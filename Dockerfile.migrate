@@ -1,0 +1,28 @@
+# Standalone image that runs MigrationRunner against MIGRATION_DATABASE_URL
+# (or DATABASE_URL fallback — both URL forms accepted by MigrationRunner only).
+# code829-backend never embeds this image; backend reads DB_* components and
+# verifies __EFMigrationsHistory at boot. Production migrations run via
+# .github/workflows/migrate.yml in this repo, which builds the URL string from
+# the DB_HOST / DB_PORT_SESSION / DB_USER / DB_NAME / DB_PASSWORD components
+# stored on the production GitHub Environment.
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+WORKDIR /src
+
+COPY svyneEventBackEnd.slnx ./
+COPY db/Db/Db.csproj                                       ./db/Db/
+COPY db/MigrationRunner/MigrationRunner.csproj             ./db/MigrationRunner/
+COPY db/SchemaSnapshot/SchemaSnapshot.csproj               ./db/SchemaSnapshot/
+COPY tests/SchemaTests/SchemaTests.csproj                   ./tests/SchemaTests/
+
+RUN dotnet restore db/MigrationRunner/MigrationRunner.csproj
+
+COPY . .
+
+RUN dotnet publish db/MigrationRunner -c Release -o /app/migrate \
+    --no-restore -p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine AS runtime
+WORKDIR /app
+COPY --from=build /app/migrate /app/migrate
+ENTRYPOINT ["dotnet", "/app/migrate/MigrationRunner.dll"]

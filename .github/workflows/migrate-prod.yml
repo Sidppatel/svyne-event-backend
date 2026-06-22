@@ -1,0 +1,43 @@
+name: Production Database Migration
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  migrate-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Migration Image
+        run: docker build -f Dockerfile.migrate -t migrate-runner .
+
+      - name: Run Schema Migrations
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT_SESSION: ${{ secrets.DB_PORT_SESSION }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          # Build the connection string for the runner
+          CONN_STRING="Host=${DB_HOST};Port=${DB_PORT_SESSION};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD};SslMode=VerifyFull;"
+          
+          # Run the migration container
+          docker run --rm -e MIGRATION_DATABASE_URL="$CONN_STRING" migrate-runner
+
+      - name: Trigger Render API Deploy
+        if: success()
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL not set, skipping automatic Render deployment."
+          else
+            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+            echo "Render deploy triggered successfully!"
+          fi

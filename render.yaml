@@ -1,0 +1,141 @@
+# Render Blueprint for code829-backend
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Usage:
+#   1. In the Render dashboard, click "New" → "Blueprint" and point it at this repo.
+#   2. Render auto-discovers this file and provisions the service on `main` pushes.
+#   3. Fill in the env vars marked `sync: false` — those are secrets that never live
+#      in this file. Non-secret defaults (ASPNETCORE_ENVIRONMENT, PORT) are set here.
+#
+# The frontend deploys independently via .github/workflows/deploy.yml in code829-frontend
+# to Cloudflare Workers — it is NOT managed by this blueprint.
+
+services:
+  - type: web
+    name: code829-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # See docs/adr/0008-render-plan.md for tier selection rationale.
+    plan: starter
+    region: oregon
+    branch: main
+    # autoDeploy must stay off: pushes to main should NOT ship code unreviewed.
+    # Deploys are triggered manually in the Render dashboard after CI + review.
+    autoDeploy: false
+    healthCheckPath: /health/live
+    # Migrations are owned exclusively by code829-db/.github/workflows/migrate.yml
+    # (this repo never authors or applies schema). The backend image does not bundle
+    # MigrationRunner; Program.cs verifies __EFMigrationsHistory at boot and refuses
+    # to start if the schema is missing or EXPECTED_MIGRATION_ID does not match.
+    envVars:
+      # ─── Runtime (non-secret) ───────────────────────────────────
+      # Default to Production. Flip in the Render dashboard only for the
+      # `Staging` environment (which keeps Stripe test keys). Program.cs
+      # refuses to start in Production without live Stripe keys (sk_live_*).
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: PORT
+        value: "10000"
+      # Optional version pin. When set, backend startup fails unless the latest
+      # row in __EFMigrationsHistory equals this exact MigrationId. Leave unset
+      # for presence-only enforcement. See api/Program.cs for the check.
+      - key: EXPECTED_MIGRATION_ID
+        value: 20260607200658_UpdateTablesViews
+
+      # ─── Required secrets / DB components ──────────────────────
+      # Postgres connection components (Supabase transaction pooler for runtime).
+      # Backend builds the Npgsql connection string at boot from these — no URL
+      # is ever read or constructed in source. Migrations run via code829-db's
+      # migrate.yml using the session pooler (DB_PORT_SESSION=5432); runtime
+      # uses the transaction pooler (DB_PORT=6543).
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+
+      # Redis connection components (Upstash TLS in prod).
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_USER
+        sync: false
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: REDIS_TLS
+        value: "true"
+
+      # Generate via: openssl rand -hex 32
+      - key: JWT_SECRET
+        sync: false
+      # Stripe is mandatory in every environment — startup fails without this.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+
+      # ─── Optional secrets / integrations ────────────────────────
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: CDN_BASE_URL
+        sync: false
+      # Sentry DSN — absent disables transport (no-op in local/dev without DSN).
+      - key: SENTRY_DSN
+        sync: false
+      # Optional override. If absent, Program.cs falls back to RENDER_GIT_COMMIT (Render built-in)
+      # then to the assembly version. Set this manually to pin a specific release tag.
+      - key: SENTRY_RELEASE
+        sync: false
+
+      # ─── OpenTelemetry (BE #8, BE #12) ──────────────────────────
+      # Grafana Cloud OTLP gateway — receives traces + metrics + logs.
+      # Endpoint form: https://otlp-gateway-prod-<region>.grafana.net/otlp
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      # Format: Authorization=Basic <base64(instance_id:api_token)>
+      # Generate in Grafana Cloud → Connections → OpenTelemetry (OTLP).
+      - key: OTEL_EXPORTER_OTLP_HEADERS
+        sync: false
+
+      # ─── Cloudflare / networking ────────────────────────────────
+      # Public URL used in magic-link emails and seed data.
+      - key: FRONTEND_URL
+        value: https://code829.com
+      # Allowed origins for CORS (API is called from all four frontends).
+      - key: CORS_ORIGINS
+        value: https://code829.com,https://admin.code829.com,https://developer.code829.com,https://staff.code829.com
+      # Cloudflare IPv4 ranges — so ForwardedHeadersMiddleware trusts X-Forwarded-For
+      # from the Workers in front of this service, and CloudflareIpAllowlistMiddleware
+      # rejects direct-to-origin traffic from non-CF IPs. Refresh weekly via
+      # .github/workflows/cloudflare-cidr-refresh.yml.
+      # Source: https://www.cloudflare.com/ips-v4
+      - key: TRUSTED_PROXIES
+        value: 173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22
+      # Cloudflare IPv6 ranges — CloudflareIpAllowlistMiddleware consumes these
+      # alongside TRUSTED_PROXIES. Refreshed by the same weekly workflow.
+      # Source: https://www.cloudflare.com/ips-v6
+      - key: CLOUDFLARE_IPV6_CIDRS
+        value: 2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32
+      # Set to "true" only once the Render service is reachable solely via a
+      # Cloudflare-fronted domain. When enforced, non-CF TCP peers get 403.
+      # Leave unset / "false" during transition — Render's internal LB is not
+      # in TRUSTED_PROXIES and would otherwise be rejected.
+      - key: CF_IP_ALLOWLIST_ENFORCE
+        value: "false"
