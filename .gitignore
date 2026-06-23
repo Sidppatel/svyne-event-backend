@@ -116,3 +116,4 @@ remote-data.sql
 .antigravity/
 .claude/
 .cursor/
+src/Api/Properties/launchSettings.json
