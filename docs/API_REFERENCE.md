@@ -4,6 +4,8 @@ Transport: **gRPC-Web over HTTPS** (Protobuf). REST is used only for the documen
 
 Auth: JWT bearer. Claims: `sub` (users_id), `email`, `role` (0 Attendee, 1 Main Admin, 2 Staff, 3 Sub-Tenant, 99 Developer), `tenants_id` (null for developers), `tenant_slug`. Tenant/RLS context (`app.current_user_id`, `app.current_tenant`) is set per request from the JWT.
 
+Client setup (React/Next.js/mobile, codegen, auth interceptor): see [FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md).
+
 ## gRPC services (`protos/`)
 
 ### AuthService (auth.proto)

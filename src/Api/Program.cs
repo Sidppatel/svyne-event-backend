@@ -15,6 +15,24 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ConfigureEndpointDefaults(listen =>
         listen.Protocols = http2Only ? HttpProtocols.Http2 : HttpProtocols.Http1AndHttp2));
 
+const string CorsPolicy = "frontend";
+var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? string.Empty)
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+builder.Services.AddCors(options =>
+    options.AddPolicy(CorsPolicy, policy =>
+    {
+        if (corsOrigins.Length > 0)
+        {
+            policy.WithOrigins(corsOrigins);
+        }
+        policy
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            // gRPC-Web returns the RPC status in response headers; the browser
+            // client cannot read them unless they are explicitly exposed.
+            .WithExposedHeaders("grpc-status", "grpc-message", "grpc-status-details-bin");
+    }));
+
 builder.Services.AddGrpc();
 builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<PasswordHasher>();
@@ -44,6 +62,7 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 app.UseRouting();
+app.UseCors(CorsPolicy);
 app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
 app.UseAuthentication();
 app.UseAuthorization();
