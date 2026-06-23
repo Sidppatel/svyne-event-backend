@@ -8,15 +8,23 @@ public sealed class Db
 
     public Db(IConfiguration configuration)
     {
-        var raw = configuration["DATABASE_URL"]
-            ?? "Host=localhost;Port=5432;Database=event_platform;Username=ep_dev;Password=ep_dev_password";
-        if (raw.StartsWith("postgres://") || raw.StartsWith("postgresql://"))
+        var host = configuration["DB_HOST"] ?? "127.0.0.1";
+        var port = configuration["DB_PORT"] ?? "5432";
+        var user = configuration["DB_USER"] ?? "ep_dev";
+        var database = configuration["DB_NAME"] ?? "event_platform";
+        var password = configuration["DB_PASSWORD"] ?? "ep_dev_password";
+        var sslMode = configuration["DATABASE_SSL_MODE"] ?? "Disable";
+
+        var builder = new NpgsqlConnectionStringBuilder
         {
-            var uri = new Uri(raw);
-            var userInfo = uri.UserInfo.Split(':');
-            raw = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]}";
-        }
-        connectionString = raw;
+            Host = host,
+            Port = int.Parse(port),
+            Username = user,
+            Database = database,
+            Password = password,
+            SslMode = Enum.Parse<SslMode>(sslMode, ignoreCase: true)
+        };
+        connectionString = builder.ConnectionString;
     }
 
     public async Task<NpgsqlConnection> OpenAsync(Guid? usersId, Guid? tenantsId, CancellationToken ct)
