@@ -3,6 +3,7 @@ using System;
 using Db;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -12,9 +13,11 @@ using NpgsqlTypes;
 namespace Db.Migrations
 {
     [DbContext(typeof(EventPlatformDbContext))]
-    partial class EventPlatformDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260624092227_FixBookingForPaymentTypes")]
+    partial class FixBookingForPaymentTypes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2108,51 +2111,6 @@ namespace Db.Migrations
                         .HasFilter("stripe_connected_account_id IS NOT NULL");
 
                     b.ToTable("tenants", (string)null);
-                });
-
-            modelBuilder.Entity("Db.Entities.TenantStripeProfile", b =>
-                {
-                    b.Property<Guid>("TenantsId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenants_id");
-
-                    b.Property<string>("BusinessType")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("business_type");
-
-                    b.Property<string>("BusinessUrl")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("business_url");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Mcc")
-                        .HasMaxLength(4)
-                        .HasColumnType("character varying(4)")
-                        .HasColumnName("mcc");
-
-                    b.Property<string>("ProductDescription")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("product_description");
-
-                    b.Property<string>("SupportEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("support_email");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("TenantsId")
-                        .HasName("pk_tenant_stripe_profiles");
-
-                    b.ToTable("tenant_stripe_profiles", (string)null);
                 });
 
             modelBuilder.Entity("Db.Entities.Ticket", b =>
@@ -5366,18 +5324,6 @@ namespace Db.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_table_templates_tenants_tenants_id");
-
-                    b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("Db.Entities.TenantStripeProfile", b =>
-                {
-                    b.HasOne("Db.Entities.Tenant", "Tenant")
-                        .WithOne()
-                        .HasForeignKey("Db.Entities.TenantStripeProfile", "TenantsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_tenant_stripe_profiles_tenants_tenants_id");
 
                     b.Navigation("Tenant");
                 });

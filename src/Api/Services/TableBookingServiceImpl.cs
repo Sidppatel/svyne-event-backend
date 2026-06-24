@@ -18,6 +18,22 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         this.tenantContext = tenantContext;
     }
 
+    // Columns 0..9: tables_id, event_tables_id, label, grid_row, grid_col,
+    // row_span, col_span, status, price_cents, platform_fee_cents.
+    private static Table MapTable(NpgsqlDataReader r) => new()
+    {
+        TablesId = r.GetGuid(0).ToString(),
+        EventTablesId = r.GetGuid(1).ToString(),
+        Label = r.GetString(2),
+        GridRow = r.GetInt32(3),
+        GridCol = r.GetInt32(4),
+        RowSpan = r.GetInt32(5),
+        ColSpan = r.GetInt32(6),
+        Status = r.GetString(7),
+        PriceCents = r.GetInt32(8),
+        PlatformFeeCents = r.GetInt32(9)
+    };
+
     public override async Task<EventLayout> GetEventLayout(UuidValue request, ServerCallContext context)
     {
         var ct = context.CancellationToken;
@@ -35,23 +51,15 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
             }
         }
         await using var cmd = new NpgsqlCommand(
-            "SELECT tables_id, event_tables_id, label, grid_row, grid_col, row_span, col_span, status "
-            + "FROM tables WHERE events_id = @ev ORDER BY sort_order", connection);
+            "SELECT t.tables_id, t.event_tables_id, t.label, t.grid_row, t.grid_col, t.row_span, t.col_span, t.status, "
+            + "COALESCE(et.price_cents, 0), COALESCE(et.platform_fee_cents, 0) "
+            + "FROM tables t LEFT JOIN event_tables et ON et.event_tables_id = t.event_tables_id "
+            + "WHERE t.events_id = @ev ORDER BY t.sort_order", connection);
         cmd.Parameters.AddWithValue("ev", eventsId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            layout.Tables.Add(new Table
-            {
-                TablesId = reader.GetGuid(0).ToString(),
-                EventTablesId = reader.GetGuid(1).ToString(),
-                Label = reader.GetString(2),
-                GridRow = reader.GetInt32(3),
-                GridCol = reader.GetInt32(4),
-                RowSpan = reader.GetInt32(5),
-                ColSpan = reader.GetInt32(6),
-                Status = reader.GetString(7)
-            });
+            layout.Tables.Add(MapTable(reader));
         }
         return layout;
     }
@@ -62,23 +70,15 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         var response = new ListTablesResponse();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT tables_id, event_tables_id, label, grid_row, grid_col, row_span, col_span, status "
-            + "FROM tables WHERE events_id = @ev ORDER BY sort_order", connection);
+            "SELECT t.tables_id, t.event_tables_id, t.label, t.grid_row, t.grid_col, t.row_span, t.col_span, t.status, "
+            + "COALESCE(et.price_cents, 0), COALESCE(et.platform_fee_cents, 0) "
+            + "FROM tables t LEFT JOIN event_tables et ON et.event_tables_id = t.event_tables_id "
+            + "WHERE t.events_id = @ev ORDER BY t.sort_order", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            response.Tables.Add(new Table
-            {
-                TablesId = reader.GetGuid(0).ToString(),
-                EventTablesId = reader.GetGuid(1).ToString(),
-                Label = reader.GetString(2),
-                GridRow = reader.GetInt32(3),
-                GridCol = reader.GetInt32(4),
-                RowSpan = reader.GetInt32(5),
-                ColSpan = reader.GetInt32(6),
-                Status = reader.GetString(7)
-            });
+            response.Tables.Add(MapTable(reader));
         }
         return response;
     }

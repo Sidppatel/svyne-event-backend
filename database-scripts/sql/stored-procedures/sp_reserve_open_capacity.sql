@@ -1,4 +1,5 @@
 DROP FUNCTION IF EXISTS sp_reserve_open_capacity(uuid, uuid, int, uuid, int, int, int, text);
+DROP FUNCTION IF EXISTS sp_reserve_open_capacity(uuid, uuid, int, uuid, int, int, int);
 
 CREATE OR REPLACE FUNCTION sp_reserve_open_capacity(
     p_user_id uuid,
@@ -21,7 +22,37 @@ DECLARE
     v_tenant uuid;
     v_number text;
     v_attempt int := 0;
+    v_hold int;
 BEGIN
+    -- Hard hold window (seconds) the Pending booking reserves the seats for.
+    SELECT COALESCE((SELECT value::int FROM app_settings WHERE key = 'booking_hold_seconds'), 600)
+      INTO v_hold;
+
+    -- Idempotency / resume: if this user already holds a live Pending booking
+    -- for the same event + ticket type, return it instead of creating a new one
+    -- (handles double-clicks, tab switches, mid-payment navigation).
+    SELECT b.bookings_id, b.booking_number INTO v_id, v_number
+      FROM bookings b
+      WHERE b.users_id = p_user_id
+        AND b.events_id = p_event_id
+        AND b.status = 'Pending'
+        AND b.tables_id IS NULL
+        AND b.event_ticket_types_id IS NOT DISTINCT FROM p_event_ticket_type_id
+        AND (b.hold_expires_at IS NULL OR b.hold_expires_at > now())
+      ORDER BY b.created_at DESC
+      LIMIT 1;
+
+    IF v_id IS NOT NULL THEN
+        -- Refresh the hold window on resume.
+        UPDATE bookings
+           SET hold_expires_at = now() + make_interval(secs => v_hold), updated_at = now()
+         WHERE bookings.bookings_id = v_id;
+        bookings_id := v_id;
+        booking_number := v_number;
+        RETURN NEXT;
+        RETURN;
+    END IF;
+
     SELECT layout_mode, max_capacity, tenants_id
       INTO v_layout, v_max_capacity, v_tenant
       FROM events
@@ -38,12 +69,15 @@ BEGIN
         RAISE EXCEPTION 'Event has no capacity configured' USING ERRCODE = '22023';
     END IF;
 
+    -- Live reservations: Paid/CheckedIn always count; Pending only counts while
+    -- its hold is still alive (expired holds are free seats again).
     SELECT COALESCE(SUM(seats_reserved), 0)
       INTO v_total_reserved
       FROM bookings
       WHERE events_id = p_event_id
-        AND status IN ('Pending', 'Paid', 'CheckedIn')
-        AND seats_reserved IS NOT NULL;
+        AND seats_reserved IS NOT NULL
+        AND (status IN ('Paid', 'CheckedIn')
+             OR (status = 'Pending' AND (hold_expires_at IS NULL OR hold_expires_at > now())));
 
     IF v_total_reserved + p_seats > v_max_capacity THEN
         RAISE EXCEPTION 'Not enough capacity. Available: %, requested: %',
@@ -61,8 +95,9 @@ BEGIN
               INTO v_tt_sold
               FROM bookings
               WHERE event_ticket_types_id = p_event_ticket_type_id
-                AND status IN ('Pending', 'Paid', 'CheckedIn')
-                AND seats_reserved IS NOT NULL;
+                AND seats_reserved IS NOT NULL
+                AND (status IN ('Paid', 'CheckedIn')
+                     OR (status = 'Pending' AND (hold_expires_at IS NULL OR hold_expires_at > now())));
 
             IF v_tt_sold + p_seats > v_tt_max THEN
                 RAISE EXCEPTION 'Not enough availability for ticket type. Available: %, requested: %',
@@ -78,10 +113,10 @@ BEGIN
         BEGIN
             INSERT INTO bookings (tenants_id, booking_number, status, users_id, events_id, tables_id,
                 seats_reserved, event_ticket_types_id, subtotal_cents, fee_cents, total_cents,
-                created_at, updated_at)
+                hold_expires_at, created_at, updated_at)
             VALUES (v_tenant, v_number, 'Pending', p_user_id, p_event_id, NULL,
                 p_seats, p_event_ticket_type_id, p_subtotal_cents, p_fee_cents, p_total_cents,
-                now(), now())
+                now() + make_interval(secs => v_hold), now(), now())
             RETURNING bookings.bookings_id INTO v_id;
             EXIT;
         EXCEPTION WHEN unique_violation THEN

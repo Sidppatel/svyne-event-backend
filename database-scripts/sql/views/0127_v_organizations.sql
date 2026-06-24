@@ -1,6 +1,7 @@
 CREATE OR REPLACE VIEW vw_tenants AS
 SELECT
     o.tenants_id AS tenants_id,
+    o.slug,
     o.name,
     o.legal_name,
     o.country_code,

@@ -1,6 +1,7 @@
 using Grpc.Core;
 using Npgsql;
 using Svyne.Api.Data;
+using Svyne.Api.Payments;
 using Svyne.Api.Security;
 using Svyne.Protos.Admin;
 using Svyne.Protos.Common;
@@ -12,12 +13,14 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
     private readonly Db db;
     private readonly TenantContext tenantContext;
     private readonly IConfiguration configuration;
+    private readonly StripeService stripe;
 
-    public FinancialServiceImpl(Db db, TenantContext tenantContext, IConfiguration configuration)
+    public FinancialServiceImpl(Db db, TenantContext tenantContext, IConfiguration configuration, StripeService stripe)
     {
         this.db = db;
         this.tenantContext = tenantContext;
         this.configuration = configuration;
+        this.stripe = stripe;
     }
 
     public override async Task<MonthlyReport> GetMonthlyReport(MonthlyReportRequest request, ServerCallContext context)
@@ -66,13 +69,64 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
         };
     }
 
-    public override Task<StripeOnboardingLink> StartStripeOnboarding(UuidValue request, ServerCallContext context)
+    public override async Task<StripeOnboardingLink> StartStripeOnboarding(UuidValue request, ServerCallContext context)
     {
         if (!tenantContext.IsDeveloper && tenantContext.TenantsId is null)
         {
             throw new RpcException(new Status(StatusCode.PermissionDenied, "Access denied"));
         }
+        if (!stripe.Configured)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, "Payments are not configured"));
+        }
+        var ct = context.CancellationToken;
+        var tenantId = Guid.Parse(request.Value);
+
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+
+        // Reuse the tenant's connected account or create a fresh Express one,
+        // pre-filled from the prefill captured on the tenant record.
+        string? accountId;
+        var prefill = new StripeAccountPrefill();
+        await using (var cmd = new NpgsqlCommand(
+            "SELECT t.stripe_connected_account_id, t.country_code, COALESCE(t.legal_name, t.name), "
+            + "p.business_type, p.business_url, p.product_description, p.mcc, p.support_email "
+            + "FROM tenants t LEFT JOIN tenant_stripe_profiles p ON p.tenants_id = t.tenants_id "
+            + "WHERE t.tenants_id = @t", connection))
+        {
+            cmd.Parameters.AddWithValue("t", tenantId);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                throw new RpcException(new Status(StatusCode.NotFound, "Tenant not found"));
+            }
+            accountId = reader.IsDBNull(0) ? null : reader.GetString(0);
+            prefill = new StripeAccountPrefill
+            {
+                Country = reader.IsDBNull(1) ? "US" : reader.GetString(1),
+                BusinessName = reader.IsDBNull(2) ? null : reader.GetString(2),
+                BusinessType = reader.IsDBNull(3) ? null : reader.GetString(3),
+                Url = reader.IsDBNull(4) ? null : reader.GetString(4),
+                ProductDescription = reader.IsDBNull(5) ? null : reader.GetString(5),
+                Mcc = reader.IsDBNull(6) ? null : reader.GetString(6),
+                SupportEmail = reader.IsDBNull(7) ? null : reader.GetString(7)
+            };
+        }
+
+        if (string.IsNullOrEmpty(accountId))
+        {
+            accountId = await stripe.CreateExpressAccountAsync(prefill, ct);
+            await using var save = new NpgsqlCommand(
+                "SELECT sp_update_tenant_stripe_account(@t, @acct)", connection);
+            save.Parameters.AddWithValue("t", tenantId);
+            save.Parameters.AddWithValue("acct", accountId);
+            await save.ExecuteNonQueryAsync(ct);
+        }
+
         var baseUrl = configuration["PUBLIC_BASE_URL"] ?? "https://localhost";
-        return Task.FromResult(new StripeOnboardingLink { Url = $"{baseUrl}/stripe/onboard/{request.Value}" });
+        var returnUrl = $"{baseUrl}/stripe/onboard/return?tenant={tenantId}";
+        var refreshUrl = $"{baseUrl}/stripe/onboard/refresh?tenant={tenantId}";
+        var url = await stripe.CreateAccountLinkAsync(accountId, returnUrl, refreshUrl, ct);
+        return new StripeOnboardingLink { Url = url };
     }
 }

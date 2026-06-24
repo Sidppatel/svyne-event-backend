@@ -27,6 +27,8 @@ message Table {
   int32 row_span = 6;
   int32 col_span = 7;
   string status = 8;
+  int32 price_cents = 9;
+  int32 platform_fee_cents = 10;
 }
 
 message EventLayout {

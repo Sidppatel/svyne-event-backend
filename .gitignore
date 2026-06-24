@@ -4,6 +4,7 @@
 **/artifacts/
 [Bb]in/
 [Oo]bj/
+bin-check/
 *.user
 *.suo
 *.sln.docstates

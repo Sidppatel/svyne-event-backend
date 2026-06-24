@@ -4,11 +4,15 @@ RETURNS void LANGUAGE plpgsql
 AS $$
 DECLARE v_seats int; v_seat int; v_tenant uuid; v_event uuid; v_code text; v_attempt int;
 BEGIN
-    UPDATE bookings SET status = 'Paid', qr_token = p_qr_token, updated_at = now()
-    WHERE bookings_id = p_booking_id AND status = 'Pending'
+    UPDATE bookings SET status = 'Paid', qr_token = p_qr_token,
+        hold_expires_at = NULL, updated_at = now()
+    -- Accept Pending or a just-Expired hold: if the payment actually succeeded
+    -- we honor the seat even if the sweeper raced ahead and expired the hold.
+    WHERE bookings_id = p_booking_id AND status IN ('Pending', 'Expired')
     RETURNING seats_reserved, tenants_id, events_id INTO v_seats, v_tenant, v_event;
 
     IF NOT FOUND THEN
+        -- Already Paid (idempotent webhook retry) or Cancelled/Refunded — no-op.
         RETURN;
     END IF;
 

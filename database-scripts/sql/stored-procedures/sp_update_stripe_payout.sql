@@ -21,7 +21,7 @@ DECLARE
     v_org_id uuid;
     v_id uuid;
 BEGIN
-    SELECT the_id INTO v_org_id
+    SELECT tenants_id INTO v_org_id
     FROM tenants
     WHERE stripe_connected_account_id = p_stripe_account_id;
 

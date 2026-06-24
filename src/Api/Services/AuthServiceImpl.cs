@@ -2,6 +2,7 @@ using Google.Apis.Auth;
 using Grpc.Core;
 using Npgsql;
 using Svyne.Api.Data;
+using Svyne.Api.Email;
 using Svyne.Api.Security;
 using Svyne.Protos.Auth;
 
@@ -13,13 +14,23 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
     private readonly PasswordHasher passwordHasher;
     private readonly JwtTokenService jwt;
     private readonly IConfiguration configuration;
+    private readonly IEmailService email;
+    private readonly EmailTemplateRenderer templates;
+    private readonly AppSettingsProvider settings;
+    private readonly ILogger<AuthServiceImpl> logger;
 
-    public AuthServiceImpl(Db db, PasswordHasher passwordHasher, JwtTokenService jwt, IConfiguration configuration)
+    public AuthServiceImpl(Db db, PasswordHasher passwordHasher, JwtTokenService jwt,
+        IConfiguration configuration, IEmailService email, EmailTemplateRenderer templates,
+        AppSettingsProvider settings, ILogger<AuthServiceImpl> logger)
     {
         this.db = db;
         this.passwordHasher = passwordHasher;
         this.jwt = jwt;
         this.configuration = configuration;
+        this.email = email;
+        this.templates = templates;
+        this.settings = settings;
+        this.logger = logger;
     }
 
     public override async Task<AuthResponse> Login(LoginRequest request, ServerCallContext context)
@@ -378,12 +389,38 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
         }
         var token = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
         var hash = EmailHasher.Hash(token);
+        var expiryHours = await settings.GetIntAsync("password_reset_expiry_hours", 1, ct);
         await using var cmd = new NpgsqlCommand("SELECT sp_create_password_reset_token(@u, @h, @exp, @email, NULL)", connection);
         cmd.Parameters.AddWithValue("u", usersId);
         cmd.Parameters.AddWithValue("h", hash);
-        cmd.Parameters.AddWithValue("exp", DateTime.UtcNow.AddHours(1));
+        cmd.Parameters.AddWithValue("exp", DateTime.UtcNow.AddHours(expiryHours));
         cmd.Parameters.AddWithValue("email", request.Email);
         await cmd.ExecuteNonQueryAsync(ct);
+
+        // Local dev writes the email as .html to LOCAL_EMAIL_DIR instead of sending.
+        // Best-effort: never leak delivery state to the caller (avoids account enumeration).
+        try
+        {
+            var fromAddress = await settings.GetStringAsync("password_reset_email", "noreply@svyne.com", ct);
+            var subject = await settings.GetStringAsync("password_reset_subject", "Reset your Svyne password", ct);
+            var resetBase = await settings.GetStringAsync("password_reset_link_base", "http://localhost:5173/reset-password", ct);
+            var separator = resetBase.Contains('?') ? "&" : "?";
+            var resetLink = $"{resetBase}{separator}token={token}";
+            var values = new Dictionary<string, string>
+            {
+                ["Subject"] = subject,
+                ["Email"] = request.Email,
+                ["ResetLink"] = resetLink,
+                ["ExpiryHours"] = expiryHours.ToString()
+            };
+            var htmlBody = await templates.RenderAsync("password_reset.html", values, ct);
+            await email.SendAsync(fromAddress, request.Email, subject, htmlBody, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send password reset email");
+        }
+
         return new Svyne.Protos.Common.AckResponse { Success = true, Message = "If the account exists, a reset link was sent" };
     }
 

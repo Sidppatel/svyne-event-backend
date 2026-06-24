@@ -1,6 +1,7 @@
 using Grpc.Core;
 using Npgsql;
 using Svyne.Api.Data;
+using Svyne.Api.Payments;
 using Svyne.Api.Security;
 using Svyne.Protos.Common;
 using Svyne.Protos.Booking;
@@ -11,11 +12,39 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
 {
     private readonly Db db;
     private readonly TenantContext tenantContext;
+    private readonly StripeService stripe;
 
-    public BookingServiceImpl(Db db, TenantContext tenantContext)
+    public BookingServiceImpl(Db db, TenantContext tenantContext, StripeService stripe)
     {
         this.db = db;
         this.tenantContext = tenantContext;
+        this.stripe = stripe;
+    }
+
+    public override async Task<ListEventTicketTypesResponse> ListEventTicketTypes(UuidValue request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        var response = new ListEventTicketTypesResponse();
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT event_ticket_types_id, label, price_cents, COALESCE(platform_fee_cents, 0), "
+            + "COALESCE(max_quantity, 0), COALESCE(description, '') "
+            + "FROM event_ticket_types WHERE events_id = @ev AND is_active = true ORDER BY sort_order, label", connection);
+        cmd.Parameters.AddWithValue("ev", Guid.Parse(request.Value));
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            response.TicketTypes.Add(new EventTicketType
+            {
+                EventTicketTypesId = reader.GetGuid(0).ToString(),
+                Label = reader.GetString(1),
+                PriceCents = reader.GetInt32(2),
+                PlatformFeeCents = reader.GetInt32(3),
+                MaxQuantity = reader.GetInt32(4),
+                Description = reader.GetString(5)
+            });
+        }
+        return response;
     }
 
     public override async Task<CreateBookingResponse> CreateBooking(CreateBookingRequest request, ServerCallContext context)
@@ -57,11 +86,160 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         return new CreateBookingResponse { BookingsId = reader.GetGuid(0).ToString(), BookingNumber = reader.GetString(1) };
     }
 
+    public override async Task<PaymentIntentResponse> CreatePaymentIntent(PaymentIntentRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        RequireUser();
+        if (!stripe.Configured)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, "Payments are not configured"));
+        }
+        if (!Guid.TryParse(request.BookingsId, out var bookingId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid booking id"));
+        }
+
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+
+        long subtotal, fee, total;
+        string currency, status;
+        string? connectedAccount, existingIntent;
+        DateTime? holdExpiresAt;
+        try
+        {
+            await using var cmd = new NpgsqlCommand(
+                "SELECT status, subtotal_cents, fee_cents, total_cents, currency, connected_account_id, "
+                + "charges_enabled, existing_intent_id, hold_expires_at "
+                + "FROM sp_get_booking_for_payment(@b, @u)", connection);
+            cmd.Parameters.AddWithValue("b", bookingId);
+            cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                throw new RpcException(new Status(StatusCode.NotFound, "Booking not found"));
+            }
+            status = reader.GetString(0);
+            subtotal = reader.GetInt32(1);
+            fee = reader.GetInt32(2);
+            total = reader.GetInt32(3);
+            currency = reader.GetString(4);
+            connectedAccount = reader.IsDBNull(5) ? null : reader.GetString(5);
+            var chargesEnabled = !reader.IsDBNull(6) && reader.GetBoolean(6);
+            existingIntent = reader.IsDBNull(7) ? null : reader.GetString(7);
+            holdExpiresAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8);
+
+            if (string.IsNullOrEmpty(connectedAccount) || !chargesEnabled)
+            {
+                throw new RpcException(new Status(StatusCode.FailedPrecondition,
+                    "Seller is not yet able to accept payments"));
+            }
+        }
+        catch (PostgresException ex)
+        {
+            throw MapPostgres(ex);
+        }
+
+        Stripe.PaymentIntent intent;
+        // Resume: if a usable intent already exists, hand back its secret instead
+        // of creating a duplicate (idempotent for tab switches / re-entry).
+        if (!string.IsNullOrEmpty(existingIntent))
+        {
+            var existing = await stripe.GetPaymentIntentAsync(existingIntent, ct);
+            intent = StripeService.IsPayable(existing.Status)
+                ? existing
+                : await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, ct);
+        }
+        else
+        {
+            intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, ct);
+        }
+
+        // transfer_amount = what the seller receives = ticket subtotal.
+        await using (var save = new NpgsqlCommand(
+            "SELECT sp_upsert_stripe_intent(@b, @intent, @amount, @transfer, @cur)", connection))
+        {
+            save.Parameters.AddWithValue("b", bookingId);
+            save.Parameters.AddWithValue("intent", intent.Id);
+            save.Parameters.AddWithValue("amount", (int)total);
+            save.Parameters.AddWithValue("transfer", (int)subtotal);
+            save.Parameters.AddWithValue("cur", currency);
+            await save.ExecuteScalarAsync(ct);
+        }
+
+        return new PaymentIntentResponse
+        {
+            ClientSecret = intent.ClientSecret,
+            PublishableKey = stripe.PublishableKey,
+            PaymentIntentId = intent.Id,
+            Status = intent.Status,
+            AmountCents = total,
+            HoldExpiresAt = holdExpiresAt is { } h ? new DateTimeOffset(h, TimeSpan.Zero).ToUnixTimeSeconds() : 0
+        };
+    }
+
+    public override async Task<PaymentStatusResponse> GetPaymentStatus(UuidValue request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        if (!Guid.TryParse(request.Value, out var bookingId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid booking id"));
+        }
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT b.status, COALESCE(st.status, '') FROM bookings b "
+            + "LEFT JOIN stripe_transactions st ON st.bookings_id = b.bookings_id "
+            + "WHERE b.bookings_id = @b", connection);
+        cmd.Parameters.AddWithValue("b", bookingId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, "Booking not found"));
+        }
+        return new PaymentStatusResponse
+        {
+            BookingStatus = reader.GetString(0),
+            PaymentStatus = reader.GetString(1)
+        };
+    }
+
+    private static RpcException MapPostgres(PostgresException ex) => ex.SqlState switch
+    {
+        "P0002" => new RpcException(new Status(StatusCode.NotFound, ex.MessageText)),
+        "42501" => new RpcException(new Status(StatusCode.PermissionDenied, ex.MessageText)),
+        "22023" => new RpcException(new Status(StatusCode.FailedPrecondition, ex.MessageText)),
+        "23514" => new RpcException(new Status(StatusCode.FailedPrecondition, ex.MessageText)),
+        _ => new RpcException(new Status(StatusCode.Internal, ex.MessageText))
+    };
+
     public override Task<AckResponse> ConfirmBooking(ConfirmBookingRequest request, ServerCallContext context)
         => RunVoid("SELECT sp_confirm_booking(@id, @qr)", request.BookingsId, context, ("qr", request.QrToken), "Booking confirmed");
 
-    public override Task<AckResponse> CancelBooking(UuidValue request, ServerCallContext context)
-        => RunVoid("SELECT sp_cancel_booking(@id)", request.Value, context, null, "Booking cancelled");
+    public override async Task<AckResponse> CancelBooking(UuidValue request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        var bookingId = Guid.Parse(request.Value);
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+
+        // Cancel the in-flight PaymentIntent (if any) so the buyer is not charged.
+        string? intentId = null;
+        await using (var look = new NpgsqlCommand(
+            "SELECT payment_intent_id FROM stripe_transactions WHERE bookings_id = @b AND status NOT IN ('Succeeded','Refunded')", connection))
+        {
+            look.Parameters.AddWithValue("b", bookingId);
+            intentId = await look.ExecuteScalarAsync(ct) as string;
+        }
+        if (stripe.Configured && !string.IsNullOrEmpty(intentId))
+        {
+            await stripe.CancelPaymentIntentAsync(intentId, ct);
+        }
+
+        await using (var cmd = new NpgsqlCommand("SELECT sp_cancel_booking(@id)", connection))
+        {
+            cmd.Parameters.AddWithValue("id", bookingId);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        return new AckResponse { Success = true, Message = "Booking cancelled" };
+    }
 
     public override Task<AckResponse> RefundBooking(UuidValue request, ServerCallContext context)
         => RunVoid("SELECT sp_refund_booking(@id)", request.Value, context, null, "Booking refunded");

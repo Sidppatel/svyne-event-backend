@@ -45,6 +45,15 @@ public sealed class StartupSeeder
         ("admin_invitation_expiry", "86400", "Admin invitation validity window in seconds (24 hours)."),
         ("admin_invitation_subject", "You are invited to join svyne", "Subject line for admin invitation emails."),
         ("admin_invitation_link_base", "http://admin.localhost:5173/accept-invitation", "Frontend base URL for the admin invitation accept link."),
+        ("tenant_setup_email", "noreply@svyne.com", "From address for tenant admin setup emails."),
+        ("tenant_setup_subject", "Activate your Svyne workspace", "Subject line for tenant admin setup emails."),
+        ("tenant_setup_link_base", "http://admin.localhost:5173/setup", "Frontend base URL for the tenant admin setup link."),
+        ("tenant_setup_expiry_days", "7", "Tenant admin setup link validity window in days."),
+        ("password_reset_email", "noreply@svyne.com", "From address for password reset emails."),
+        ("password_reset_subject", "Reset your Svyne password", "Subject line for password reset emails."),
+        ("password_reset_link_base", "http://localhost:5173/reset-password", "Frontend base URL for the password reset link."),
+        ("password_reset_expiry_hours", "1", "Password reset link validity window in hours."),
+        ("booking_hold_seconds", "600", "Hard seat/table hold window in seconds while a booking awaits payment (10 minutes)."),
     };
 
     public async Task SeedAsync(CancellationToken ct)

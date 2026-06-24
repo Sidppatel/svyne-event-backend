@@ -21,6 +21,12 @@ public class Booking : BaseEntity
 
     public string? QrToken { get; set; }
 
+    /// <summary>
+    /// Hard expiry for an unpaid Pending hold. NULL once Paid/Cancelled/Expired.
+    /// Seats/tables are reserved only while this is in the future.
+    /// </summary>
+    public DateTime? HoldExpiresAt { get; set; }
+
     public Guid? TablesId { get; set; }
     public Table? Table { get; set; }
 

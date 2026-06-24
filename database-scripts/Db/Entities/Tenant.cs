@@ -12,5 +12,6 @@ public class Tenant : BaseEntity
     public bool StripeDetailsSubmitted { get; set; }
     public DateTime? StripeOnboardedAt { get; set; }
     public string? StripeRequirementsDue { get; set; }
+
     public DateTime? ArchivedAt { get; set; }
 }

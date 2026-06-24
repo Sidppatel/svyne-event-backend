@@ -15,6 +15,28 @@ service TenantService {
   rpc ListPublicTenants (svyne.common.Empty) returns (ListPublicTenantsResponse);
   rpc ListTenantMembers (svyne.common.UuidValue) returns (ListTenantMembersResponse);
   rpc GetTenantStripeStatus (svyne.common.UuidValue) returns (TenantStripeStatus);
+  rpc GetTenantStripeProfile (svyne.common.UuidValue) returns (TenantStripeProfile);
+  rpc UpdateTenantStripeProfile (UpdateTenantStripeProfileRequest) returns (svyne.common.AckResponse);
+}
+
+message TenantStripeProfile {
+  bool has_account = 1;
+  string business_type = 2;
+  string business_name = 3;
+  string business_url = 4;
+  string product_description = 5;
+  string mcc = 6;
+  string support_email = 7;
+}
+
+message UpdateTenantStripeProfileRequest {
+  string tenants_id = 1;
+  string business_type = 2;
+  string business_name = 3;
+  string business_url = 4;
+  string product_description = 5;
+  string mcc = 6;
+  string support_email = 7;
 }
 
 message Tenant {
@@ -37,6 +59,13 @@ message CreateTenantRequest {
   string admin_last_name = 5;
   string legal_name = 6;
   string country_code = 7;
+  // Stripe Connect onboarding prefill (all optional). Used to pre-create the
+  // connected account so the Express onboarding form is pre-filled.
+  string business_type = 8;        // "individual" | "company"
+  string business_url = 9;
+  string product_description = 10;
+  string mcc = 11;                 // 4-digit Stripe merchant category code
+  string support_email = 12;
 }
 
 message CreateTenantResponse {

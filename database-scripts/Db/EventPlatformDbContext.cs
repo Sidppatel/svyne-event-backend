@@ -10,6 +10,7 @@ public class EventPlatformDbContext(
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<TenantStripeProfile> TenantStripeProfiles => Set<TenantStripeProfile>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<Address> Addresses => Set<Address>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
@@ -113,6 +114,20 @@ public class EventPlatformDbContext(
             entity.Property(e => e.StripePayoutsEnabled).HasDefaultValue(false);
             entity.Property(e => e.StripeDetailsSubmitted).HasDefaultValue(false);
             entity.Property(e => e.StripeRequirementsDue).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<TenantStripeProfile>(entity =>
+        {
+            entity.ToTable("tenant_stripe_profiles");
+            entity.HasKey(e => e.TenantsId);
+            entity.Property(e => e.TenantsId).HasColumnName("tenants_id");
+            entity.Property(e => e.BusinessType).HasMaxLength(20);
+            entity.Property(e => e.BusinessUrl).HasMaxLength(512);
+            entity.Property(e => e.ProductDescription).HasMaxLength(2048);
+            entity.Property(e => e.Mcc).HasMaxLength(4);
+            entity.Property(e => e.SupportEmail).HasMaxLength(256);
+            entity.HasOne(e => e.Tenant).WithOne().HasForeignKey<TenantStripeProfile>(e => e.TenantsId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<User>(entity =>

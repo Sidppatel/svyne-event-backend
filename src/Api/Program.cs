@@ -56,6 +56,9 @@ builder.Services.AddSingleton<PasswordHasher>();
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddScoped<TenantContext>();
 builder.Services.AddSingleton<Svyne.Api.Storage.ObjectStorage>();
+builder.Services.AddSingleton<Svyne.Api.Payments.StripeService>();
+builder.Services.AddSingleton<Svyne.Api.Payments.StripeWebhookHandler>();
+builder.Services.AddHostedService<Svyne.Api.Payments.HoldExpiryWorker>();
 
 var jwtService = new JwtTokenService(builder.Configuration);
 var validation = jwtService.ValidationParameters;
@@ -122,23 +125,44 @@ app.MapGet("/health/ready", async (Db db, CancellationToken ct) =>
     }
 });
 
-app.MapPost("/webhooks/stripe", async (HttpRequest request, IConfiguration config) =>
+app.MapPost("/webhooks/stripe", async (
+    HttpRequest request,
+    IConfiguration config,
+    Svyne.Api.Payments.StripeWebhookHandler handler,
+    ILoggerFactory loggerFactory,
+    CancellationToken ct) =>
 {
     using var reader = new StreamReader(request.Body);
-    var payload = await reader.ReadToEndAsync();
+    var payload = await reader.ReadToEndAsync(ct);
     var signature = request.Headers["Stripe-Signature"].ToString();
     var secret = config["STRIPE_WEBHOOK_SECRET"];
-    if (!string.IsNullOrEmpty(secret))
+
+    Stripe.Event stripeEvent;
+    try
     {
-        try
-        {
-            Stripe.EventUtility.ValidateSignature(payload, signature, secret);
-        }
-        catch (Stripe.StripeException)
-        {
-            return Results.BadRequest("Invalid signature");
-        }
+        // Verifies the signature AND parses in one step. throwOnApiVersionMismatch
+        // off so SDK/account version drift doesn't reject events.
+        stripeEvent = string.IsNullOrEmpty(secret)
+            ? Stripe.EventUtility.ParseEvent(payload)
+            : Stripe.EventUtility.ConstructEvent(payload, signature, secret, throwOnApiVersionMismatch: false);
     }
+    catch (Stripe.StripeException)
+    {
+        return Results.BadRequest("Invalid signature");
+    }
+
+    try
+    {
+        await handler.HandleAsync(stripeEvent, ct);
+    }
+    catch (Exception ex)
+    {
+        // Return 500 so Stripe retries; never swallow a processing failure.
+        loggerFactory.CreateLogger("StripeWebhook")
+            .LogError(ex, "Failed handling Stripe event {Type} {Id}", stripeEvent.Type, stripeEvent.Id);
+        return Results.StatusCode(StatusCodes.Status500InternalServerError);
+    }
+
     return Results.Ok();
 }).AllowAnonymous();
 

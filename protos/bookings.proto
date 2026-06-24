@@ -7,8 +7,11 @@ option csharp_namespace = "Svyne.Protos.Booking";
 import "common.proto";
 
 service BookingService {
+  rpc ListEventTicketTypes (svyne.common.UuidValue) returns (ListEventTicketTypesResponse);
   rpc CreateBooking (CreateBookingRequest) returns (CreateBookingResponse);
   rpc ReserveOpenCapacity (ReserveOpenCapacityRequest) returns (CreateBookingResponse);
+  rpc CreatePaymentIntent (PaymentIntentRequest) returns (PaymentIntentResponse);
+  rpc GetPaymentStatus (svyne.common.UuidValue) returns (PaymentStatusResponse);
   rpc ConfirmBooking (ConfirmBookingRequest) returns (svyne.common.AckResponse);
   rpc CancelBooking (svyne.common.UuidValue) returns (svyne.common.AckResponse);
   rpc RefundBooking (svyne.common.UuidValue) returns (svyne.common.AckResponse);
@@ -64,6 +67,40 @@ message ReserveOpenCapacityRequest {
 message CreateBookingResponse {
   string bookings_id = 1;
   string booking_number = 2;
+}
+
+message EventTicketType {
+  string event_ticket_types_id = 1;
+  string label = 2;
+  int32 price_cents = 3;
+  int32 platform_fee_cents = 4;
+  int32 max_quantity = 5;
+  string description = 6;
+}
+
+message ListEventTicketTypesResponse {
+  repeated EventTicketType ticket_types = 1;
+}
+
+message PaymentIntentRequest {
+  string bookings_id = 1;
+}
+
+message PaymentIntentResponse {
+  string client_secret = 1;
+  string publishable_key = 2;
+  string payment_intent_id = 3;
+  string status = 4;
+  int64 amount_cents = 5;
+  // Unix seconds when the seat hold expires (0 = no hold).
+  int64 hold_expires_at = 6;
+}
+
+message PaymentStatusResponse {
+  // Booking lifecycle: Pending|Paid|Cancelled|Refunded|Expired.
+  string booking_status = 1;
+  // Stripe payment: RequiresConfirmation|Succeeded|Failed|Refunded.
+  string payment_status = 2;
 }
 
 message ConfirmBookingRequest {
