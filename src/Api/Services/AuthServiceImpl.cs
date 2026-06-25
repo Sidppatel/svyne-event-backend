@@ -37,7 +37,13 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
     {
         var ct = context.CancellationToken;
         var emailHash = EmailHasher.Hash(request.Email);
-        var tenantsId = await ResolveTenantAsync(request.TenantSlug, ct);
+        // Public attendees can share one email across tenants, so the public portal
+        // must disambiguate by tenant slug. Admin/staff/developer accounts are
+        // single-tenant: the tenant comes from the matched user row, and the slug
+        // (which may be a stale value left in the client) is ignored.
+        var portal = request.Portal ?? string.Empty;
+        var slugScoped = portal.Length == 0 || portal == "public";
+        var tenantsId = slugScoped ? await ResolveTenantAsync(request.TenantSlug, ct) : null;
 
         await using var connection = await db.OpenAsync(null, null, ct);
         await using var cmd = new NpgsqlCommand(
@@ -50,10 +56,22 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
         {
             var rowTenant = reader.IsDBNull(1) ? (Guid?)null : reader.GetGuid(1);
             var role = reader.GetInt16(4);
-            var matchesTenant = role == 99 ? rowTenant is null : rowTenant == tenantsId;
-            if (!matchesTenant)
+            // Skip rows whose role this portal does not serve. This lets a single
+            // email that exists in several tenants/roles resolve to the right account
+            // (e.g. attendee row skipped on the admin portal) instead of failing.
+            if (!PortalAllowsRole(portal, role))
             {
                 continue;
+            }
+            // Public portal: tenant must match the requested slug. Other portals:
+            // accept the row and take the tenant from it.
+            if (slugScoped)
+            {
+                var matchesTenant = role == 99 ? rowTenant is null : rowTenant == tenantsId;
+                if (!matchesTenant)
+                {
+                    continue;
+                }
             }
             if (reader.IsDBNull(2))
             {
@@ -70,22 +88,29 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
             {
                 break;
             }
-            EnsurePortalAllowsRole(request.Portal, role);
+            var email = reader.GetString(5);
+            var firstName = reader.GetString(6);
+            var lastName = reader.GetString(7);
+            var emailVerified = reader.GetBoolean(8);
+            await reader.CloseAsync();
+            // Use the account's real tenant slug, not the (possibly stale) request slug.
+            var tenantSlug = rowTenant is { } rt
+                ? await ResolveSlugAsync(rt, ct) ?? request.TenantSlug
+                : string.Empty;
             var profile = new UserProfile
             {
                 UsersId = usersId.ToString(),
                 TenantsId = rowTenant?.ToString() ?? string.Empty,
-                Email = reader.GetString(5),
-                FirstName = reader.GetString(6),
-                LastName = reader.GetString(7),
+                Email = email,
+                FirstName = firstName,
+                LastName = lastName,
                 Role = role,
-                TenantSlug = request.TenantSlug,
-                EmailVerified = reader.GetBoolean(8)
+                TenantSlug = tenantSlug,
+                EmailVerified = emailVerified
             };
-            await reader.CloseAsync();
             await MaybeRehashAsync(usersId, request.Password, pepperVersion, ct);
             await UpdateLastLoginAsync(usersId, ct);
-            return BuildAuth(usersId, profile.Email, rowTenant, role, request.TenantSlug, profile);
+            return BuildAuth(usersId, profile.Email, rowTenant, role, tenantSlug, profile);
         }
         throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid credentials"));
     }
@@ -555,13 +580,13 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
     // Enforce that the account's role is allowed on the portal it's logging into.
     // Empty portal = no restriction (back-compat for non-portal callers).
     // Roles: Attendee=0, Admin=1, Staff=2, SubTenant=3, Developer=99.
-    private static void EnsurePortalAllowsRole(string portal, int role)
+    private static bool PortalAllowsRole(string portal, int role)
     {
         if (string.IsNullOrEmpty(portal))
         {
-            return;
+            return true;
         }
-        var allowed = portal switch
+        return portal switch
         {
             "public" => role == 0,
             "admin" => role == 1 || role == 3,
@@ -569,7 +594,11 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
             "developer" => role == 99,
             _ => true
         };
-        if (!allowed)
+    }
+
+    private static void EnsurePortalAllowsRole(string portal, int role)
+    {
+        if (!PortalAllowsRole(portal, role))
         {
             throw new RpcException(new Status(StatusCode.PermissionDenied,
                 "This account cannot sign in on this portal. Use the correct portal, or sign up for an account here."));
@@ -587,6 +616,14 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
         cmd.Parameters.AddWithValue("s", slug);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is Guid g ? g : null;
+    }
+
+    private async Task<string?> ResolveSlugAsync(Guid tenantsId, CancellationToken ct)
+    {
+        await using var connection = await db.OpenAsync(null, null, ct);
+        await using var cmd = new NpgsqlCommand("SELECT slug FROM tenants WHERE tenants_id = @id AND archived_at IS NULL", connection);
+        cmd.Parameters.AddWithValue("id", tenantsId);
+        return await cmd.ExecuteScalarAsync(ct) as string;
     }
 
     private async Task MaybeRehashAsync(Guid usersId, string password, short pepperVersion, CancellationToken ct)

@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION sp_consume_password_reset_token(
     p_token_hash text
-) RETURNS SETOF users LANGUAGE plpgsql
+) RETURNS SETOF users LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog
 AS $$
 DECLARE
@@ -13,8 +13,10 @@ BEGIN
       AND expires_at > now()
     LIMIT 1;
 
+    -- Already used / expired / unknown: return no rows so the caller surfaces a
+    -- clean "Invalid or expired token" instead of a 500. Enforces single use.
     IF v_users_id IS NULL THEN
-        RAISE EXCEPTION 'Invalid or expired token';
+        RETURN;
     END IF;
 
     UPDATE password_reset_tokens
