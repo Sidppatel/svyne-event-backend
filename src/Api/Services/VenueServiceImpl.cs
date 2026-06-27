@@ -63,7 +63,7 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
         var ct = context.CancellationToken;
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT venues_id, name, description, image_path, phone, email, website, is_active FROM vw_venues WHERE venues_id = @id", connection);
+            "SELECT venues_id, name, description, image_path, phone, email, website, is_active, state FROM vw_venues WHERE venues_id = @id", connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -79,7 +79,7 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
         var response = new ListVenuesResponse { Meta = new PageMeta { Offset = request.Offset, Limit = request.Limit } };
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT venues_id, name, description, image_path, phone, email, website, is_active FROM vw_venues ORDER BY name", connection);
+            "SELECT venues_id, name, description, image_path, phone, email, website, is_active, state FROM vw_venues ORDER BY name", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
@@ -98,7 +98,8 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
         Phone = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
         Email = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
         Website = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-        IsActive = !reader.IsDBNull(7) && reader.GetBoolean(7)
+        IsActive = !reader.IsDBNull(7) && reader.GetBoolean(7),
+        State = reader.IsDBNull(8) ? string.Empty : reader.GetString(8)
     };
 
     private void RequireTenant()

@@ -38,6 +38,7 @@ message Venue {
   string email = 6;
   string website = 7;
   bool is_active = 8;
+  string state = 9;
 }
 
 message CreateVenueRequest {
