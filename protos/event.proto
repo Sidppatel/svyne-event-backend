@@ -21,6 +21,51 @@ service EventService {
   rpc CreateScheduleItem (CreateScheduleItemRequest) returns (svyne.common.UuidValue);
   rpc UpdateScheduleItem (UpdateScheduleItemRequest) returns (svyne.common.AckResponse);
   rpc DeleteScheduleItem (svyne.common.UuidValue) returns (svyne.common.AckResponse);
+  rpc ListEventImages (ListEventImagesRequest) returns (ListEventImagesResponse);
+  rpc AddEventImage (AddEventImageRequest) returns (EventImage);
+  rpc RemoveEventImage (RemoveEventImageRequest) returns (svyne.common.AckResponse);
+  rpc SetPrimaryEventImage (RemoveEventImageRequest) returns (svyne.common.AckResponse);
+  rpc ReorderEventImages (ReorderEventImagesRequest) returns (svyne.common.AckResponse);
+  rpc GetMediaSettings (svyne.common.Empty) returns (MediaSettings);
+}
+
+message EventImage {
+  string images_id = 1;
+  string storage_key = 2;
+  string type = 3;
+  bool is_primary = 4;
+  int32 sort_order = 5;
+}
+
+message ListEventImagesRequest {
+  string events_id = 1;
+  string type = 2;
+}
+
+message ListEventImagesResponse {
+  repeated EventImage images = 1;
+}
+
+message AddEventImageRequest {
+  string events_id = 1;
+  string images_id = 2;
+  string type = 3;
+}
+
+message RemoveEventImageRequest {
+  string events_id = 1;
+  string images_id = 2;
+}
+
+message ReorderEventImagesRequest {
+  string events_id = 1;
+  string type = 2;
+  repeated string images_id = 3;
+}
+
+message MediaSettings {
+  string event_image_aspect_ratio = 1;
+  string event_thumbnail_aspect_ratio = 2;
 }
 
 message ScheduleItem {
@@ -76,6 +121,7 @@ message Event {
   string sponsors_json = 16;
   bool fees_included = 17;
   string event_type = 18;            // Open | Table | Both
+  string primary_image_id = 19;      // images_id of primary thumbnail (fallback event image)
 }
 
 message GetEventBySlugRequest { string slug = 1; }

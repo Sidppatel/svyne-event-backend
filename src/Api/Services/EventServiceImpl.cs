@@ -326,6 +326,129 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         return new AckResponse { Success = true, Message = "Schedule item deleted" };
     }
 
+    public override async Task<ListEventImagesResponse> ListEventImages(ListEventImagesRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        var response = new ListEventImagesResponse();
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT images_id, storage_key, type, is_primary, sort_order "
+            + "FROM sp_list_event_images(@ev, @type)", connection);
+        cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
+        cmd.Parameters.AddWithValue("type", (object?)NullIfEmpty(request.Type) ?? DBNull.Value);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            response.Images.Add(MapEventImage(reader));
+        }
+        return response;
+    }
+
+    public override async Task<EventImage> AddEventImage(AddEventImageRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        RequireTenant();
+        var type = NullIfEmpty(request.Type) ?? "event_image";
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT i.storage_key, l.image_type, l.is_primary, l.sort_order "
+            + "FROM sp_link_event_image(@ev, @img, @type) l "
+            + "JOIN images i ON i.images_id = @img", connection);
+        cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
+        cmd.Parameters.AddWithValue("img", Guid.Parse(request.ImagesId));
+        cmd.Parameters.AddWithValue("type", type);
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                throw new RpcException(new Status(StatusCode.Internal, "Failed to link image"));
+            }
+            return new EventImage
+            {
+                ImagesId = request.ImagesId,
+                StorageKey = reader.GetString(0),
+                Type = reader.GetString(1),
+                IsPrimary = reader.GetBoolean(2),
+                SortOrder = reader.GetInt32(3)
+            };
+        }
+        catch (PostgresException ex)
+        {
+            throw MapPostgres(ex);
+        }
+    }
+
+    public override async Task<AckResponse> RemoveEventImage(RemoveEventImageRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        RequireTenant();
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand("SELECT sp_remove_event_image(@ev, @img)", connection);
+        cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
+        cmd.Parameters.AddWithValue("img", Guid.Parse(request.ImagesId));
+        var ok = (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        return new AckResponse { Success = ok, Message = ok ? "Image removed" : "Image not found" };
+    }
+
+    public override async Task<AckResponse> SetPrimaryEventImage(RemoveEventImageRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        RequireTenant();
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand("SELECT sp_set_event_primary_image(@ev, @img)", connection);
+        cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
+        cmd.Parameters.AddWithValue("img", Guid.Parse(request.ImagesId));
+        var ok = (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        return new AckResponse { Success = ok, Message = ok ? "Primary image set" : "Image not found" };
+    }
+
+    public override async Task<AckResponse> ReorderEventImages(ReorderEventImagesRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        RequireTenant();
+        var ids = request.ImagesId.Select(Guid.Parse).ToArray();
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand("SELECT sp_reorder_event_images(@ev, @type, @ids)", connection);
+        cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
+        cmd.Parameters.AddWithValue("type", NullIfEmpty(request.Type) ?? "event_image");
+        cmd.Parameters.AddWithValue("ids", ids);
+        await cmd.ExecuteNonQueryAsync(ct);
+        return new AckResponse { Success = true, Message = "Images reordered" };
+    }
+
+    public override async Task<MediaSettings> GetMediaSettings(Empty request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        await using var connection = await db.OpenAsync(null, null, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT key, value FROM app_settings WHERE key IN ('event_image_aspect_ratio', 'event_thumbnail_aspect_ratio')",
+            connection);
+        var settings = new MediaSettings { EventImageAspectRatio = "16:9", EventThumbnailAspectRatio = "4:3" };
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            if (reader.GetString(0) == "event_image_aspect_ratio")
+            {
+                settings.EventImageAspectRatio = reader.GetString(1);
+            }
+            else
+            {
+                settings.EventThumbnailAspectRatio = reader.GetString(1);
+            }
+        }
+        return settings;
+    }
+
+    private static EventImage MapEventImage(NpgsqlDataReader r) => new()
+    {
+        ImagesId = r.GetGuid(0).ToString(),
+        StorageKey = r.GetString(1),
+        Type = r.GetString(2),
+        IsPrimary = r.GetBoolean(3),
+        SortOrder = r.GetInt32(4)
+    };
+
     private static ScheduleItem MapScheduleItem(NpgsqlDataReader r) => new()
     {
         ScheduleItemsId = r.GetGuid(0).ToString(),
@@ -338,6 +461,7 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
 
     private static RpcException MapPostgres(PostgresException ex) => ex.SqlState switch
     {
+        "P0001" => new RpcException(new Status(StatusCode.FailedPrecondition, ex.MessageText)),
         "P0002" => new RpcException(new Status(StatusCode.NotFound, ex.MessageText)),
         "22023" => new RpcException(new Status(StatusCode.FailedPrecondition, ex.MessageText)),
         "23P01" => new RpcException(new Status(StatusCode.FailedPrecondition, ex.MessageText)),
@@ -347,7 +471,7 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
 
     private const string EventSelect =
         "SELECT events_id, title, slug, description, status, category, start_date, end_date, image_path, "
-        + "is_featured, layout_mode, total_capacity, venues_id, performers::text, sponsors::text, fees_included, event_type FROM vw_events";
+        + "is_featured, layout_mode, total_capacity, venues_id, performers::text, sponsors::text, fees_included, event_type, primary_image_id FROM vw_events";
 
     private static Event MapEvent(NpgsqlDataReader r) => new()
     {
@@ -367,7 +491,8 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         PerformersJson = r.IsDBNull(13) ? "[]" : r.GetString(13),
         SponsorsJson = r.IsDBNull(14) ? "[]" : r.GetString(14),
         FeesIncluded = !r.IsDBNull(15) && r.GetBoolean(15),
-        EventType = r.IsDBNull(16) ? string.Empty : r.GetString(16)
+        EventType = r.IsDBNull(16) ? string.Empty : r.GetString(16),
+        PrimaryImageId = r.IsDBNull(17) ? string.Empty : r.GetGuid(17).ToString()
     };
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;

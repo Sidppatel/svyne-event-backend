@@ -7,7 +7,7 @@ AS $$
             SELECT i.storage_key
             FROM event_images ei
             JOIN images i ON i.images_id = ei.images_id
-            WHERE ei.events_id = p_entity_id AND ei.is_primary = true
+            WHERE ei.events_id = p_entity_id AND ei.is_primary = true AND ei.type = 'event_image'
             LIMIT 1
         )
         WHEN p_entity_type = 'venue' THEN (

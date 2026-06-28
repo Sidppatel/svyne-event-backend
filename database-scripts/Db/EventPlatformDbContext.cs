@@ -922,12 +922,17 @@ public class EventPlatformDbContext(
 
         modelBuilder.Entity<EventImage>(entity =>
         {
-            entity.ToTable("event_images");
+            entity.ToTable("event_images", t =>
+            {
+                t.HasCheckConstraint("CK_event_images_Type",
+                    "type IN ('event_image','event_thumbnail')");
+            });
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Type).HasMaxLength(32).HasDefaultValue("event_image");
             entity.HasIndex(e => e.TenantsId);
             entity.HasIndex(e => new { e.EventsId, e.ImagesId }).IsUnique();
             entity.HasIndex(e => new { e.EventsId, e.SortOrder });
-            entity.HasIndex(e => e.EventsId)
+            entity.HasIndex(e => new { e.EventsId, e.Type })
                 .IsUnique()
                 .HasFilter("is_primary = true");
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantsId)

@@ -41,6 +41,7 @@ LEFT JOIN LATERAL (
     FROM event_images ei
     JOIN images i ON i.images_id = ei.images_id
     WHERE ei.events_id = e.events_id AND ei.is_primary = true
+    ORDER BY CASE ei.type WHEN 'event_thumbnail' THEN 0 WHEN 'event_image' THEN 1 ELSE 2 END
     LIMIT 1
 ) img ON true
 LEFT JOIN LATERAL (

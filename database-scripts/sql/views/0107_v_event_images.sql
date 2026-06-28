@@ -13,6 +13,7 @@ SELECT
     i.caption      AS caption,
     ei.is_primary   AS is_primary,
     ei.sort_order   AS sort_order,
-    i.created_at    AS created_at
+    i.created_at    AS created_at,
+    ei.type         AS type
 FROM event_images ei
 JOIN images i ON i.images_id = ei.images_id;

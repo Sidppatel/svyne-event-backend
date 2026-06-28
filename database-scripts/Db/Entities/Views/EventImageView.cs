@@ -15,5 +15,6 @@ public class EventImageView
     public string? Caption { get; set; }
     public bool IsPrimary { get; set; }
     public int SortOrder { get; set; }
+    public string Type { get; set; } = "event_image";
     public DateTime CreatedAt { get; set; }
 }

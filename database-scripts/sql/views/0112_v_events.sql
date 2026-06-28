@@ -48,7 +48,8 @@ SELECT
     ts.min_price::int AS min_table_price_cents,
     ettp.min_price::int AS min_ticket_type_price_cents,
     ts.min_total_price::int AS display_min_table_price_cents,
-    ettp.min_total_price::int AS display_min_ticket_type_price_cents
+    ettp.min_total_price::int AS display_min_ticket_type_price_cents,
+    prim.images_id AS primary_image_id
 FROM events e
 JOIN venues v ON e.venues_id = v.venues_id
 LEFT JOIN addresses a ON v.addresses_id = a.addresses_id
@@ -79,4 +80,11 @@ LEFT JOIN LATERAL (
     FROM tables t
     JOIN event_tables et ON t.event_tables_id = et.event_tables_id
     WHERE t.events_id = e.events_id AND t.is_active = true
-) table_cap ON true;
+) table_cap ON true
+LEFT JOIN LATERAL (
+    SELECT ei.images_id
+    FROM event_images ei
+    WHERE ei.events_id = e.events_id AND ei.is_primary = true
+    ORDER BY CASE ei.type WHEN 'event_thumbnail' THEN 0 WHEN 'event_image' THEN 1 ELSE 2 END
+    LIMIT 1
+) prim ON true;

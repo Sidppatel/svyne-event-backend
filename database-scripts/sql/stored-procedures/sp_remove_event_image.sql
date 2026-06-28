@@ -6,9 +6,10 @@ CREATE OR REPLACE FUNCTION sp_remove_event_image(
 AS $$
 DECLARE
     v_was_primary boolean;
+    v_type text;
     v_next_image_id uuid;
 BEGIN
-    SELECT is_primary INTO v_was_primary
+    SELECT is_primary, type INTO v_was_primary, v_type
     FROM event_images
     WHERE events_id = p_event_id AND images_id = p_image_id;
 
@@ -24,7 +25,7 @@ BEGIN
     IF v_was_primary THEN
         SELECT images_id INTO v_next_image_id
         FROM event_images
-        WHERE events_id = p_event_id
+        WHERE events_id = p_event_id AND type = v_type
         ORDER BY sort_order ASC
         LIMIT 1;
 

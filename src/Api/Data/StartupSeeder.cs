@@ -58,6 +58,8 @@ public sealed class StartupSeeder
         ("password_reset_link_base", "http://{slug}.localhost:5173/set-password", "Frontend base URL for the password reset link. {slug} is replaced by the tenant subdomain."),
         ("password_reset_expiry_hours", "1", "Password reset link validity window in hours."),
         ("booking_hold_seconds", "600", "Hard seat/table hold window in seconds while a booking awaits payment (10 minutes)."),
+        ("event_image_aspect_ratio", "16:9", "Crop and display aspect ratio for event page images."),
+        ("event_thumbnail_aspect_ratio", "4:3", "Crop and display aspect ratio for event list thumbnails."),
     };
 
     public async Task SeedAsync(CancellationToken ct)

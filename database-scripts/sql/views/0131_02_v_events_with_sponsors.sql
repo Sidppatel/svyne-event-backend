@@ -50,7 +50,8 @@ SELECT
     ts.min_total_price::int AS display_min_table_price_cents,
     ettp.min_total_price::int AS display_min_ticket_type_price_cents,
     COALESCE(perf.performers, '[]'::jsonb) AS performers,
-    COALESCE(spon.sponsors, '[]'::jsonb) AS sponsors
+    COALESCE(spon.sponsors, '[]'::jsonb) AS sponsors,
+    prim.images_id AS primary_image_id
 FROM events e
 JOIN venues v ON e.venues_id = v.venues_id
 LEFT JOIN addresses a ON v.addresses_id = a.addresses_id
@@ -115,4 +116,11 @@ LEFT JOIN LATERAL (
     FROM event_sponsors es
     JOIN sponsors s ON s.sponsors_id = es.sponsors_id
     WHERE es.events_id = e.events_id
-) spon ON true;
+) spon ON true
+LEFT JOIN LATERAL (
+    SELECT ei.images_id
+    FROM event_images ei
+    WHERE ei.events_id = e.events_id AND ei.is_primary = true
+    ORDER BY CASE ei.type WHEN 'event_thumbnail' THEN 0 WHEN 'event_image' THEN 1 ELSE 2 END
+    LIMIT 1
+) prim ON true;
