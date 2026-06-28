@@ -22,9 +22,10 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
     {
         var ct = context.CancellationToken;
         RequireTenant();
+        ValidateVenue(request.Name, request.Email, request.Phone, request.State);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_create_venue(@t, @name, @desc, @img, @phone, @email, @web, @l1, @l2, @city, @state, @zip, @cap, @vtype)", connection);
+            "SELECT sp_create_venue(@t, @name, @desc, @img, @phone, @email, @web, @l1, @l2, @city, @state, @zip)", connection);
         cmd.Parameters.AddWithValue("t", tenantContext.TenantsId!);
         cmd.Parameters.AddWithValue("name", request.Name);
         cmd.Parameters.AddWithValue("desc", (object?)NullIfEmpty(request.Description) ?? DBNull.Value);
@@ -37,8 +38,6 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
         cmd.Parameters.AddWithValue("city", (object?)NullIfEmpty(request.City) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("state", (object?)NullIfEmpty(request.State) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("zip", (object?)NullIfEmpty(request.Zip) ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("cap", DBNull.Value);
-        cmd.Parameters.AddWithValue("vtype", DBNull.Value);
         var id = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
         return new UuidValue { Value = id.ToString() };
     }
@@ -47,9 +46,10 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
     {
         var ct = context.CancellationToken;
         RequireTenant();
+        ValidateVenue(request.Name, request.Email, request.Phone, request.State);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_update_venue(@id, @name, @desc, NULL, @phone, @email, @web, @active, @l1, @l2, @city, @state, @zip, @cap, @vtype)", connection);
+            "SELECT sp_update_venue(@id, @name, @desc, NULL, @phone, @email, @web, @active, @l1, @l2, @city, @state, @zip)", connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(request.VenuesId));
         cmd.Parameters.AddWithValue("name", (object?)NullIfEmpty(request.Name) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("desc", (object?)NullIfEmpty(request.Description) ?? DBNull.Value);
@@ -62,8 +62,6 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
         cmd.Parameters.AddWithValue("city", (object?)NullIfEmpty(request.City) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("state", (object?)NullIfEmpty(request.State) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("zip", (object?)NullIfEmpty(request.Zip) ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("cap", DBNull.Value);
-        cmd.Parameters.AddWithValue("vtype", DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
         return new AckResponse { Success = true, Message = "Venue updated" };
     }
@@ -189,7 +187,7 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
 
     private const string VenueSelect =
         "SELECT venues_id, name, description, image_path, phone, email, website, is_active, state, "
-        + "address_line1, address_line2, city, zip_code, capacity, venue_type FROM vw_venues";
+        + "address_line1, address_line2, city, zip_code FROM vw_venues";
 
     private static Venue MapVenue(NpgsqlDataReader reader) => new()
     {
@@ -217,4 +215,31 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
     }
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
+
+    private static readonly System.Text.RegularExpressions.Regex EmailRx =
+        new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex PhoneRx =
+        new(@"^\+1[0-9]{10}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex StateRx =
+        new(@"^[A-Z]{2}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static void ValidateVenue(string name, string email, string phone, string state)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Venue name is required"));
+        }
+        if (!string.IsNullOrEmpty(email) && !EmailRx.IsMatch(email))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid email address"));
+        }
+        if (!string.IsNullOrEmpty(phone) && !PhoneRx.IsMatch(phone))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Phone must be +1 followed by 10 digits"));
+        }
+        if (!string.IsNullOrEmpty(state) && !StateRx.IsMatch(state))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "State must be a 2-letter code"));
+        }
+    }
 }

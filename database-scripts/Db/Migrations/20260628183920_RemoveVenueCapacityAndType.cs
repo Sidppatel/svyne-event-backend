@@ -11,8 +11,14 @@ namespace Db.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.views");
-            MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.stored_procedures");
+            // Drop the view (binds the columns) and the stale capacity/venue_type SP
+            // overloads before dropping the columns. The SQL reinstall at the end
+            // recreates the view/procs against the slimmed schema.
+            migrationBuilder.Sql("DROP VIEW IF EXISTS vw_venues CASCADE;");
+            migrationBuilder.Sql(
+                "DROP FUNCTION IF EXISTS sp_create_venue(uuid,text,text,text,text,text,text,text,text,text,text,text,int,text);");
+            migrationBuilder.Sql(
+                "DROP FUNCTION IF EXISTS sp_update_venue(uuid,text,text,text,text,text,text,bool,text,text,text,text,text,int,text);");
 
             migrationBuilder.DropColumn(
                 name: "capacity",
@@ -21,6 +27,9 @@ namespace Db.Migrations
             migrationBuilder.DropColumn(
                 name: "venue_type",
                 table: "venues");
+
+            MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.views");
+            MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.stored_procedures");
         }
 
         /// <inheritdoc />
