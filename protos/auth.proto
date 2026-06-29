@@ -21,6 +21,12 @@ service AuthService {
   rpc Me (svyne.common.Empty) returns (UserProfile);
   rpc UpdateProfile (UpdateProfileRequest) returns (UserProfile);
   rpc SetAvatar (SetAvatarRequest) returns (UserProfile);
+  rpc LinkGoogle (LinkGoogleRequest) returns (UserProfile);
+  rpc UnlinkGoogle (svyne.common.Empty) returns (UserProfile);
+}
+
+message LinkGoogleRequest {
+  string google_token = 1;
 }
 
 message UpdateProfileRequest {
@@ -117,4 +123,5 @@ message UserProfile {
   string city = 12;
   string state = 13;
   string zip = 14;
+  bool google_connected = 15;
 }

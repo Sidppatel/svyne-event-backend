@@ -11,6 +11,9 @@ service TenantService {
   rpc UpdateTenant (UpdateTenantRequest) returns (svyne.common.AckResponse);
   rpc ArchiveTenant (svyne.common.UuidValue) returns (svyne.common.AckResponse);
   rpc GetTenant (svyne.common.UuidValue) returns (Tenant);
+  rpc GetMyTenant (svyne.common.Empty) returns (Tenant);
+  rpc UpdateMyTenantContact (UpdateMyTenantContactRequest) returns (svyne.common.AckResponse);
+  rpc UpdateMyTenantBranding (UpdateMyTenantBrandingRequest) returns (svyne.common.AckResponse);
   rpc ListTenants (svyne.common.PageRequest) returns (ListTenantsResponse);
   rpc ListPublicTenants (svyne.common.Empty) returns (ListPublicTenantsResponse);
   rpc ListTenantMembers (svyne.common.UuidValue) returns (ListTenantMembersResponse);
@@ -52,6 +55,32 @@ message Tenant {
   // Tenant default service-fee formula. Auto-applied to every new event price;
   // empty = no default set. Developer-only (set via PricingService).
   string default_fee_formulas_id = 10;
+  string phone = 11;
+  string address_line1 = 12;
+  string address_line2 = 13;
+  string city = 14;
+  string state = 15;
+  string zip = 16;
+  string logo_url = 17;
+  string brand_primary = 18;
+  string brand_secondary = 19;
+  string brand_accent = 20;
+}
+
+message UpdateMyTenantBrandingRequest {
+  string logo_images_id = 1;
+  string brand_primary = 2;
+  string brand_secondary = 3;
+  string brand_accent = 4;
+}
+
+message UpdateMyTenantContactRequest {
+  string phone = 1;
+  string address_line1 = 2;
+  string address_line2 = 3;
+  string city = 4;
+  string state = 5;
+  string zip = 6;
 }
 
 message CreateTenantRequest {

@@ -84,11 +84,15 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
                     Value = (object?)reqJson ?? DBNull.Value
                 });
                 await sync.ExecuteNonQueryAsync(ct);
+                var bankLast4 = account.ExternalAccounts?.Data
+                    .OfType<Stripe.BankAccount>()
+                    .FirstOrDefault()?.Last4;
                 return new StripeStatus
                 {
                     ChargesEnabled = account.ChargesEnabled,
                     PayoutsEnabled = account.PayoutsEnabled,
-                    DetailsSubmitted = account.DetailsSubmitted
+                    DetailsSubmitted = account.DetailsSubmitted,
+                    BankLast4 = bankLast4 ?? string.Empty
                 };
             }
             catch (Stripe.StripeException)

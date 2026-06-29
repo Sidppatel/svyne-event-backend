@@ -265,6 +265,93 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         };
     }
 
+    public override async Task<Tenant> GetMyTenant(Empty request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        if (tenantContext.UsersId is not { } usersId || tenantContext.TenantsId is null)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Tenant context required"));
+        }
+        await using var connection = await db.OpenAsync(usersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT tenants_id, slug, name, legal_name, country_code, "
+            + "COALESCE(phone, ''), COALESCE(address_line1, ''), COALESCE(address_line2, ''), "
+            + "COALESCE(city, ''), COALESCE(state, ''), COALESCE(zip, ''), "
+            + "logo_images_id, COALESCE(brand_primary, ''), COALESCE(brand_secondary, ''), COALESCE(brand_accent, '') "
+            + "FROM sp_get_my_tenant(@u)", connection);
+        cmd.Parameters.AddWithValue("u", usersId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, "Tenant not found"));
+        }
+        var logoImagesId = reader.IsDBNull(11) ? (Guid?)null : reader.GetGuid(11);
+        var baseUrl = configuration["PUBLIC_BASE_URL"] ?? string.Empty;
+        return new Tenant
+        {
+            TenantsId = reader.GetGuid(0).ToString(),
+            Slug = reader.GetString(1),
+            Name = reader.GetString(2),
+            LegalName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+            CountryCode = reader.GetString(4),
+            Phone = reader.GetString(5),
+            AddressLine1 = reader.GetString(6),
+            AddressLine2 = reader.GetString(7),
+            City = reader.GetString(8),
+            State = reader.GetString(9),
+            Zip = reader.GetString(10),
+            LogoUrl = logoImagesId is { } logo ? $"{baseUrl}/images/{logo}" : string.Empty,
+            BrandPrimary = reader.GetString(12),
+            BrandSecondary = reader.GetString(13),
+            BrandAccent = reader.GetString(14)
+        };
+    }
+
+    public override async Task<AckResponse> UpdateMyTenantBranding(UpdateMyTenantBrandingRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        if (tenantContext.UsersId is not { } usersId || tenantContext.TenantsId is not { } tenantsId)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Tenant context required"));
+        }
+        object logo = DBNull.Value;
+        if (Guid.TryParse(request.LogoImagesId, out var logoId))
+        {
+            logo = logoId;
+        }
+        await using var connection = await db.OpenAsync(usersId, tenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT sp_update_tenant_branding(@t, @logo, @primary, @secondary, @accent)", connection);
+        cmd.Parameters.AddWithValue("t", tenantsId);
+        cmd.Parameters.AddWithValue("logo", logo);
+        cmd.Parameters.AddWithValue("primary", (object?)NullIfEmpty(request.BrandPrimary) ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("secondary", (object?)NullIfEmpty(request.BrandSecondary) ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("accent", (object?)NullIfEmpty(request.BrandAccent) ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+        return new AckResponse { Success = true, Message = "Tenant branding updated" };
+    }
+
+    public override async Task<AckResponse> UpdateMyTenantContact(UpdateMyTenantContactRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        if (tenantContext.UsersId is not { } usersId || tenantContext.TenantsId is not { } tenantsId)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Tenant context required"));
+        }
+        await using var connection = await db.OpenAsync(usersId, tenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT sp_update_tenant_contact(@t, @phone, @l1, @l2, @city, @state, @zip)", connection);
+        cmd.Parameters.AddWithValue("t", tenantsId);
+        cmd.Parameters.AddWithValue("phone", (object?)NullIfEmpty(request.Phone) ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("l1", (object?)NullIfEmpty(request.AddressLine1) ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("l2", (object?)NullIfEmpty(request.AddressLine2) ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("city", (object?)NullIfEmpty(request.City) ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("state", (object?)NullIfEmpty(request.State) ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("zip", (object?)NullIfEmpty(request.Zip) ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+        return new AckResponse { Success = true, Message = "Tenant contact updated" };
+    }
+
     public override async Task<AckResponse> UpdateTenant(UpdateTenantRequest request, ServerCallContext context)
     {
         RequireDeveloper();

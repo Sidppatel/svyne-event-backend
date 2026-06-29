@@ -98,7 +98,10 @@ public sealed class StripeService
     }
 
     public async Task<Account> GetAccountAsync(string accountId, CancellationToken ct)
-        => await new AccountService(client).GetAsync(accountId, cancellationToken: ct);
+        => await new AccountService(client).GetAsync(
+            accountId,
+            new AccountGetOptions { Expand = new List<string> { "external_accounts" } },
+            cancellationToken: ct);
 
     /// <summary>Pushes edited business details onto an existing connected account.</summary>
     public async Task UpdateAccountAsync(string accountId, StripeAccountPrefill prefill, CancellationToken ct)

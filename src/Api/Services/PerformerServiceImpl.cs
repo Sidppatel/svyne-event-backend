@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Grpc.Core;
 using Npgsql;
 using Svyne.Api.Data;
@@ -98,6 +99,30 @@ public sealed class PerformerServiceImpl : PerformerService.PerformerServiceBase
         return new AckResponse { Success = true, Message = "Performers updated" };
     }
 
+    public override async Task<PublicPerformer> GetPerformerBySlug(GetBySlugRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT performers_id, name, slug, primary_image_path, meta::text, events::text FROM vw_performer_public WHERE slug = @slug", connection);
+        cmd.Parameters.AddWithValue("slug", request.Slug);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, "Performer not found"));
+        }
+        var performer = new PublicPerformer
+        {
+            PerformersId = reader.GetGuid(0).ToString(),
+            Name = reader.GetString(1),
+            Slug = reader.GetString(2),
+            PrimaryImagePath = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+            MetaJson = reader.IsDBNull(4) ? "[]" : reader.GetString(4)
+        };
+        performer.Events.AddRange(CatalogPublic.ParseLinkedEvents(reader.IsDBNull(5) ? "[]" : reader.GetString(5)));
+        return performer;
+    }
+
     private void RequireTenant()
     {
         if (tenantContext.TenantsId is null && !tenantContext.IsDeveloper)
@@ -107,4 +132,30 @@ public sealed class PerformerServiceImpl : PerformerService.PerformerServiceBase
     }
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
+}
+
+internal static class CatalogPublic
+{
+    internal static List<PublicLinkedEvent> ParseLinkedEvents(string json)
+    {
+        var list = new List<PublicLinkedEvent>();
+        using var doc = JsonDocument.Parse(string.IsNullOrEmpty(json) ? "[]" : json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+        {
+            return list;
+        }
+        foreach (var item in doc.RootElement.EnumerateArray())
+        {
+            list.Add(new PublicLinkedEvent
+            {
+                EventsId = item.TryGetProperty("eventsId", out var id) ? id.GetString() ?? string.Empty : string.Empty,
+                Title = item.TryGetProperty("title", out var t) ? t.GetString() ?? string.Empty : string.Empty,
+                Slug = item.TryGetProperty("slug", out var s) ? s.GetString() ?? string.Empty : string.Empty,
+                StartDate = item.TryGetProperty("startDate", out var sd) && sd.ValueKind == JsonValueKind.Number ? sd.GetInt64() : 0,
+                PrimaryImagePath = item.TryGetProperty("primaryImagePath", out var img) && img.ValueKind == JsonValueKind.String ? img.GetString() ?? string.Empty : string.Empty,
+                Category = item.TryGetProperty("category", out var c) ? c.GetString() ?? string.Empty : string.Empty
+            });
+        }
+        return list;
+    }
 }

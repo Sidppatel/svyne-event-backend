@@ -76,6 +76,7 @@ message StripeStatus {
   bool charges_enabled = 1;
   bool payouts_enabled = 2;
   bool details_submitted = 3;
+  string bank_last4 = 4;
 }
 
 message StripeOnboardingLink { string url = 1; }

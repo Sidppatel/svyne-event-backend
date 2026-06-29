@@ -34,6 +34,8 @@ public class Event : BaseEntity
     /// </summary>
     public bool FeesIncluded { get; set; }
 
+    public string Meta { get; set; } = "[]";
+
     public NpgsqlTsVector? SearchVector { get; set; }
 
     public Guid TenantsId { get; set; }

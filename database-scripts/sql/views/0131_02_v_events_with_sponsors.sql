@@ -51,6 +51,7 @@ SELECT
     ettp.min_total_price::int AS display_min_ticket_type_price_cents,
     COALESCE(perf.performers, '[]'::jsonb) AS performers,
     COALESCE(spon.sponsors, '[]'::jsonb) AS sponsors,
+    COALESCE(e.meta, '[]'::jsonb) AS extra_info,
     prim.images_id AS primary_image_id
 FROM events e
 JOIN venues v ON e.venues_id = v.venues_id

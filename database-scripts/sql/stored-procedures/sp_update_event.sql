@@ -1,6 +1,7 @@
 DROP FUNCTION IF EXISTS sp_update_event(uuid, text, text, text, text, timestamptz, timestamptz, text, bool, text, int, int, int, int, int, int, uuid, timestamptz);
 DROP FUNCTION IF EXISTS sp_update_event(uuid, text, text, text, text, timestamptz, timestamptz, text, bool, text, int, int, int, int, int, int, uuid, timestamptz, text);
 DROP FUNCTION IF EXISTS sp_update_event(uuid, text, text, text, text, timestamptz, timestamptz, text, bool, text, int, int, int, int, uuid, timestamptz, text);
+DROP FUNCTION IF EXISTS sp_update_event(uuid, text, text, text, text, timestamptz, timestamptz, text, bool, text, int, int, int, uuid, timestamptz, text);
 
 CREATE OR REPLACE FUNCTION sp_update_event(
     p_id uuid, p_title text, p_slug text, p_description text, p_category text,
@@ -8,7 +9,8 @@ CREATE OR REPLACE FUNCTION sp_update_event(
     p_layout_mode text, p_price_per_person_cents int,
     p_platform_fee_percent int, p_platform_fee_cents int,
     p_venue_id uuid,
-    p_scheduled_publish_at timestamptz DEFAULT NULL, p_event_type text DEFAULT NULL
+    p_scheduled_publish_at timestamptz DEFAULT NULL, p_event_type text DEFAULT NULL,
+    p_meta jsonb DEFAULT NULL
 ) RETURNS void LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -28,6 +30,7 @@ BEGIN
         event_type = COALESCE(NULLIF(p_event_type, ''), event_type),
         venues_id = COALESCE(p_venue_id, venues_id),
         scheduled_publish_at = p_scheduled_publish_at,
+        meta = COALESCE(p_meta, meta),
         updated_at = now()
     WHERE events_id = p_id;
 END; $$;

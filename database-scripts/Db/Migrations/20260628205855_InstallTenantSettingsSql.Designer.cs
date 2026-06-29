@@ -3,6 +3,7 @@ using System;
 using Db;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -12,9 +13,11 @@ using NpgsqlTypes;
 namespace Db.Migrations
 {
     [DbContext(typeof(EventPlatformDbContext))]
-    partial class EventPlatformDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260628205855_InstallTenantSettingsSql")]
+    partial class InstallTenantSettingsSql
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -670,13 +673,6 @@ namespace Db.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("layout_mode");
-
-                    b.Property<string>("Meta")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("meta")
-                        .HasDefaultValueSql("'[]'::jsonb");
 
                     b.Property<DateTime?>("PublishedAt")
                         .HasColumnType("timestamp with time zone")
@@ -2931,18 +2927,6 @@ namespace Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("archived_at");
 
-                    b.Property<string>("BrandAccent")
-                        .HasColumnType("text")
-                        .HasColumnName("brand_accent");
-
-                    b.Property<string>("BrandPrimary")
-                        .HasColumnType("text")
-                        .HasColumnName("brand_primary");
-
-                    b.Property<string>("BrandSecondary")
-                        .HasColumnType("text")
-                        .HasColumnName("brand_secondary");
-
                     b.Property<string>("City")
                         .HasColumnType("text")
                         .HasColumnName("city");
@@ -2967,10 +2951,6 @@ namespace Db.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("legal_name");
-
-                    b.Property<Guid?>("LogoImagesId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("logo_images_id");
 
                     b.Property<string>("Name")
                         .IsRequired()

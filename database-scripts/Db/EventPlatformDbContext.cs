@@ -632,6 +632,7 @@ public class EventPlatformDbContext(
             entity.Property(e => e.EventType).HasConversion<string>().HasMaxLength(20)
                 .HasDefaultValue(Db.Enums.EventType.Open);
             entity.Property(e => e.FeesIncluded).HasDefaultValue(false);
+            entity.Property(e => e.Meta).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantsId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Venue).WithMany(v => v.Events).HasForeignKey(e => e.VenuesId)

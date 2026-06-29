@@ -277,12 +277,67 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
         return await LoadProfileAsync(usersId, tc, ct);
     }
 
+    public override async Task<UserProfile> LinkGoogle(LinkGoogleRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        var tc = context.GetHttpContext().RequestServices.GetRequiredService<TenantContext>();
+        if (tc.UsersId is not { } usersId)
+        {
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Not authenticated"));
+        }
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            payload = await GoogleJsonWebSignature.ValidateAsync(request.GoogleToken);
+        }
+        catch (InvalidJwtException)
+        {
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid Google token"));
+        }
+        try
+        {
+            await using var connection = await db.OpenAsync(usersId, tc.TenantsId, ct);
+            await using var cmd = new NpgsqlCommand("SELECT sp_link_google(@u, @sub)", connection);
+            cmd.Parameters.AddWithValue("u", usersId);
+            cmd.Parameters.AddWithValue("sub", payload.Subject);
+            await cmd.ExecuteScalarAsync(ct);
+        }
+        catch (PostgresException ex) when (ex.SqlState == "P0001")
+        {
+            throw new RpcException(new Status(StatusCode.AlreadyExists, ex.MessageText));
+        }
+        return await LoadProfileAsync(usersId, tc, ct);
+    }
+
+    public override async Task<UserProfile> UnlinkGoogle(Svyne.Protos.Common.Empty request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        var tc = context.GetHttpContext().RequestServices.GetRequiredService<TenantContext>();
+        if (tc.UsersId is not { } usersId)
+        {
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Not authenticated"));
+        }
+        try
+        {
+            await using var connection = await db.OpenAsync(usersId, tc.TenantsId, ct);
+            await using var cmd = new NpgsqlCommand("SELECT sp_unlink_google(@u)", connection);
+            cmd.Parameters.AddWithValue("u", usersId);
+            await cmd.ExecuteScalarAsync(ct);
+        }
+        catch (PostgresException ex) when (ex.SqlState == "P0002")
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.MessageText));
+        }
+        return await LoadProfileAsync(usersId, tc, ct);
+    }
+
     private async Task<UserProfile> LoadProfileAsync(Guid usersId, TenantContext tc, CancellationToken ct)
     {
         await using var connection = await db.OpenAsync(usersId, tc.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT u.email, u.first_name, u.last_name, u.email_verified, COALESCE(u.phone, ''), u.images_id, "
-            + "COALESCE(a.line1, ''), COALESCE(a.city, ''), COALESCE(a.state, ''), COALESCE(a.zip_code, '') "
+            + "COALESCE(a.line1, ''), COALESCE(a.city, ''), COALESCE(a.state, ''), COALESCE(a.zip_code, ''), "
+            + "u.google_subject IS NOT NULL "
             + "FROM users u LEFT JOIN addresses a ON a.addresses_id = u.addresses_id WHERE u.users_id = @id", connection);
         cmd.Parameters.AddWithValue("id", usersId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -307,7 +362,8 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
             AddressLine = reader.GetString(6),
             City = reader.GetString(7),
             State = reader.GetString(8),
-            Zip = reader.GetString(9)
+            Zip = reader.GetString(9),
+            GoogleConnected = reader.GetBoolean(10)
         };
     }
 

@@ -24,6 +24,7 @@ service PerformerService {
   rpc DeletePerformer (svyne.common.UuidValue) returns (svyne.common.AckResponse);
   rpc ListPerformers (svyne.common.PageRequest) returns (ListPerformersResponse);
   rpc SetEventPerformers (SetEventLinksRequest) returns (svyne.common.AckResponse);
+  rpc GetPerformerBySlug (GetBySlugRequest) returns (PublicPerformer);
 }
 
 service SponsorService {
@@ -32,6 +33,38 @@ service SponsorService {
   rpc DeleteSponsor (svyne.common.UuidValue) returns (svyne.common.AckResponse);
   rpc ListSponsors (svyne.common.PageRequest) returns (ListSponsorsResponse);
   rpc SetEventSponsors (SetEventLinksRequest) returns (svyne.common.AckResponse);
+  rpc GetSponsorBySlug (GetBySlugRequest) returns (PublicSponsor);
+}
+
+message GetBySlugRequest {
+  string slug = 1;
+}
+
+message PublicLinkedEvent {
+  string events_id = 1;
+  string title = 2;
+  string slug = 3;
+  int64 start_date = 4;
+  string primary_image_path = 5;
+  string category = 6;
+}
+
+message PublicPerformer {
+  string performers_id = 1;
+  string name = 2;
+  string slug = 3;
+  string primary_image_path = 4;
+  string meta_json = 5;
+  repeated PublicLinkedEvent events = 6;
+}
+
+message PublicSponsor {
+  string sponsors_id = 1;
+  string name = 2;
+  string slug = 3;
+  string primary_image_path = 4;
+  string meta_json = 5;
+  repeated PublicLinkedEvent events = 6;
 }
 
 message Venue {

@@ -98,6 +98,30 @@ public sealed class SponsorServiceImpl : SponsorService.SponsorServiceBase
         return new AckResponse { Success = true, Message = "Sponsors updated" };
     }
 
+    public override async Task<PublicSponsor> GetSponsorBySlug(GetBySlugRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT sponsors_id, name, slug, primary_image_path, meta::text, events::text FROM vw_sponsor_public WHERE slug = @slug", connection);
+        cmd.Parameters.AddWithValue("slug", request.Slug);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, "Sponsor not found"));
+        }
+        var sponsor = new PublicSponsor
+        {
+            SponsorsId = reader.GetGuid(0).ToString(),
+            Name = reader.GetString(1),
+            Slug = reader.GetString(2),
+            PrimaryImagePath = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+            MetaJson = reader.IsDBNull(4) ? "[]" : reader.GetString(4)
+        };
+        sponsor.Events.AddRange(CatalogPublic.ParseLinkedEvents(reader.IsDBNull(5) ? "[]" : reader.GetString(5)));
+        return sponsor;
+    }
+
     private void RequireTenant()
     {
         if (tenantContext.TenantsId is null && !tenantContext.IsDeveloper)

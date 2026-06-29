@@ -51,7 +51,15 @@ builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<StartupSeeder>();
 builder.Services.AddSingleton<AppSettingsProvider>();
 builder.Services.AddSingleton<Svyne.Api.Email.EmailTemplateRenderer>();
-builder.Services.AddSingleton<Svyne.Api.Email.IEmailService, Svyne.Api.Email.LocalFileEmailService>();
+// Resend in deployed envs; local .html files when RESEND_API_KEY is absent (dev).
+if (!string.IsNullOrEmpty(builder.Configuration["RESEND_API_KEY"]))
+{
+    builder.Services.AddSingleton<Svyne.Api.Email.IEmailService, Svyne.Api.Email.ResendEmailService>();
+}
+else
+{
+    builder.Services.AddSingleton<Svyne.Api.Email.IEmailService, Svyne.Api.Email.LocalFileEmailService>();
+}
 builder.Services.AddSingleton<PasswordHasher>();
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddScoped<TenantContext>();
