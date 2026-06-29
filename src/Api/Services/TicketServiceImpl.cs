@@ -166,6 +166,41 @@ public sealed class TicketServiceImpl : TicketService.TicketServiceBase
         return new AckResponse { Success = ok, Message = ok ? "Invite sent" : "Invite failed" };
     }
 
+    public override async Task<AckResponse> ClaimTicketSelf(UuidValue request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        if (tenantContext.UsersId is null)
+        {
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Authentication required"));
+        }
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT success, message FROM sp_claim_ticket_self(@ticket_id, @user_id)", connection);
+        cmd.Parameters.AddWithValue("ticket_id", Guid.Parse(request.Value));
+        cmd.Parameters.AddWithValue("user_id", tenantContext.UsersId!);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return new AckResponse { Success = false, Message = "Claim failed" };
+        }
+        return new AckResponse { Success = reader.GetBoolean(0), Message = reader.IsDBNull(1) ? string.Empty : reader.GetString(1) };
+    }
+
+    public override async Task<AckResponse> RevokeTicket(UuidValue request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        if (tenantContext.UsersId is null)
+        {
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Authentication required"));
+        }
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT sp_revoke_ticket_invite(@ticket_id)", connection);
+        cmd.Parameters.AddWithValue("ticket_id", Guid.Parse(request.Value));
+        await cmd.ExecuteNonQueryAsync(ct);
+        return new AckResponse { Success = true, Message = "Ticket revoked" };
+    }
+
     private static Ticket MapTicket(NpgsqlDataReader reader) => new()
     {
         TicketsId = reader.GetGuid(0).ToString(),

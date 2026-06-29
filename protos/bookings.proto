@@ -27,6 +27,8 @@ service TicketService {
   rpc ClaimTicket (ClaimTicketRequest) returns (svyne.common.AckResponse);
   rpc InviteTicket (InviteTicketRequest) returns (svyne.common.AckResponse);
   rpc ListTickets (svyne.common.UuidValue) returns (ListTicketsResponse);
+  rpc ClaimTicketSelf (svyne.common.UuidValue) returns (svyne.common.AckResponse);
+  rpc RevokeTicket (svyne.common.UuidValue) returns (svyne.common.AckResponse);
 }
 
 service CheckInService {
