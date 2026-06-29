@@ -13,7 +13,7 @@ CREATE OR REPLACE FUNCTION sp_insert_stripe_transfer(
     p_amount_cents int,
     p_currency text,
     p_raw_event jsonb
-) RETURNS uuid LANGUAGE plpgsql
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog
 AS $$
 DECLARE

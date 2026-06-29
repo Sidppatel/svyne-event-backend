@@ -2,7 +2,7 @@
 -- payment. Flips them to 'Expired', frees the held table, and marks any
 -- attached (unpaid) Stripe transaction Failed. Idempotent; safe to run on a
 -- short interval from the HoldExpiryWorker. Returns the number expired.
-CREATE OR REPLACE FUNCTION sp_expire_holds() RETURNS int LANGUAGE plpgsql
+CREATE OR REPLACE FUNCTION sp_expire_holds() RETURNS int LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog
 AS $$
 DECLARE v_count int;

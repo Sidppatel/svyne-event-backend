@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION sp_update_stripe_payout(
     p_arrival_date timestamptz,
     p_paid_at timestamptz,
     p_raw_event jsonb
-) RETURNS uuid LANGUAGE plpgsql
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog
 AS $$
 DECLARE

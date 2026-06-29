@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION sp_confirm_booking(p_booking_id uuid, p_qr_token text)
-RETURNS void LANGUAGE plpgsql
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog
 AS $$
 DECLARE v_seats int; v_seat int; v_tenant uuid; v_event uuid; v_code text; v_attempt int;

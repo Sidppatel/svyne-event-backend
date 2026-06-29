@@ -1,5 +1,6 @@
 using Grpc.Core;
 using Npgsql;
+using Stripe;
 using Svyne.Api.Data;
 using Svyne.Api.Payments;
 using Svyne.Api.Security;
@@ -179,18 +180,32 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         }
 
         Stripe.PaymentIntent intent;
-        // Resume: if a usable intent already exists, hand back its secret instead
-        // of creating a duplicate (idempotent for tab switches / re-entry).
-        if (!string.IsNullOrEmpty(existingIntent))
+        try
         {
-            var existing = await stripe.GetPaymentIntentAsync(existingIntent, ct);
-            intent = StripeService.IsPayable(existing.Status)
-                ? existing
-                : await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, ct);
+            // Resume: if a usable intent already exists, hand back its secret instead
+            // of creating a duplicate (idempotent for tab switches / re-entry).
+            if (!string.IsNullOrEmpty(existingIntent))
+            {
+                var existing = await stripe.GetPaymentIntentAsync(existingIntent, ct);
+                if (existing.Status == "succeeded" || existing.Status == "processing")
+                {
+                    intent = existing;
+                }
+                else
+                {
+                    intent = StripeService.IsPayable(existing.Status)
+                        ? existing
+                        : await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, ct);
+                }
+            }
+            else
+            {
+                intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, ct);
+            }
         }
-        else
+        catch (StripeException ex)
         {
-            intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, ct);
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, $"Stripe payment setup failed: {ex.StripeError?.Message ?? ex.Message}"));
         }
 
         // transfer_amount = what the seller receives = ticket subtotal.

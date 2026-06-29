@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION sp_cancel_booking(p_booking_id uuid) RETURNS void LANGUAGE plpgsql
+CREATE OR REPLACE FUNCTION sp_cancel_booking(p_booking_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog
 AS $$
 BEGIN
