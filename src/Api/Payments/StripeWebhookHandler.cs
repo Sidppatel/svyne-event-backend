@@ -3,6 +3,7 @@ using Npgsql;
 using NpgsqlTypes;
 using Stripe;
 using Svyne.Api.Data;
+using Svyne.Api.Email;
 
 namespace Svyne.Api.Payments;
 
@@ -16,16 +17,27 @@ public sealed class StripeWebhookHandler
 {
     private readonly Db db;
     private readonly ILogger<StripeWebhookHandler> logger;
+    private readonly IEmailService emailService;
+    private readonly EmailTemplateRenderer templates;
+    private readonly AppSettingsProvider settings;
 
-    public StripeWebhookHandler(Db db, ILogger<StripeWebhookHandler> logger)
+    public StripeWebhookHandler(
+        Db db,
+        ILogger<StripeWebhookHandler> logger,
+        IEmailService emailService,
+        EmailTemplateRenderer templates,
+        AppSettingsProvider settings)
     {
         this.db = db;
         this.logger = logger;
+        this.emailService = emailService;
+        this.templates = templates;
+        this.settings = settings;
     }
 
     public async Task HandleAsync(Event stripeEvent, CancellationToken ct)
     {
-        await using var connection = await db.OpenAsync(null, null, ct);
+        await using var connection = await db.OpenBootstrapAsync(ct);
 
         switch (stripeEvent.Type)
         {
@@ -119,6 +131,10 @@ public sealed class StripeWebhookHandler
             enrich.Parameters.AddWithValue("fees", DBNull.Value);
             await enrich.ExecuteNonQueryAsync(ct);
         }
+
+        // Send booking confirmation email
+        await BookingEmailSender.SendBookingConfirmationEmailAsync(
+            conn, bookingId.Value, emailService, templates, settings, logger, ct);
     }
 
     private async Task OnPaymentCanceled(NpgsqlConnection conn, PaymentIntent pi, CancellationToken ct)

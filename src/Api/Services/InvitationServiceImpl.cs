@@ -15,19 +15,22 @@ public sealed class InvitationServiceImpl : InvitationService.InvitationServiceB
     private readonly AppSettingsProvider settings;
     private readonly IEmailService email;
     private readonly EmailTemplateRenderer templates;
+    private readonly PasswordHasher passwordHasher;
 
     public InvitationServiceImpl(
         Db db,
         TenantContext tenantContext,
         AppSettingsProvider settings,
         IEmailService email,
-        EmailTemplateRenderer templates)
+        EmailTemplateRenderer templates,
+        PasswordHasher passwordHasher)
     {
         this.db = db;
         this.tenantContext = tenantContext;
         this.settings = settings;
         this.email = email;
         this.templates = templates;
+        this.passwordHasher = passwordHasher;
     }
 
     public override async Task<UuidValue> CreateInvitation(CreateInvitationRequest request, ServerCallContext context)
@@ -38,7 +41,7 @@ public sealed class InvitationServiceImpl : InvitationService.InvitationServiceB
         var hash = EmailHasher.Hash(token);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_create_invitation(@email, @hash, @role, @by, @exp, @t)", connection);
+            "SELECT sp_create_invitation(@email, @hash, @role, @by, @exp, @t, @event)", connection);
         cmd.Parameters.AddWithValue("email", request.Email);
         cmd.Parameters.AddWithValue("hash", hash);
         cmd.Parameters.AddWithValue("role", (short)request.Role);
@@ -46,6 +49,7 @@ public sealed class InvitationServiceImpl : InvitationService.InvitationServiceB
         var expirySeconds = await settings.GetIntAsync("admin_invitation_expiry", 86400, ct);
         cmd.Parameters.AddWithValue("exp", DateTime.UtcNow.AddSeconds(expirySeconds));
         cmd.Parameters.AddWithValue("t", (object?)tenantContext.TenantsId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("event", string.IsNullOrEmpty(request.EventsId) ? DBNull.Value : Guid.Parse(request.EventsId));
         var id = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
 
         await SendInvitationEmailAsync(request.Email, token, expirySeconds, ct);
@@ -80,16 +84,67 @@ public sealed class InvitationServiceImpl : InvitationService.InvitationServiceB
         var hash = EmailHasher.Hash(request.Token);
         await using var connection = await db.OpenAsync(null, null, ct);
         await using var lookup = new NpgsqlCommand(
-            "SELECT invitation_id FROM vw_invitations WHERE token_hash = @h AND status = 'Pending'", connection);
+            "SELECT invitation_id, email, role, tenants_id, event_id FROM vw_invitations WHERE token_hash = @h AND status = 'Pending'", connection);
         lookup.Parameters.AddWithValue("h", hash);
-        var invitationId = await lookup.ExecuteScalarAsync(ct);
-        if (invitationId is not Guid id)
+        
+        Guid id;
+        string email;
+        short role;
+        Guid? tenantsId;
+        Guid? eventId;
+        
+        await using (var reader = await lookup.ExecuteReaderAsync(ct))
         {
-            return new AckResponse { Success = false, Message = "Invalid or expired invitation" };
+            if (!await reader.ReadAsync(ct))
+            {
+                return new AckResponse { Success = false, Message = "Invalid or expired invitation" };
+            }
+            id = reader.GetGuid(0);
+            email = reader.GetString(1);
+            role = reader.GetInt16(2);
+            tenantsId = reader.IsDBNull(3) ? (Guid?)null : reader.GetGuid(3);
+            eventId = reader.IsDBNull(4) ? (Guid?)null : reader.GetGuid(4);
         }
-        await using var cmd = new NpgsqlCommand("SELECT sp_accept_invitation(@id)", connection);
-        cmd.Parameters.AddWithValue("id", id);
-        await cmd.ExecuteNonQueryAsync(ct);
+
+        // Hash the password
+        var passwordHash = passwordHasher.Hash(request.Password);
+
+        // Sign up the user (create user account)
+        Guid userId;
+        await using (var signup = new NpgsqlCommand(
+            "SELECT users_id FROM sp_signup_user(@tenant, @email, @hash, @first, @last, @pwd, @pv, @role)", connection))
+        {
+            signup.Parameters.AddWithValue("tenant", (object?)tenantsId ?? DBNull.Value);
+            signup.Parameters.AddWithValue("email", email);
+            signup.Parameters.AddWithValue("hash", EmailHasher.Hash(email));
+            signup.Parameters.AddWithValue("first", request.FirstName);
+            signup.Parameters.AddWithValue("last", request.LastName);
+            signup.Parameters.AddWithValue("pwd", passwordHash);
+            signup.Parameters.AddWithValue("pv", passwordHasher.CurrentVersion);
+            signup.Parameters.AddWithValue("role", role);
+            userId = (Guid)(await signup.ExecuteScalarAsync(ct))!;
+        }
+
+        // Accept invitation
+        await using (var cmd = new NpgsqlCommand("SELECT sp_accept_invitation(@id)", connection))
+        {
+            cmd.Parameters.AddWithValue("id", id);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        // If there was an associated event, automatically assign them access
+        if (eventId.HasValue)
+        {
+            await using (var assign = new NpgsqlCommand(
+                "SELECT sp_assign_user_event(@user, @event, @by)", connection))
+            {
+                assign.Parameters.AddWithValue("user", userId);
+                assign.Parameters.AddWithValue("event", eventId.Value);
+                assign.Parameters.AddWithValue("by", DBNull.Value); // Assigned automatically
+                await assign.ExecuteNonQueryAsync(ct);
+            }
+        }
+
         return new AckResponse { Success = true, Message = "Invitation accepted" };
     }
 

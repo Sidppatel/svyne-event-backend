@@ -677,9 +677,9 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
         }
         return portal switch
         {
-            "public" => role == 0,
-            "admin" => role == 1 || role == 3,
-            "staff" => role == 2,
+            "public" => true,
+            "admin" => role == 1 || role == 3 || role == 99,
+            "staff" => role == 2 || role == 1 || role == 3 || role == 99,
             "developer" => role == 99,
             _ => true
         };

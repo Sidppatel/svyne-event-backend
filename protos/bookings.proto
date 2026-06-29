@@ -32,6 +32,9 @@ service TicketService {
 service CheckInService {
   rpc Scan (ScanRequest) returns (ScanResponse);
   rpc GetCheckInStats (svyne.common.UuidValue) returns (CheckInStats);
+  rpc ListEventsForStaff (svyne.common.Empty) returns (ListEventsForStaffResponse);
+  rpc GetGuestList (svyne.common.UuidValue) returns (GetGuestListResponse);
+  rpc CheckInGuest (CheckInGuestRequest) returns (ScanResponse);
 }
 
 message Booking {
@@ -194,4 +197,45 @@ message CheckInStats {
   int32 total = 1;
   int32 checked_in = 2;
   int32 remaining = 3;
+}
+
+message StaffEvent {
+  string events_id = 1;
+  string title = 2;
+  string slug = 3;
+  int64 start_date = 4;
+  int64 end_date = 5;
+  string status = 6;
+  string venue_name = 7;
+}
+
+message ListEventsForStaffResponse {
+  repeated StaffEvent events = 1;
+}
+
+message GuestTicket {
+  string tickets_id = 1;
+  string ticket_code = 2;
+  string guest_name = 3;
+  string status = 4;
+  int32 seat_number = 5;
+  int64 checked_in_at = 6;
+}
+
+message GuestBooking {
+  string bookings_id = 1;
+  string booking_number = 2;
+  string buyer_name = 3;
+  string status = 4;
+  repeated GuestTicket tickets = 5;
+}
+
+message GetGuestListResponse {
+  repeated GuestBooking bookings = 1;
+}
+
+message CheckInGuestRequest {
+  string events_id = 1;
+  string code_or_id = 2;
+  string type = 3;
 }

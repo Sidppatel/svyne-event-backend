@@ -4,7 +4,7 @@ CREATE OR REPLACE FUNCTION sp_user_event_exists(
     SET search_path = public, extensions, pg_catalog
 AS $$
     SELECT EXISTS(
-        SELECT 1 FROM user_events
-        WHERE users_id = p_users_id AND events_id = p_events_id
+        SELECT 1 FROM staff_event_access
+        WHERE staff_user_id = p_users_id AND event_id = p_events_id
     );
 $$;

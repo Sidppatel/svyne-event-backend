@@ -19,17 +19,17 @@ RETURNS TABLE(
     SET search_path = public, extensions, pg_catalog
 AS $$
     SELECT
-        aue.user_events_id, aue.users_id,
+        aue.staff_event_access_id, aue.staff_user_id,
         au.first_name::text, au.last_name::text, au.email::text,
         au.is_active,
-        aue.events_id, e.title::text, e.slug::text,
+        aue.event_id, e.title::text, e.slug::text,
         e.start_date, e.end_date, e.status::text,
-        aue.assigned_by_users_id,
+        aue.assigned_by_admin_id,
         aue.created_at, aue.updated_at
-    FROM user_events aue
-    JOIN users au ON au.users_id = aue.users_id
-    JOIN events e ON e.events_id = aue.events_id
-    WHERE aue.events_id = p_event_id
+    FROM staff_event_access aue
+    JOIN users au ON au.users_id = aue.staff_user_id
+    JOIN events e ON e.events_id = aue.event_id
+    WHERE aue.event_id = p_event_id
       AND au.is_active = true
     ORDER BY au.first_name, au.last_name;
 $$;

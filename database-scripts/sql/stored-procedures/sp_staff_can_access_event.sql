@@ -5,12 +5,13 @@ CREATE OR REPLACE FUNCTION sp_staff_can_access_event(
 AS $$
     SELECT EXISTS(
         SELECT 1
-        FROM user_events aue
-        JOIN users au ON au.users_id = aue.users_id
-        JOIN events e ON e.events_id = aue.events_id
-        WHERE aue.users_id = p_business_user_id
-          AND aue.events_id = p_event_id
+        FROM staff_event_access aue
+        JOIN users au ON au.users_id = aue.staff_user_id
+        JOIN events e ON e.events_id = aue.event_id
+        WHERE aue.staff_user_id = p_business_user_id
+          AND aue.event_id = p_event_id
           AND au.is_active = true
+          AND now() >= e.start_date - make_interval(hours => p_grace_hours)
           AND now() <= e.end_date + make_interval(hours => p_grace_hours)
     );
 $$;

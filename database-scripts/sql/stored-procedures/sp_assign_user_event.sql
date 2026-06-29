@@ -5,9 +5,9 @@ CREATE OR REPLACE FUNCTION sp_assign_user_event(
 AS $$
 DECLARE v_id uuid;
 BEGIN
-    INSERT INTO user_events (users_id, events_id, assigned_by_users_id, created_at, updated_at)
+    INSERT INTO staff_event_access (staff_user_id, event_id, assigned_by_admin_id, created_at, updated_at)
     VALUES (p_users_id, p_events_id, p_assigned_by_users_id, now(), now())
-    ON CONFLICT (users_id, events_id) DO UPDATE SET updated_at = now()
-    RETURNING user_events_id INTO v_id;
+    ON CONFLICT (staff_user_id, event_id) DO UPDATE SET updated_at = now()
+    RETURNING staff_event_access_id INTO v_id;
     RETURN v_id;
 END; $$;

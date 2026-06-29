@@ -14,4 +14,7 @@ public class Invitation : BaseEntity
     public InvitationStatus Status { get; set; } = InvitationStatus.Pending;
     public DateTime ExpiresAt { get; set; }
     public DateTime? AcceptedAt { get; set; }
+
+    public Guid? EventId { get; set; }
+    public Event? Event { get; set; }
 }

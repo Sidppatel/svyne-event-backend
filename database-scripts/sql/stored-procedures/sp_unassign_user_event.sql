@@ -4,6 +4,6 @@ CREATE OR REPLACE FUNCTION sp_unassign_user_event(
     SET search_path = public, extensions, pg_catalog
 AS $$
 BEGIN
-    DELETE FROM user_events
-    WHERE users_id = p_users_id AND events_id = p_events_id;
+    DELETE FROM staff_event_access
+    WHERE staff_user_id = p_users_id AND event_id = p_events_id;
 END; $$;

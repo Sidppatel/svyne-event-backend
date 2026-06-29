@@ -7,6 +7,8 @@ using Svyne.Api.Security;
 using Svyne.Protos.Common;
 using Svyne.Protos.Booking;
 
+using Svyne.Api.Email;
+
 namespace Svyne.Api.Services;
 
 public sealed class BookingServiceImpl : BookingService.BookingServiceBase
@@ -14,12 +16,27 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
     private readonly Db db;
     private readonly TenantContext tenantContext;
     private readonly StripeService stripe;
+    private readonly IEmailService email;
+    private readonly EmailTemplateRenderer templates;
+    private readonly AppSettingsProvider settings;
+    private readonly ILogger<BookingServiceImpl> logger;
 
-    public BookingServiceImpl(Db db, TenantContext tenantContext, StripeService stripe)
+    public BookingServiceImpl(
+        Db db,
+        TenantContext tenantContext,
+        StripeService stripe,
+        IEmailService email,
+        EmailTemplateRenderer templates,
+        AppSettingsProvider settings,
+        ILogger<BookingServiceImpl> logger)
     {
         this.db = db;
         this.tenantContext = tenantContext;
         this.stripe = stripe;
+        this.email = email;
+        this.templates = templates;
+        this.settings = settings;
+        this.logger = logger;
     }
 
     public override async Task<ListEventTicketTypesResponse> ListEventTicketTypes(UuidValue request, ServerCallContext context)
@@ -265,8 +282,25 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         _ => new RpcException(new Status(StatusCode.Internal, ex.MessageText))
     };
 
-    public override Task<AckResponse> ConfirmBooking(ConfirmBookingRequest request, ServerCallContext context)
-        => RunVoid("SELECT sp_confirm_booking(@id, @qr)", request.BookingsId, context, ("qr", request.QrToken), "Booking confirmed");
+    public override async Task<AckResponse> ConfirmBooking(ConfirmBookingRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        var bookingId = Guid.Parse(request.BookingsId);
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        
+        await using (var cmd = new NpgsqlCommand("SELECT sp_confirm_booking(@id, @qr)", connection))
+        {
+            cmd.Parameters.AddWithValue("id", bookingId);
+            cmd.Parameters.AddWithValue("qr", request.QrToken);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        // Send booking confirmation email
+        await BookingEmailSender.SendBookingConfirmationEmailAsync(
+            connection, bookingId, email, templates, settings, logger, ct);
+
+        return new AckResponse { Success = true, Message = "Booking confirmed" };
+    }
 
     public override async Task<AckResponse> CancelBooking(UuidValue request, ServerCallContext context)
     {

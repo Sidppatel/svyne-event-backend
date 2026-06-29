@@ -5,17 +5,33 @@ using Svyne.Api.Security;
 using Svyne.Protos.Common;
 using Svyne.Protos.Booking;
 
+using Svyne.Api.Email;
+
 namespace Svyne.Api.Services;
 
 public sealed class TicketServiceImpl : TicketService.TicketServiceBase
 {
     private readonly Db db;
     private readonly TenantContext tenantContext;
+    private readonly AppSettingsProvider settings;
+    private readonly IEmailService email;
+    private readonly EmailTemplateRenderer templates;
+    private readonly ILogger<TicketServiceImpl> logger;
 
-    public TicketServiceImpl(Db db, TenantContext tenantContext)
+    public TicketServiceImpl(
+        Db db,
+        TenantContext tenantContext,
+        AppSettingsProvider settings,
+        IEmailService email,
+        EmailTemplateRenderer templates,
+        ILogger<TicketServiceImpl> logger)
     {
         this.db = db;
         this.tenantContext = tenantContext;
+        this.settings = settings;
+        this.email = email;
+        this.templates = templates;
+        this.logger = logger;
     }
 
     public override async Task<Ticket> GetTicket(UuidValue request, ServerCallContext context)
@@ -85,6 +101,68 @@ public sealed class TicketServiceImpl : TicketService.TicketServiceBase
         cmd.Parameters.AddWithValue("email", request.Email);
         cmd.Parameters.AddWithValue("exp", DateTime.UtcNow.AddDays(14));
         var ok = (bool)(await cmd.ExecuteScalarAsync(ct))!;
+
+        if (ok)
+        {
+            try
+            {
+                await using var detailCmd = new NpgsqlCommand(
+                    "SELECT ticket_code, seat_number, event_title, event_start_date, venue_name, booking_user_email " +
+                    "FROM vw_tickets WHERE ticket_id = @id", connection);
+                detailCmd.Parameters.AddWithValue("id", Guid.Parse(request.TicketsId));
+                
+                string ticketCode = "";
+                int seatNumber = 0;
+                string eventTitle = "";
+                DateTime eventStartDate = DateTime.MinValue;
+                string venueName = "";
+                string senderEmail = "";
+                
+                await using (var reader = await detailCmd.ExecuteReaderAsync(ct))
+                {
+                    if (await reader.ReadAsync(ct))
+                    {
+                        ticketCode = reader.GetString(0);
+                        seatNumber = reader.GetInt32(1);
+                        eventTitle = reader.GetString(2);
+                        eventStartDate = reader.GetDateTime(3);
+                        venueName = reader.GetString(4);
+                        senderEmail = reader.GetString(5);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(ticketCode))
+                {
+                    var fromAddress = await settings.GetStringAsync("admin_invitation_email", "noreply@svyne.com", ct);
+                    var subject = $"You have been invited to {eventTitle}!";
+                    var linkBase = await settings.GetStringAsync("ticket_claim_link_base", "http://localhost:5173/claim", ct);
+                    var separator = linkBase.Contains('?') ? "&" : "?";
+                    var claimLink = $"{linkBase}{separator}token={token}";
+
+                    var values = new Dictionary<string, string>
+                    {
+                        ["Subject"] = subject,
+                        ["Email"] = request.Email,
+                        ["SenderEmail"] = senderEmail,
+                        ["EventTitle"] = eventTitle,
+                        ["EventDate"] = eventStartDate.ToString("f"),
+                        ["VenueName"] = venueName,
+                        ["TicketCode"] = ticketCode,
+                        ["SeatNumber"] = seatNumber.ToString(),
+                        ["InviteLink"] = claimLink
+                    };
+
+                    var htmlBody = await templates.RenderAsync("ticket_invitation.html", values, ct);
+                    await email.SendAsync(fromAddress, request.Email, subject, htmlBody, ct);
+                    logger.LogInformation("Ticket invitation email sent to {Email} for Ticket: {TicketCode}", request.Email, ticketCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send ticket invitation email to {Email}", request.Email);
+            }
+        }
+
         return new AckResponse { Success = ok, Message = ok ? "Invite sent" : "Invite failed" };
     }
 

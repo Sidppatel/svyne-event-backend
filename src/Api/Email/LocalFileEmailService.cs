@@ -11,6 +11,34 @@ public sealed class LocalFileEmailService : IEmailService
     {
         outputDir = configuration["LOCAL_EMAIL_DIR"] ?? string.Empty;
         this.logger = logger;
+
+        if (string.IsNullOrEmpty(outputDir))
+        {
+            // Try to find the local_emails folder in the workspace
+            var current = Directory.GetCurrentDirectory();
+            var candidates = new[]
+            {
+                @"D:\svyne-event-system\local_emails",
+                Path.Combine(current, "local_emails"),
+                Path.Combine(current, "..", "local_emails"),
+                Path.Combine(current, "..", "..", "local_emails")
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (Directory.Exists(candidate))
+                {
+                    outputDir = Path.GetFullPath(candidate);
+                    break;
+                }
+            }
+
+            // If still not found, default to a directory at the expected workspace location
+            if (string.IsNullOrEmpty(outputDir))
+            {
+                outputDir = @"D:\svyne-event-system\local_emails";
+            }
+        }
     }
 
     public async Task SendAsync(string fromAddress, string toAddress, string subject, string htmlBody, CancellationToken ct)

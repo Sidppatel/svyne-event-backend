@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{Subject}}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f3f4f6;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;">
+          <tr>
+            <td style="background-color:#4f46e5;padding:24px 32px;">
+              <span style="color:#ffffff;font-size:20px;font-weight:bold;">Svyne</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <h1 style="margin:0 0 16px;font-size:22px;color:#111827;">You've received a ticket!</h1>
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">
+                {{SenderEmail}} has sent you a ticket for <strong>{{EventTitle}}</strong>.
+              </p>
+              <h3 style="margin:24px 0 8px;font-size:16px;color:#111827;">Event Details</h3>
+              <p style="margin:0 0 4px;font-size:15px;color:#374151;"><strong>Date:</strong> {{EventDate}}</p>
+              <p style="margin:0 0 4px;font-size:15px;color:#374151;"><strong>Venue:</strong> {{VenueName}}</p>
+              <p style="margin:0 0 16px;font-size:15px;color:#374151;"><strong>Ticket Code:</strong> {{TicketCode}} (Seat {{SeatNumber}})</p>
+
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:24px 0;">
+                <tr>
+                  <td style="border-radius:8px;background-color:#4f46e5;">
+                    <a href="{{InviteLink}}" style="display:inline-block;padding:12px 28px;font-size:15px;color:#ffffff;text-decoration:none;font-weight:bold;">Claim your ticket</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#6b7280;">
+                This link was sent to {{Email}}. Click the button to claim your ticket and add it to your Svyne account.
+              </p>
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
+                If the button does not work, copy this link into your browser:<br />
+                <a href="{{InviteLink}}" style="color:#4f46e5;word-break:break-all;">{{InviteLink}}</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;background-color:#f9fafb;border-top:1px solid #e5e7eb;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">
+                If you did not expect this email, you can safely ignore it.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

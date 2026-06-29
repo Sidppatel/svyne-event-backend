@@ -11,9 +11,12 @@ System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultInboundClaimTypeM
 var builder = WebApplication.CreateBuilder(args);
 
 var http2Only = builder.Configuration["GRPC_HTTP2_ONLY"] == "true";
-builder.WebHost.ConfigureKestrel(options =>
-    options.ConfigureEndpointDefaults(listen =>
-        listen.Protocols = http2Only ? HttpProtocols.Http2 : HttpProtocols.Http1AndHttp2));
+if (http2Only)
+{
+    builder.WebHost.ConfigureKestrel(options =>
+        options.ConfigureEndpointDefaults(listen =>
+            listen.Protocols = HttpProtocols.Http2));
+}
 
 const string CorsPolicy = "frontend";
 var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? string.Empty)

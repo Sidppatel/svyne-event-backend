@@ -15,6 +15,43 @@ if (!string.IsNullOrEmpty(migrationUrl))
 }
 
 var factory = new DesignTimeDbContextFactory();
+
+if (args.Contains("--reload-sql"))
+{
+    Console.WriteLine("[migrate] reloading SQL objects...");
+    await using var ctx = factory.CreateDbContext(args);
+    var sqlRoot = Path.Combine(Directory.GetCurrentDirectory(), "database-scripts", "sql");
+    if (!Directory.Exists(sqlRoot))
+    {
+        sqlRoot = Path.Combine(Directory.GetCurrentDirectory(), "sql");
+    }
+    if (!Directory.Exists(sqlRoot))
+    {
+        sqlRoot = Path.Combine(Directory.GetCurrentDirectory(), "..", "sql");
+    }
+    
+    var conn = ctx.Database.GetDbConnection();
+    if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+    foreach (var folder in new[] { "functions", "views", "stored-procedures", "policies" })
+    {
+        var dir = Path.Combine(sqlRoot, folder);
+        if (Directory.Exists(dir))
+        {
+            var files = Directory.GetFiles(dir, "*.sql").OrderBy(f => f).ToList();
+            foreach (var file in files)
+            {
+                Console.WriteLine($"[migrate] executing {Path.GetFileName(file)}");
+                var sql = await File.ReadAllTextAsync(file);
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = sql;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+    Console.WriteLine("[migrate] SQL objects reloaded.");
+    return 0;
+}
+
 const int maxRetries = 8;
 
 for (var attempt = 1; attempt <= maxRetries; attempt++)

@@ -4,6 +4,15 @@ RETURNS void LANGUAGE plpgsql
 AS $$
 DECLARE v_price uuid;
 BEGIN
+    -- Refuse to remove a type that still has sold (Booked) or actively held
+    -- (Locked) tables; those represent live sales/holds and must not vanish.
+    IF EXISTS(
+        SELECT 1 FROM tables
+        WHERE event_tables_id = p_id
+          AND (status = 'Booked' OR (status = 'Locked' AND lock_expires_at > now()))
+    ) THEN
+        RAISE EXCEPTION 'Cannot remove this table type: it has sold or held tables';
+    END IF;
     SELECT prices_id INTO v_price FROM event_tables WHERE event_tables_id = p_id;
     DELETE FROM tables WHERE event_tables_id = p_id;
     DELETE FROM event_tables WHERE event_tables_id = p_id;

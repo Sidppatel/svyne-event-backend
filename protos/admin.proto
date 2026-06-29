@@ -21,6 +21,10 @@ service StaffService {
   rpc ListStaffForEvent (svyne.common.UuidValue) returns (ListStaffResponse);
   rpc AssignStaff (AssignStaffRequest) returns (svyne.common.AckResponse);
   rpc UnassignStaff (AssignStaffRequest) returns (svyne.common.AckResponse);
+  rpc ListAllStaff (svyne.common.Empty) returns (ListStaffResponse);
+  rpc AssignStaffByEmail (AssignStaffByEmailRequest) returns (AssignStaffByEmailResponse);
+  rpc AddOrInviteStaff (AddOrInviteStaffRequest) returns (AddOrInviteStaffResponse);
+  rpc RemoveStaffRole (svyne.common.UuidValue) returns (svyne.common.AckResponse);
 }
 
 service InvitationService {
@@ -98,6 +102,27 @@ message AssignStaffRequest {
 message CreateInvitationRequest {
   string email = 1;
   int32 role = 2;
+  string events_id = 3;
+}
+
+message AssignStaffByEmailRequest {
+  string email = 1;
+  string events_id = 2;
+}
+
+message AssignStaffByEmailResponse {
+  bool user_existed = 1;
+  string message = 2;
+}
+
+message AddOrInviteStaffRequest {
+  string email = 1;
+}
+
+message AddOrInviteStaffResponse {
+  bool user_existed = 1;
+  string users_id = 2;
+  string message = 3;
 }
 
 message AcceptInvitationRequest {

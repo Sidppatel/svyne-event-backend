@@ -30,7 +30,8 @@ public class EventPlatformDbContext(
     public DbSet<EventPerformer> EventPerformers => Set<EventPerformer>();
     public DbSet<Sponsor> Sponsors => Set<Sponsor>();
     public DbSet<EventSponsor> EventSponsors => Set<EventSponsor>();
-    public DbSet<UserEvent> UserEvents => Set<UserEvent>();
+    public DbSet<StaffEventAccess> StaffEventAccesses => Set<StaffEventAccess>();
+    public DbSet<CheckInLog> CheckInLogs => Set<CheckInLog>();
     public DbSet<EventTable> EventTables => Set<EventTable>();
     public DbSet<EventTicketType> EventTicketTypes => Set<EventTicketType>();
     public DbSet<FeeFormula> FeeFormulas => Set<FeeFormula>();
@@ -229,6 +230,11 @@ public class EventPlatformDbContext(
             entity.HasOne(e => e.InvitedBy)
                 .WithMany()
                 .HasForeignKey(e => e.InvitedByUsersId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Event)
+                .WithMany()
+                .HasForeignKey(e => e.EventId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -664,18 +670,36 @@ public class EventPlatformDbContext(
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        modelBuilder.Entity<UserEvent>(entity =>
+        modelBuilder.Entity<StaffEventAccess>(entity =>
         {
-            entity.ToTable("user_events");
+            entity.ToTable("staff_event_access");
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => new { e.UsersId, e.EventsId }).IsUnique();
-            entity.HasIndex(e => e.EventsId);
-            entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UsersId)
+            entity.HasIndex(e => new { e.StaffUserId, e.EventId }).IsUnique();
+            entity.HasIndex(e => e.EventId);
+            entity.HasOne(e => e.StaffUser).WithMany().HasForeignKey(e => e.StaffUserId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(e => e.Event).WithMany().HasForeignKey(e => e.EventsId)
+            entity.HasOne(e => e.Event).WithMany().HasForeignKey(e => e.EventId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(e => e.AssignedByUser).WithMany()
-                .HasForeignKey(e => e.AssignedByUsersId)
+            entity.HasOne(e => e.AssignedByAdmin).WithMany()
+                .HasForeignKey(e => e.AssignedByAdminId)
+                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<CheckInLog>(entity =>
+        {
+            entity.ToTable("checkin_logs");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.EventId);
+            entity.HasIndex(e => e.StaffUserId);
+            entity.HasIndex(e => e.BookingId);
+            entity.HasIndex(e => e.TicketId);
+            entity.HasOne(e => e.Event).WithMany().HasForeignKey(e => e.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.StaffUser).WithMany().HasForeignKey(e => e.StaffUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Booking).WithMany().HasForeignKey(e => e.BookingId)
+                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Ticket).WithMany().HasForeignKey(e => e.TicketId)
                 .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
         });
 

@@ -1,11 +1,34 @@
+using Microsoft.Extensions.Hosting;
+
 namespace Svyne.Api.Email;
 
 public sealed class EmailTemplateRenderer
 {
     private readonly string templateRoot;
 
-    public EmailTemplateRenderer()
+    public EmailTemplateRenderer(IHostEnvironment env)
     {
+        if (env.IsDevelopment())
+        {
+            // Try to find the templates folder in the source files for hot-reloading templates in dev
+            var current = Directory.GetCurrentDirectory();
+            var candidates = new[]
+            {
+                Path.Combine(current, "src", "Api", "Email", "Templates"),
+                Path.Combine(current, "Email", "Templates"),
+                Path.Combine(current, "..", "src", "Api", "Email", "Templates")
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (Directory.Exists(candidate))
+                {
+                    templateRoot = Path.GetFullPath(candidate);
+                    return;
+                }
+            }
+        }
+
         templateRoot = Path.Combine(AppContext.BaseDirectory, "Email", "Templates");
     }
 

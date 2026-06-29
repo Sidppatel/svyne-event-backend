@@ -1,4 +1,8 @@
-CREATE OR REPLACE FUNCTION sp_check_in_ticket(p_qr_token text)
+CREATE OR REPLACE FUNCTION sp_check_in_ticket(
+    p_ticket_id uuid,
+    p_event_id uuid,
+    p_staff_user_id uuid
+)
 RETURNS TABLE(
     success boolean,
     message text,
@@ -22,15 +26,23 @@ DECLARE
     v_booking_status text;
     v_event_title text;
     v_guest_name text;
+    v_event_id uuid;
     v_all_checked boolean;
 BEGIN
-    SELECT t.tickets_id, t.bookings_id, t.status, t.seat_number, t.guest_users_id, t.updated_at
-      INTO v_ticket_id, v_booking_id, v_ticket_status, v_seat_number, v_guest_user_id, v_ticket_updated_at
+    SELECT t.tickets_id, t.bookings_id, t.status, t.seat_number, t.guest_users_id, t.updated_at, t.events_id
+      INTO v_ticket_id, v_booking_id, v_ticket_status, v_seat_number, v_guest_user_id, v_ticket_updated_at, v_event_id
     FROM tickets t
-    WHERE t.qr_token = p_qr_token
+    WHERE t.tickets_id = p_ticket_id
     FOR UPDATE;
 
     IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    IF v_event_id <> p_event_id THEN
+        RETURN QUERY SELECT
+            false, 'Ticket is for a different event'::text,
+            NULL::text, NULL::text, NULL::text, NULL::text, NULL::timestamptz;
         RETURN;
     END IF;
 
@@ -67,7 +79,7 @@ BEGIN
         RETURN;
     END IF;
 
-    IF v_ticket_status <> 'Claimed' THEN
+    IF v_ticket_status <> 'Claimed' AND v_ticket_status <> 'Unassigned' THEN
         RETURN QUERY SELECT
             false,
             CASE WHEN v_ticket_status = 'Invited'
@@ -79,9 +91,14 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Update ticket status to CheckedIn
     UPDATE tickets
        SET status = 'CheckedIn', updated_at = now()
-     WHERE users_id = v_ticket_id;
+     WHERE tickets_id = v_ticket_id;
+
+    -- Insert log
+    INSERT INTO checkin_logs (checkin_logs_id, event_id, staff_user_id, booking_id, ticket_id, timestamp, created_at, updated_at)
+    VALUES (gen_random_uuid(), p_event_id, p_staff_user_id, v_booking_id, v_ticket_id, now(), now(), now());
 
     SELECT NOT EXISTS (
         SELECT 1 FROM tickets
@@ -91,7 +108,7 @@ BEGIN
     IF v_all_checked THEN
         UPDATE bookings
            SET status = 'CheckedIn', updated_at = now()
-         WHERE tickets_id = v_booking_id;
+         WHERE bookings_id = v_booking_id;
     END IF;
 
     RETURN QUERY SELECT
