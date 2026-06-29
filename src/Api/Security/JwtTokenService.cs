@@ -11,6 +11,7 @@ public sealed class JwtTokenService
     private readonly string issuer;
     private readonly string audience;
     private readonly int lifetimeMinutes;
+    private readonly int refreshLifetimeMinutes;
 
     public JwtTokenService(IConfiguration configuration)
     {
@@ -19,6 +20,7 @@ public sealed class JwtTokenService
         issuer = configuration["JWT_ISSUER"] ?? "svyne";
         audience = configuration["JWT_AUDIENCE"] ?? "svyne-clients";
         lifetimeMinutes = int.TryParse(configuration["JWT_LIFETIME_MINUTES"], out var m) ? m : 60;
+        refreshLifetimeMinutes = int.TryParse(configuration["JWT_REFRESH_LIFETIME_MINUTES"], out var rm) ? rm : 43200;
     }
 
     public TokenParameters ValidationParameters => new()
@@ -29,14 +31,21 @@ public sealed class JwtTokenService
     };
 
     public (string token, long expiresAt) Issue(Guid usersId, string email, Guid? tenantsId, int role, string tenantSlug)
+        => Build(usersId, email, tenantsId, role, tenantSlug, lifetimeMinutes, "access");
+
+    public (string token, long expiresAt) IssueRefresh(Guid usersId, string email, Guid? tenantsId, int role, string tenantSlug)
+        => Build(usersId, email, tenantsId, role, tenantSlug, refreshLifetimeMinutes, "refresh");
+
+    private (string token, long expiresAt) Build(Guid usersId, string email, Guid? tenantsId, int role, string tenantSlug, int minutes, string type)
     {
-        var expires = DateTime.UtcNow.AddMinutes(lifetimeMinutes);
+        var expires = DateTime.UtcNow.AddMinutes(minutes);
         var claims = new List<Claim>
         {
             new("sub", usersId.ToString()),
             new("email", email),
             new("role", role.ToString()),
-            new("tenant_slug", tenantSlug)
+            new("tenant_slug", tenantSlug),
+            new("typ", type)
         };
         if (tenantsId is { } t)
         {

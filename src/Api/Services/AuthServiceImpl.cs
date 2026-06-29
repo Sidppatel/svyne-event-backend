@@ -603,6 +603,10 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
         {
             throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid refresh token"));
         }
+        if (principal.FindFirst("typ")?.Value != "refresh")
+        {
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid refresh token"));
+        }
         var sub = principal.FindFirst("sub")?.Value;
         if (!Guid.TryParse(sub, out var usersId))
         {
@@ -635,8 +639,9 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
 
     private AuthResponse BuildAuth(Guid usersId, string email, Guid? tenantsId, int role, string slug, UserProfile profile)
     {
-        var (token, expiresAt) = jwt.Issue(usersId, email, tenantsId, role, slug);
-        return new AuthResponse { AccessToken = token, RefreshToken = token, ExpiresAt = expiresAt, User = profile };
+        var (access, expiresAt) = jwt.Issue(usersId, email, tenantsId, role, slug);
+        var (refresh, _) = jwt.IssueRefresh(usersId, email, tenantsId, role, slug);
+        return new AuthResponse { AccessToken = access, RefreshToken = refresh, ExpiresAt = expiresAt, User = profile };
     }
 
     private static async Task<(Guid usersId, Guid? tenantsId, short role, string firstName, string lastName, bool emailVerified)> CreateAttendeeAsync(
