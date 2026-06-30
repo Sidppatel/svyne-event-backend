@@ -201,13 +201,53 @@ public sealed class TicketServiceImpl : TicketService.TicketServiceBase
         return new AckResponse { Success = true, Message = "Ticket revoked" };
     }
 
-    private static Ticket MapTicket(NpgsqlDataReader reader) => new()
+    public override async Task<ListTicketsResponse> ListMyTickets(Empty request, ServerCallContext context)
     {
-        TicketsId = reader.GetGuid(0).ToString(),
-        TicketCode = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
-        QrToken = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
-        SeatNumber = reader.GetInt32(3),
-        Status = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-        GuestUsersId = reader.IsDBNull(5) ? string.Empty : reader.GetGuid(5).ToString()
-    };
+        var ct = context.CancellationToken;
+        if (tenantContext.UsersId is null)
+        {
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Authentication required"));
+        }
+        var response = new ListTicketsResponse();
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT t.ticket_id, t.ticket_code, t.qr_token, t.seat_number, t.status, t.guest_users_id, "
+            + "t.event_title, t.event_start_date, t.venue_name, e.slug AS event_slug, t.booking_number "
+            + "FROM vw_tickets t "
+            + "JOIN events e ON t.events_id = e.events_id "
+            + "WHERE t.guest_users_id = @u "
+            + "ORDER BY t.event_start_date", connection);
+        cmd.Parameters.AddWithValue("u", tenantContext.UsersId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            response.Tickets.Add(MapTicket(reader));
+        }
+        return response;
+    }
+
+    private static Ticket MapTicket(NpgsqlDataReader reader)
+    {
+        var ticket = new Ticket
+        {
+            TicketsId = reader.GetGuid(0).ToString(),
+            TicketCode = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+            QrToken = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+            SeatNumber = reader.GetInt32(3),
+            Status = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+            GuestUsersId = reader.IsDBNull(5) ? string.Empty : reader.GetGuid(5).ToString()
+        };
+        if (reader.FieldCount > 6)
+        {
+            ticket.EventTitle = reader.IsDBNull(6) ? string.Empty : reader.GetString(6);
+            ticket.EventStartDate = reader.IsDBNull(7) ? 0 : new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(7), DateTimeKind.Utc)).ToUnixTimeSeconds();
+            ticket.VenueName = reader.IsDBNull(8) ? string.Empty : reader.GetString(8);
+            ticket.EventSlug = reader.IsDBNull(9) ? string.Empty : reader.GetString(9);
+            if (reader.FieldCount > 10)
+            {
+                ticket.BookingNumber = reader.IsDBNull(10) ? string.Empty : reader.GetString(10);
+            }
+        }
+        return ticket;
+    }
 }

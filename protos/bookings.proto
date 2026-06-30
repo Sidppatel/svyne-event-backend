@@ -29,6 +29,7 @@ service TicketService {
   rpc ListTickets (svyne.common.UuidValue) returns (ListTicketsResponse);
   rpc ClaimTicketSelf (svyne.common.UuidValue) returns (svyne.common.AckResponse);
   rpc RevokeTicket (svyne.common.UuidValue) returns (svyne.common.AckResponse);
+  rpc ListMyTickets (svyne.common.Empty) returns (ListTicketsResponse);
 }
 
 service CheckInService {
@@ -168,6 +169,11 @@ message Ticket {
   int32 seat_number = 4;
   string status = 5;
   string guest_users_id = 6;
+  string event_title = 7;
+  int64 event_start_date = 8;
+  string venue_name = 9;
+  string event_slug = 10;
+  string booking_number = 11;
 }
 
 message ClaimTicketRequest {
