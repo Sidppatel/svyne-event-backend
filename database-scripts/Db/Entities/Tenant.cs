@@ -33,4 +33,13 @@ public class Tenant : BaseEntity
     /// </summary>
     public Guid? DefaultFeeFormulasId { get; set; }
     public FeeFormula? DefaultFeeFormula { get; set; }
+
+    /// <summary>
+    /// Tenant-level gateway (payment-processing) fee formula. Applied to the full
+    /// charged amount (selling + platform fee + tax) to model the processor cost as
+    /// a separate buyer-facing line. Null = no gateway fee. Reuses the FeeFormula
+    /// shape (percent_bps + flat_cents). Settable only by developers (role 99).
+    /// </summary>
+    public Guid? GatewayFeeFormulasId { get; set; }
+    public FeeFormula? GatewayFeeFormula { get; set; }
 }

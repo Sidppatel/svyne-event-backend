@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION sp_set_ticket_invite(
 AS $$
 DECLARE v_updated int;
 BEGIN
-    UPDATE tickets SET
+    UPDATE booking_lines SET
         invite_token_hash = p_invite_hash,
         invited_email = p_email,
         invite_sent_at = now(),
@@ -14,7 +14,7 @@ BEGIN
         guest_users_id = NULL,
         claimed_at = NULL,
         updated_at = now()
-    WHERE tickets_id = p_ticket_id
+    WHERE booking_lines_id = p_ticket_id AND kind = 'Ticket'
       AND status IN ('Unassigned', 'Invited');
     GET DIAGNOSTICS v_updated = ROW_COUNT;
     RETURN v_updated > 0;

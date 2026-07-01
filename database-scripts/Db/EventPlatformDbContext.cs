@@ -43,8 +43,6 @@ public class EventPlatformDbContext(
     public DbSet<FloorPlanTemplateObject> FloorPlanTemplateObjects => Set<FloorPlanTemplateObject>();
     public DbSet<Table> Tables => Set<Table>();
     public DbSet<Booking> Bookings => Set<Booking>();
-    public DbSet<Ticket> Tickets => Set<Ticket>();
-    public DbSet<BookingTable> BookingTables => Set<BookingTable>();
     public DbSet<BookingLine> BookingLines => Set<BookingLine>();
     public DbSet<StripeTransaction> StripeTransactions => Set<StripeTransaction>();
     public DbSet<StripeTransfer> StripeTransfers => Set<StripeTransfer>();
@@ -127,6 +125,9 @@ public class EventPlatformDbContext(
             entity.Property(e => e.StripeRequirementsDue).HasColumnType("jsonb");
             entity.HasOne(e => e.DefaultFeeFormula).WithMany()
                 .HasForeignKey(e => e.DefaultFeeFormulasId)
+                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.GatewayFeeFormula).WithMany()
+                .HasForeignKey(e => e.GatewayFeeFormulasId)
                 .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -461,7 +462,7 @@ public class EventPlatformDbContext(
             entity.ToTable("prices", t =>
             {
                 t.HasCheckConstraint("CK_prices_PricingType",
-                    "pricing_type IN ('TicketTier','Table','AddOn')");
+                    "pricing_type IN ('TicketTier','Table')");
                 t.HasCheckConstraint("CK_prices_BasePriceCents", "base_price_cents >= 0");
                 t.HasCheckConstraint("CK_prices_PerAttendeeCents", "per_attendee_cents >= 0");
                 t.HasCheckConstraint("CK_prices_MaxQuantity",
@@ -481,8 +482,6 @@ public class EventPlatformDbContext(
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(e => e.FeeFormula).WithMany().HasForeignKey(e => e.FeeFormulasId)
                 .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-            entity.HasOne(e => e.ParentPrice).WithMany().HasForeignKey(e => e.ParentPricesId)
-                .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<PriceRule>(entity =>
@@ -774,57 +773,6 @@ public class EventPlatformDbContext(
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Event).WithMany().HasForeignKey(e => e.EventsId)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(e => e.Table).WithMany().HasForeignKey(e => e.TablesId)
-                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-            entity.HasOne(e => e.EventTicketType).WithMany().HasForeignKey(e => e.EventTicketTypesId)
-                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-        });
-
-        modelBuilder.Entity<Ticket>(entity =>
-        {
-            entity.ToTable("tickets", t =>
-            {
-                t.HasCheckConstraint("CK_tickets_Status",
-                    "status IN ('Unassigned','Invited','Claimed','CheckedIn')");
-                t.HasCheckConstraint("CK_tickets_SeatNumber", "seat_number > 0");
-            });
-            entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.TenantsId);
-            entity.HasIndex(e => e.QrToken).IsUnique();
-            entity.HasIndex(e => e.InviteTokenHash).IsUnique()
-                .HasFilter("invite_token_hash IS NOT NULL");
-            entity.HasIndex(e => new { e.BookingsId, e.SeatNumber }).IsUnique();
-            // Ticket number (TK-*) is unique within an event.
-            entity.HasIndex(e => new { e.EventsId, e.TicketCode }).IsUnique();
-            entity.HasIndex(e => e.GuestUsersId);
-            entity.Property(e => e.TicketCode).HasMaxLength(20);
-            entity.Property(e => e.QrToken).HasMaxLength(128);
-            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
-            entity.Property(e => e.InviteTokenHash).HasMaxLength(128);
-            entity.Property(e => e.InvitedEmail).HasMaxLength(256);
-            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantsId)
-                .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(e => e.Booking).WithMany(b => b.Tickets)
-                .HasForeignKey(e => e.BookingsId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(e => e.Event).WithMany().HasForeignKey(e => e.EventsId)
-                .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(e => e.GuestUser).WithMany()
-                .HasForeignKey(e => e.GuestUsersId).IsRequired(false)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        modelBuilder.Entity<BookingTable>(entity =>
-        {
-            entity.ToTable("booking_tables");
-            entity.HasKey(e => new { e.BookingsId, e.TablesId });
-            entity.HasIndex(e => e.TablesId);
-            entity.HasIndex(e => e.TenantsId);
-            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantsId)
-                .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(e => e.Booking).WithMany()
-                .HasForeignKey(e => e.BookingsId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(e => e.Table).WithMany()
-                .HasForeignKey(e => e.TablesId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<BookingLine>(entity =>
@@ -832,31 +780,52 @@ public class EventPlatformDbContext(
             entity.ToTable("booking_lines", t =>
             {
                 t.HasCheckConstraint("CK_booking_lines_Kind", "kind IN ('Ticket','Table')");
-                // Exactly one sellable ref, matching the kind.
                 t.HasCheckConstraint("CK_booking_lines_Ref",
                     "(kind = 'Ticket' AND event_ticket_types_id IS NOT NULL AND tables_id IS NULL) "
+                    + "OR (kind = 'Ticket' AND tables_id IS NOT NULL AND event_ticket_types_id IS NULL) "
                     + "OR (kind = 'Table' AND tables_id IS NOT NULL AND event_ticket_types_id IS NULL)");
                 t.HasCheckConstraint("CK_booking_lines_Seats", "seats > 0");
                 t.HasCheckConstraint("CK_booking_lines_SubtotalCents", "subtotal_cents >= 0");
                 t.HasCheckConstraint("CK_booking_lines_FeeCents", "fee_cents >= 0");
                 t.HasCheckConstraint("CK_booking_lines_TotalFormula",
                     "total_cents = subtotal_cents + fee_cents");
+                t.HasCheckConstraint("CK_booking_lines_TicketStatus",
+                    "status IN ('Unassigned','Invited','Claimed','CheckedIn')");
             });
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.TenantsId);
             entity.HasIndex(e => e.BookingsId);
             entity.HasIndex(e => e.EventTicketTypesId);
             entity.HasIndex(e => e.TablesId);
+            entity.HasIndex(e => e.EventsId);
+            entity.HasIndex(e => e.GuestUsersId);
+            entity.HasIndex(e => e.QrToken).IsUnique().HasFilter("qr_token IS NOT NULL");
+            entity.HasIndex(e => e.InviteTokenHash).IsUnique().HasFilter("invite_token_hash IS NOT NULL");
+            entity.HasIndex(e => new { e.EventsId, e.TicketCode }).IsUnique().HasFilter("ticket_code IS NOT NULL");
+            entity.HasIndex(e => new { e.BookingsId, e.SeatNumber }).IsUnique().HasFilter("seat_number IS NOT NULL");
+
             entity.Property(e => e.Kind).HasMaxLength(20);
+            entity.Property(e => e.AppliedRuleName).HasMaxLength(128);
+            entity.Property(e => e.Currency).HasMaxLength(8).HasDefaultValue("usd");
+            entity.Property(e => e.TicketCode).HasMaxLength(20);
+            entity.Property(e => e.QrToken).HasMaxLength(128);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.InviteTokenHash).HasMaxLength(128);
+            entity.Property(e => e.InvitedEmail).HasMaxLength(256);
+
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantsId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Booking).WithMany(b => b.Lines)
                 .HasForeignKey(e => e.BookingsId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Event).WithMany().HasForeignKey(e => e.EventsId)
+                .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.EventTicketType).WithMany().HasForeignKey(e => e.EventTicketTypesId)
                 .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Table).WithMany().HasForeignKey(e => e.TablesId)
                 .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Price).WithMany().HasForeignKey(e => e.PricesId)
+                .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.GuestUser).WithMany().HasForeignKey(e => e.GuestUsersId)
                 .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -878,8 +847,6 @@ public class EventPlatformDbContext(
                     "status = 'Refunded' OR refunded_at IS NULL");
                 t.HasCheckConstraint("CK_stripe_transactions_TransferAmount",
                     "transfer_amount_cents IS NULL OR transfer_amount_cents >= 0");
-                t.HasCheckConstraint("CK_stripe_transactions_TaxAmount",
-                    "tax_amount_cents IS NULL OR tax_amount_cents >= 0");
                 t.HasCheckConstraint("CK_stripe_transactions_StripeFees",
                     "stripe_fees_cents IS NULL OR stripe_fees_cents >= 0");
                 t.HasCheckConstraint("CK_stripe_transactions_TotalCharged",
@@ -893,8 +860,6 @@ public class EventPlatformDbContext(
             entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(30);
             entity.Property(e => e.Currency).HasMaxLength(3);
             entity.Property(e => e.RefundId).HasMaxLength(128);
-            entity.Property(e => e.TaxCalculationId).HasMaxLength(128);
-            entity.Property(e => e.TaxTransactionId).HasMaxLength(128);
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantsId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Booking).WithOne(b => b.StripeTransaction)

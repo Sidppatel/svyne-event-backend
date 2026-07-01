@@ -13,15 +13,15 @@ using NpgsqlTypes;
 namespace Db.Migrations
 {
     [DbContext(typeof(EventPlatformDbContext))]
-    [Migration("20260626195653_ReinstallTenantFeeAutoApplySql")]
-    partial class ReinstallTenantFeeAutoApplySql
+    [Migration("20260701102806_UpdateBookingLinesConstraint")]
+    partial class UpdateBookingLinesConstraint
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.7")
+                .HasAnnotation("ProductVersion", "10.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -218,10 +218,6 @@ namespace Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<Guid?>("EventTicketTypesId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("event_ticket_types_id");
-
                     b.Property<Guid>("EventsId")
                         .HasColumnType("uuid")
                         .HasColumnName("events_id");
@@ -253,10 +249,6 @@ namespace Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("subtotal_cents");
 
-                    b.Property<Guid?>("TablesId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tables_id");
-
                     b.Property<Guid>("TenantsId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenants_id");
@@ -276,9 +268,6 @@ namespace Db.Migrations
                     b.HasKey("Id")
                         .HasName("pk_bookings");
 
-                    b.HasIndex("EventTicketTypesId")
-                        .HasDatabaseName("ix_bookings_event_ticket_types_id");
-
                     b.HasIndex("QrToken")
                         .IsUnique()
                         .HasDatabaseName("ix_bookings_qr_token")
@@ -286,9 +275,6 @@ namespace Db.Migrations
 
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_bookings_status");
-
-                    b.HasIndex("TablesId")
-                        .HasDatabaseName("ix_bookings_tables_id");
 
                     b.HasIndex("TenantsId")
                         .HasDatabaseName("ix_bookings_tenants_id");
@@ -322,13 +308,135 @@ namespace Db.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Db.Entities.BookingTable", b =>
+            modelBuilder.Entity("Db.Entities.BookingLine", b =>
                 {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_lines_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid?>("AppliedPriceRulesId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("applied_price_rules_id");
+
+                    b.Property<string>("AppliedRuleName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("applied_rule_name");
+
+                    b.Property<int>("BasePriceCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("base_price_cents");
+
                     b.Property<Guid>("BookingsId")
                         .HasColumnType("uuid")
                         .HasColumnName("bookings_id");
 
-                    b.Property<Guid>("TablesId")
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("claimed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasDefaultValue("usd")
+                        .HasColumnName("currency");
+
+                    b.Property<int>("DiscountCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_cents");
+
+                    b.Property<Guid?>("EventTicketTypesId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_ticket_types_id");
+
+                    b.Property<Guid?>("EventsId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("events_id");
+
+                    b.Property<int>("FeeCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("fee_cents");
+
+                    b.Property<int>("FinalPriceCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("final_price_cents");
+
+                    b.Property<int>("GatewayFeeCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("gateway_fee_cents");
+
+                    b.Property<Guid?>("GuestUsersId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("guest_users_id");
+
+                    b.Property<DateTime?>("InviteExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invite_expires_at");
+
+                    b.Property<DateTime?>("InviteSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invite_sent_at");
+
+                    b.Property<string>("InviteTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("invite_token_hash");
+
+                    b.Property<string>("InvitedEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("invited_email");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("PlatformFeeCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("platform_fee_cents");
+
+                    b.Property<Guid?>("PricesId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("prices_id");
+
+                    b.Property<string>("QrToken")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("qr_token");
+
+                    b.Property<int?>("SeatNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("seat_number");
+
+                    b.Property<int>("Seats")
+                        .HasColumnType("integer")
+                        .HasColumnName("seats");
+
+                    b.Property<int>("SellingPriceCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("selling_price_cents");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int>("SubtotalCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("subtotal_cents");
+
+                    b.Property<Guid?>("TablesId")
                         .HasColumnType("uuid")
                         .HasColumnName("tables_id");
 
@@ -336,16 +444,133 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("tenants_id");
 
-                    b.HasKey("BookingsId", "TablesId")
-                        .HasName("pk_booking_tables");
+                    b.Property<string>("TicketCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("ticket_code");
+
+                    b.Property<int>("TotalCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_cents");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_booking_lines");
+
+                    b.HasIndex("BookingsId")
+                        .HasDatabaseName("ix_booking_lines_bookings_id");
+
+                    b.HasIndex("EventTicketTypesId")
+                        .HasDatabaseName("ix_booking_lines_event_ticket_types_id");
+
+                    b.HasIndex("EventsId")
+                        .HasDatabaseName("ix_booking_lines_events_id");
+
+                    b.HasIndex("GuestUsersId")
+                        .HasDatabaseName("ix_booking_lines_guest_users_id");
+
+                    b.HasIndex("InviteTokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_booking_lines_invite_token_hash")
+                        .HasFilter("invite_token_hash IS NOT NULL");
+
+                    b.HasIndex("PricesId")
+                        .HasDatabaseName("ix_booking_lines_prices_id");
+
+                    b.HasIndex("QrToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_booking_lines_qr_token")
+                        .HasFilter("qr_token IS NOT NULL");
 
                     b.HasIndex("TablesId")
-                        .HasDatabaseName("ix_booking_tables_tables_id");
+                        .HasDatabaseName("ix_booking_lines_tables_id");
 
                     b.HasIndex("TenantsId")
-                        .HasDatabaseName("ix_booking_tables_tenants_id");
+                        .HasDatabaseName("ix_booking_lines_tenants_id");
 
-                    b.ToTable("booking_tables", (string)null);
+                    b.HasIndex("BookingsId", "SeatNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_booking_lines_bookings_id_seat_number")
+                        .HasFilter("seat_number IS NOT NULL");
+
+                    b.HasIndex("EventsId", "TicketCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_booking_lines_events_id_ticket_code")
+                        .HasFilter("ticket_code IS NOT NULL");
+
+                    b.ToTable("booking_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_booking_lines_FeeCents", "fee_cents >= 0");
+
+                            t.HasCheckConstraint("CK_booking_lines_Kind", "kind IN ('Ticket','Table')");
+
+                            t.HasCheckConstraint("CK_booking_lines_Ref", "(kind = 'Ticket' AND event_ticket_types_id IS NOT NULL AND tables_id IS NULL) OR (kind = 'Ticket' AND tables_id IS NOT NULL AND event_ticket_types_id IS NULL) OR (kind = 'Table' AND tables_id IS NOT NULL AND event_ticket_types_id IS NULL)");
+
+                            t.HasCheckConstraint("CK_booking_lines_Seats", "seats > 0");
+
+                            t.HasCheckConstraint("CK_booking_lines_SubtotalCents", "subtotal_cents >= 0");
+
+                            t.HasCheckConstraint("CK_booking_lines_TicketStatus", "status IN ('Unassigned','Invited','Claimed','CheckedIn')");
+
+                            t.HasCheckConstraint("CK_booking_lines_TotalFormula", "total_cents = subtotal_cents + fee_cents");
+                        });
+                });
+
+            modelBuilder.Entity("Db.Entities.CheckInLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("checkin_logs_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<Guid>("StaffUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("staff_user_id");
+
+                    b.Property<Guid?>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("timestamp");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_checkin_logs");
+
+                    b.HasIndex("BookingId")
+                        .HasDatabaseName("ix_checkin_logs_booking_id");
+
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("ix_checkin_logs_event_id");
+
+                    b.HasIndex("StaffUserId")
+                        .HasDatabaseName("ix_checkin_logs_staff_user_id");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_checkin_logs_ticket_id");
+
+                    b.ToTable("checkin_logs", (string)null);
                 });
 
             modelBuilder.Entity("Db.Entities.DeviceSession", b =>
@@ -567,14 +792,6 @@ namespace Db.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("fees_included");
 
-                    b.Property<int?>("GridCols")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_cols");
-
-                    b.Property<int?>("GridRows")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_rows");
-
                     b.Property<string>("ImagePath")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)")
@@ -590,9 +807,12 @@ namespace Db.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("layout_mode");
 
-                    b.Property<int?>("MaxCapacity")
-                        .HasColumnType("integer")
-                        .HasColumnName("max_capacity");
+                    b.Property<string>("Meta")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("meta")
+                        .HasDefaultValueSql("'[]'::jsonb");
 
                     b.Property<DateTime?>("PublishedAt")
                         .HasColumnType("timestamp with time zone")
@@ -688,11 +908,7 @@ namespace Db.Migrations
 
                             t.HasCheckConstraint("CK_events_EventType", "event_type IN ('Open','Table','Both')");
 
-                            t.HasCheckConstraint("CK_events_GridDimensions", "(grid_rows IS NULL OR grid_rows > 0) AND (grid_cols IS NULL OR grid_cols > 0)");
-
                             t.HasCheckConstraint("CK_events_LayoutMode", "layout_mode IN ('Grid','Open')");
-
-                            t.HasCheckConstraint("CK_events_MaxCapacity", "max_capacity IS NULL OR max_capacity > 0");
 
                             t.HasCheckConstraint("CK_events_PublishLifecycle", "status <> 'Published' OR published_at IS NOT NULL");
 
@@ -732,17 +948,20 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("tenants_id");
 
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("event_image")
+                        .HasColumnName("type");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id")
                         .HasName("pk_event_images");
-
-                    b.HasIndex("EventsId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_event_images_events_id")
-                        .HasFilter("is_primary = true");
 
                     b.HasIndex("ImagesId")
                         .HasDatabaseName("ix_event_images_images_id");
@@ -757,7 +976,15 @@ namespace Db.Migrations
                     b.HasIndex("EventsId", "SortOrder")
                         .HasDatabaseName("ix_event_images_events_id_sort_order");
 
-                    b.ToTable("event_images", (string)null);
+                    b.HasIndex("EventsId", "Type")
+                        .IsUnique()
+                        .HasDatabaseName("ix_event_images_events_id_type")
+                        .HasFilter("is_primary = true");
+
+                    b.ToTable("event_images", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_event_images_Type", "type IN ('event_image','event_thumbnail')");
+                        });
                 });
 
             modelBuilder.Entity("Db.Entities.EventPerformer", b =>
@@ -868,10 +1095,6 @@ namespace Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("capacity");
 
-                    b.Property<int?>("ColSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("col_span");
-
                     b.Property<string>("Color")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
@@ -880,6 +1103,14 @@ namespace Db.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<decimal?>("DefaultHeight")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("default_height");
+
+                    b.Property<decimal?>("DefaultWidth")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("default_width");
 
                     b.Property<Guid>("EventsId")
                         .HasColumnType("uuid")
@@ -910,10 +1141,6 @@ namespace Db.Migrations
                     b.Property<Guid?>("PricesId")
                         .HasColumnType("uuid")
                         .HasColumnName("prices_id");
-
-                    b.Property<int?>("RowSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("row_span");
 
                     b.Property<string>("Shape")
                         .IsRequired()
@@ -968,6 +1195,10 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("event_ticket_types_id")
                         .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int?>("Capacity")
+                        .HasColumnType("integer")
+                        .HasColumnName("capacity");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1043,6 +1274,8 @@ namespace Db.Migrations
 
                     b.ToTable("event_ticket_types", null, t =>
                         {
+                            t.HasCheckConstraint("CK_event_ticket_types_Capacity", "capacity IS NULL OR capacity > 0");
+
                             t.HasCheckConstraint("CK_event_ticket_types_MaxQuantity", "max_quantity IS NULL OR max_quantity > 0");
 
                             t.HasCheckConstraint("CK_event_ticket_types_PriceCents", "price_cents >= 0");
@@ -1200,14 +1433,6 @@ namespace Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<int>("GridCols")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_cols");
-
-                    b.Property<int>("GridRows")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_rows");
-
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1234,10 +1459,7 @@ namespace Db.Migrations
                     b.HasIndex("TenantsId")
                         .HasDatabaseName("ix_floor_plan_templates_tenants_id");
 
-                    b.ToTable("floor_plan_templates", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_floor_plan_templates_Grid", "(grid_rows IS NULL OR grid_rows > 0) AND (grid_cols IS NULL OR grid_cols > 0)");
-                        });
+                    b.ToTable("floor_plan_templates", (string)null);
                 });
 
             modelBuilder.Entity("Db.Entities.FloorPlanTemplateObject", b =>
@@ -1247,12 +1469,6 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("floor_plan_template_objects_id")
                         .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<int>("ColSpan")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("col_span");
 
                     b.Property<string>("Color")
                         .HasMaxLength(20)
@@ -1267,13 +1483,11 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("floor_plan_templates_id");
 
-                    b.Property<int>("GridCol")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_col");
-
-                    b.Property<int>("GridRow")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_row");
+                    b.Property<decimal>("Height")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("height");
 
                     b.Property<string>("Label")
                         .HasMaxLength(64)
@@ -1286,11 +1500,13 @@ namespace Db.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("object_type");
 
-                    b.Property<int>("RowSpan")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("row_span");
+                    b.Property<decimal>("PosX")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("pos_x");
+
+                    b.Property<decimal>("PosY")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("pos_y");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer")
@@ -1303,6 +1519,12 @@ namespace Db.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<decimal>("Width")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("width");
 
                     b.HasKey("Id")
                         .HasName("pk_floor_plan_template_objects");
@@ -1331,12 +1553,6 @@ namespace Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("capacity");
 
-                    b.Property<int>("ColSpan")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("col_span");
-
                     b.Property<string>("Color")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
@@ -1350,13 +1566,11 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("floor_plan_templates_id");
 
-                    b.Property<int>("GridCol")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_col");
-
-                    b.Property<int>("GridRow")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_row");
+                    b.Property<decimal>("Height")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("height");
 
                     b.Property<string>("Label")
                         .IsRequired()
@@ -1364,15 +1578,17 @@ namespace Db.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("label");
 
+                    b.Property<decimal>("PosX")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("pos_x");
+
+                    b.Property<decimal>("PosY")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("pos_y");
+
                     b.Property<int>("PriceCents")
                         .HasColumnType("integer")
                         .HasColumnName("price_cents");
-
-                    b.Property<int>("RowSpan")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("row_span");
 
                     b.Property<string>("Shape")
                         .IsRequired()
@@ -1397,6 +1613,12 @@ namespace Db.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<decimal>("Width")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("width");
 
                     b.HasKey("Id")
                         .HasName("pk_floor_plan_template_tables");
@@ -1541,6 +1763,10 @@ namespace Db.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("email");
 
+                    b.Property<Guid?>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
@@ -1579,6 +1805,9 @@ namespace Db.Migrations
                     b.HasIndex("Email")
                         .HasDatabaseName("ix_invitations_email");
 
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("ix_invitations_event_id");
+
                     b.HasIndex("InvitedByUsersId")
                         .HasDatabaseName("ix_invitations_invited_by_users_id");
 
@@ -1605,12 +1834,6 @@ namespace Db.Migrations
                         .HasColumnName("layout_objects_id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<int>("ColSpan")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("col_span");
-
                     b.Property<string>("Color")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
@@ -1624,13 +1847,11 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("events_id");
 
-                    b.Property<int>("GridCol")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_col");
-
-                    b.Property<int>("GridRow")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_row");
+                    b.Property<decimal>("Height")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("height");
 
                     b.Property<string>("Label")
                         .HasMaxLength(64)
@@ -1643,11 +1864,13 @@ namespace Db.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("object_type");
 
-                    b.Property<int>("RowSpan")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("row_span");
+                    b.Property<decimal>("PosX")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("pos_x");
+
+                    b.Property<decimal>("PosY")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("pos_y");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer")
@@ -1661,6 +1884,12 @@ namespace Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<decimal>("Width")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("width");
+
                     b.HasKey("Id")
                         .HasName("pk_layout_objects");
 
@@ -1672,11 +1901,11 @@ namespace Db.Migrations
 
                     b.ToTable("layout_objects", null, t =>
                         {
-                            t.HasCheckConstraint("CK_layout_objects_GridCol", "grid_col >= 0");
-
-                            t.HasCheckConstraint("CK_layout_objects_GridRow", "grid_row >= 0");
-
                             t.HasCheckConstraint("CK_layout_objects_ObjectType", "object_type IN ('Entry','Exit','Stage')");
+
+                            t.HasCheckConstraint("CK_layout_objects_PosX", "pos_x >= 0");
+
+                            t.HasCheckConstraint("CK_layout_objects_PosY", "pos_y >= 0");
                         });
                 });
 
@@ -1822,6 +2051,12 @@ namespace Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
                     b.Property<string>("Meta")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1965,10 +2200,6 @@ namespace Db.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("name");
 
-                    b.Property<Guid?>("ParentPricesId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("parent_prices_id");
-
                     b.Property<int>("PerAttendeeCents")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -1998,9 +2229,6 @@ namespace Db.Migrations
                     b.HasIndex("FeeFormulasId")
                         .HasDatabaseName("ix_prices_fee_formulas_id");
 
-                    b.HasIndex("ParentPricesId")
-                        .HasDatabaseName("ix_prices_parent_prices_id");
-
                     b.HasIndex("TenantsId")
                         .HasDatabaseName("ix_prices_tenants_id");
 
@@ -2012,7 +2240,7 @@ namespace Db.Migrations
 
                             t.HasCheckConstraint("CK_prices_PerAttendeeCents", "per_attendee_cents >= 0");
 
-                            t.HasCheckConstraint("CK_prices_PricingType", "pricing_type IN ('TicketTier','Table','AddOn')");
+                            t.HasCheckConstraint("CK_prices_PricingType", "pricing_type IN ('TicketTier','Table')");
                         });
                 });
 
@@ -2031,6 +2259,10 @@ namespace Db.Migrations
                     b.Property<DateTime?>("ActiveUntil")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("active_until");
+
+                    b.Property<int?>("Capacity")
+                        .HasColumnType("integer")
+                        .HasColumnName("capacity");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -2110,6 +2342,8 @@ namespace Db.Migrations
 
                     b.ToTable("price_rules", null, t =>
                         {
+                            t.HasCheckConstraint("CK_price_rules_Capacity", "capacity IS NULL OR capacity > 0");
+
                             t.HasCheckConstraint("CK_price_rules_PriceCents", "price_cents >= 0");
 
                             t.HasCheckConstraint("CK_price_rules_RuleType", "rule_type IN ('Presale','LastMinute','TimeWindow','Dynamic')");
@@ -2117,6 +2351,67 @@ namespace Db.Migrations
                             t.HasCheckConstraint("CK_price_rules_Scope", "(scope = 'Price' AND prices_id IS NOT NULL AND events_id IS NULL) OR (scope = 'Event' AND events_id IS NOT NULL AND prices_id IS NULL)");
 
                             t.HasCheckConstraint("CK_price_rules_Window", "active_from IS NULL OR active_until IS NULL OR active_until > active_from");
+                        });
+                });
+
+            modelBuilder.Entity("Db.Entities.ScheduleItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("schedule_items_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_time");
+
+                    b.Property<Guid>("EventsId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("events_id");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_time");
+
+                    b.Property<Guid>("TenantsId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenants_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("TypeCategory")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("type_category");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_schedule_items");
+
+                    b.HasIndex("TenantsId")
+                        .HasDatabaseName("ix_schedule_items_tenants_id");
+
+                    b.HasIndex("EventsId", "StartTime")
+                        .HasDatabaseName("ix_schedule_items_events_id_start_time");
+
+                    b.ToTable("schedule_items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_schedule_items_TimeRange", "end_time > start_time");
+
+                            t.HasCheckConstraint("CK_schedule_items_TypeCategory", "type_category IN ('Performance','Break','Intermission','DJ Set','Networking','Other')");
                         });
                 });
 
@@ -2131,6 +2426,12 @@ namespace Db.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
 
                     b.Property<string>("Meta")
                         .IsRequired()
@@ -2178,6 +2479,50 @@ namespace Db.Migrations
                         .HasDatabaseName("ix_sponsors_tenants_id");
 
                     b.ToTable("sponsors", (string)null);
+                });
+
+            modelBuilder.Entity("Db.Entities.StaffEventAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("staff_event_access_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid?>("AssignedByAdminId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_by_admin_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<Guid>("StaffUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("staff_user_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_staff_event_access");
+
+                    b.HasIndex("AssignedByAdminId")
+                        .HasDatabaseName("ix_staff_event_access_assigned_by_admin_id");
+
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("ix_staff_event_access_event_id");
+
+                    b.HasIndex("StaffUserId", "EventId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_staff_event_access_staff_user_id_event_id");
+
+                    b.ToTable("staff_event_access", (string)null);
                 });
 
             modelBuilder.Entity("Db.Entities.StripePayout", b =>
@@ -2304,20 +2649,6 @@ namespace Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("stripe_fees_cents");
 
-                    b.Property<int?>("TaxAmountCents")
-                        .HasColumnType("integer")
-                        .HasColumnName("tax_amount_cents");
-
-                    b.Property<string>("TaxCalculationId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("tax_calculation_id");
-
-                    b.Property<string>("TaxTransactionId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("tax_transaction_id");
-
                     b.Property<Guid>("TenantsId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenants_id");
@@ -2368,8 +2699,6 @@ namespace Db.Migrations
                             t.HasCheckConstraint("CK_stripe_transactions_Status", "status IN ('RequiresConfirmation','Succeeded','Failed','Refunded')");
 
                             t.HasCheckConstraint("CK_stripe_transactions_StripeFees", "stripe_fees_cents IS NULL OR stripe_fees_cents >= 0");
-
-                            t.HasCheckConstraint("CK_stripe_transactions_TaxAmount", "tax_amount_cents IS NULL OR tax_amount_cents >= 0");
 
                             t.HasCheckConstraint("CK_stripe_transactions_TotalCharged", "total_charged_cents IS NULL OR total_charged_cents >= 0");
 
@@ -2451,10 +2780,6 @@ namespace Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("capacity_override");
 
-                    b.Property<int>("ColSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("col_span");
-
                     b.Property<string>("ColorOverride")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
@@ -2472,13 +2797,11 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("events_id");
 
-                    b.Property<int>("GridCol")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_col");
-
-                    b.Property<int>("GridRow")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_row");
+                    b.Property<decimal>("Height")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("height");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
@@ -2498,9 +2821,13 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("locked_by_users_id");
 
-                    b.Property<int>("RowSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("row_span");
+                    b.Property<decimal>("PosX")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("pos_x");
+
+                    b.Property<decimal>("PosY")
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("pos_y");
 
                     b.Property<string>("ShapeOverride")
                         .HasMaxLength(20)
@@ -2527,6 +2854,12 @@ namespace Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<decimal>("Width")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("width");
+
                     b.HasKey("Id")
                         .HasName("pk_tables");
 
@@ -2549,19 +2882,15 @@ namespace Db.Migrations
                     b.HasIndex("EventsId", "Status")
                         .HasDatabaseName("ix_tables_events_id_status");
 
-                    b.HasIndex("EventsId", "GridRow", "GridCol")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tables_events_id_grid_row_grid_col");
-
                     b.ToTable("tables", null, t =>
                         {
                             t.HasCheckConstraint("CK_tables_AvailableNoLock", "status <> 'Available' OR (locked_by_users_id IS NULL AND lock_expires_at IS NULL)");
 
-                            t.HasCheckConstraint("CK_tables_GridCol", "grid_col >= 0");
-
-                            t.HasCheckConstraint("CK_tables_GridRow", "grid_row >= 0");
-
                             t.HasCheckConstraint("CK_tables_LockedRequiresOwner", "status <> 'Locked' OR (locked_by_users_id IS NOT NULL AND lock_expires_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_tables_PosX", "pos_x >= 0");
+
+                            t.HasCheckConstraint("CK_tables_PosY", "pos_y >= 0");
 
                             t.HasCheckConstraint("CK_tables_Status", "status IN ('Available','Locked','Booked')");
                         });
@@ -2583,28 +2912,38 @@ namespace Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("default_capacity");
 
-                    b.Property<int>("DefaultColSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("default_col_span");
-
                     b.Property<string>("DefaultColor")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("default_color");
 
+                    b.Property<decimal>("DefaultHeight")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("default_height");
+
+                    b.Property<bool>("DefaultIsAllInclusive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("default_is_all_inclusive");
+
                     b.Property<int>("DefaultPriceCents")
                         .HasColumnType("integer")
                         .HasColumnName("default_price_cents");
-
-                    b.Property<int>("DefaultRowSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("default_row_span");
 
                     b.Property<string>("DefaultShape")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("default_shape");
+
+                    b.Property<decimal>("DefaultWidth")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(80m)
+                        .HasColumnName("default_width");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
@@ -2629,6 +2968,15 @@ namespace Db.Migrations
 
                     b.HasIndex("TenantsId")
                         .HasDatabaseName("ix_table_templates_tenants_id");
+
+                    b.HasIndex("TenantsId", "DefaultColor")
+                        .IsUnique()
+                        .HasDatabaseName("ix_table_templates_tenants_id_default_color")
+                        .HasFilter("default_color IS NOT NULL");
+
+                    b.HasIndex("TenantsId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_table_templates_tenants_id_name");
 
                     b.ToTable("table_templates", null, t =>
                         {
@@ -2735,9 +3083,33 @@ namespace Db.Migrations
                         .HasColumnName("tenants_id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<string>("AddressLine1")
+                        .HasColumnType("text")
+                        .HasColumnName("address_line1");
+
+                    b.Property<string>("AddressLine2")
+                        .HasColumnType("text")
+                        .HasColumnName("address_line2");
+
                     b.Property<DateTime?>("ArchivedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("archived_at");
+
+                    b.Property<string>("BrandAccent")
+                        .HasColumnType("text")
+                        .HasColumnName("brand_accent");
+
+                    b.Property<string>("BrandPrimary")
+                        .HasColumnType("text")
+                        .HasColumnName("brand_primary");
+
+                    b.Property<string>("BrandSecondary")
+                        .HasColumnType("text")
+                        .HasColumnName("brand_secondary");
+
+                    b.Property<string>("City")
+                        .HasColumnType("text")
+                        .HasColumnName("city");
 
                     b.Property<string>("CountryCode")
                         .IsRequired()
@@ -2755,10 +3127,18 @@ namespace Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("default_fee_formulas_id");
 
+                    b.Property<Guid?>("GatewayFeeFormulasId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("gateway_fee_formulas_id");
+
                     b.Property<string>("LegalName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("legal_name");
+
+                    b.Property<Guid?>("LogoImagesId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("logo_images_id");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2766,11 +3146,19 @@ namespace Db.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("name");
 
+                    b.Property<string>("Phone")
+                        .HasColumnType("text")
+                        .HasColumnName("phone");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
                         .HasColumnName("slug");
+
+                    b.Property<string>("State")
+                        .HasColumnType("text")
+                        .HasColumnName("state");
 
                     b.Property<bool>("StripeChargesEnabled")
                         .ValueGeneratedOnAdd()
@@ -2807,6 +3195,10 @@ namespace Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<string>("Zip")
+                        .HasColumnType("text")
+                        .HasColumnName("zip");
+
                     b.HasKey("Id")
                         .HasName("pk_tenants");
 
@@ -2815,6 +3207,9 @@ namespace Db.Migrations
 
                     b.HasIndex("DefaultFeeFormulasId")
                         .HasDatabaseName("ix_tenants_default_fee_formulas_id");
+
+                    b.HasIndex("GatewayFeeFormulasId")
+                        .HasDatabaseName("ix_tenants_gateway_fee_formulas_id");
 
                     b.HasIndex("Slug")
                         .IsUnique()
@@ -2871,116 +3266,6 @@ namespace Db.Migrations
                         .HasName("pk_tenant_stripe_profiles");
 
                     b.ToTable("tenant_stripe_profiles", (string)null);
-                });
-
-            modelBuilder.Entity("Db.Entities.Ticket", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("tickets_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid>("BookingsId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("bookings_id");
-
-                    b.Property<DateTime?>("ClaimedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("claimed_at");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("EventsId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("events_id");
-
-                    b.Property<Guid?>("GuestUsersId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("guest_users_id");
-
-                    b.Property<DateTime?>("InviteExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("invite_expires_at");
-
-                    b.Property<DateTime?>("InviteSentAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("invite_sent_at");
-
-                    b.Property<string>("InviteTokenHash")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("invite_token_hash");
-
-                    b.Property<string>("InvitedEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("invited_email");
-
-                    b.Property<string>("QrToken")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("qr_token");
-
-                    b.Property<int>("SeatNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("seat_number");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<Guid>("TenantsId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenants_id");
-
-                    b.Property<string>("TicketCode")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("ticket_code");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_tickets");
-
-                    b.HasIndex("GuestUsersId")
-                        .HasDatabaseName("ix_tickets_guest_users_id");
-
-                    b.HasIndex("InviteTokenHash")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tickets_invite_token_hash")
-                        .HasFilter("invite_token_hash IS NOT NULL");
-
-                    b.HasIndex("QrToken")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tickets_qr_token");
-
-                    b.HasIndex("TenantsId")
-                        .HasDatabaseName("ix_tickets_tenants_id");
-
-                    b.HasIndex("BookingsId", "SeatNumber")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tickets_bookings_id_seat_number");
-
-                    b.HasIndex("EventsId", "TicketCode")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tickets_events_id_ticket_code");
-
-                    b.ToTable("tickets", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_tickets_SeatNumber", "seat_number > 0");
-
-                            t.HasCheckConstraint("CK_tickets_Status", "status IN ('Unassigned','Invited','Claimed','CheckedIn')");
-                        });
                 });
 
             modelBuilder.Entity("Db.Entities.User", b =>
@@ -3188,50 +3473,6 @@ namespace Db.Migrations
                         .HasDatabaseName("ix_user_email_verification_tokens_users_id");
 
                     b.ToTable("user_email_verification_tokens", (string)null);
-                });
-
-            modelBuilder.Entity("Db.Entities.UserEvent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_events_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid?>("AssignedByUsersId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("assigned_by_users_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("EventsId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("events_id");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid>("UsersId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("users_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_user_events");
-
-                    b.HasIndex("AssignedByUsersId")
-                        .HasDatabaseName("ix_user_events_assigned_by_users_id");
-
-                    b.HasIndex("EventsId")
-                        .HasDatabaseName("ix_user_events_events_id");
-
-                    b.HasIndex("UsersId", "EventsId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_user_events_users_id_events_id");
-
-                    b.ToTable("user_events", (string)null);
                 });
 
             modelBuilder.Entity("Db.Entities.Venue", b =>
@@ -3525,18 +3766,6 @@ namespace Db.Migrations
                         .IsRequired()
                         .HasColumnType("text[]")
                         .HasColumnName("table_labels");
-
-                    b.Property<int?>("TaxAmountCents")
-                        .HasColumnType("integer")
-                        .HasColumnName("tax_amount_cents");
-
-                    b.Property<string>("TaxCalculationId")
-                        .HasColumnType("text")
-                        .HasColumnName("tax_calculation_id");
-
-                    b.Property<string>("TaxTransactionId")
-                        .HasColumnType("text")
-                        .HasColumnName("tax_transaction_id");
 
                     b.Property<int>("TicketCount")
                         .HasColumnType("integer")
@@ -3893,6 +4122,11 @@ namespace Db.Migrations
                         .HasColumnType("text")
                         .HasColumnName("storage_key");
 
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
                     b.Property<int>("Width")
                         .HasColumnType("integer")
                         .HasColumnName("width");
@@ -3951,10 +4185,6 @@ namespace Db.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("layout_mode");
-
-                    b.Property<int?>("MaxCapacity")
-                        .HasColumnType("integer")
-                        .HasColumnName("max_capacity");
 
                     b.Property<int?>("MinTablePriceCents")
                         .HasColumnType("integer")
@@ -4073,13 +4303,13 @@ namespace Db.Migrations
                         .HasColumnType("text")
                         .HasColumnName("color");
 
-                    b.Property<int>("DefaultColSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("default_col_span");
+                    b.Property<decimal>("DefaultHeight")
+                        .HasColumnType("numeric")
+                        .HasColumnName("default_height");
 
-                    b.Property<int>("DefaultRowSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("default_row_span");
+                    b.Property<decimal>("DefaultWidth")
+                        .HasColumnType("numeric")
+                        .HasColumnName("default_width");
 
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid")
@@ -4219,14 +4449,6 @@ namespace Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("end_date");
 
-                    b.Property<int?>("GridCols")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_cols");
-
-                    b.Property<int?>("GridRows")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_rows");
-
                     b.Property<string>("ImagePath")
                         .HasColumnType("text")
                         .HasColumnName("image_path");
@@ -4239,10 +4461,6 @@ namespace Db.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("layout_mode");
-
-                    b.Property<int?>("MaxCapacity")
-                        .HasColumnType("integer")
-                        .HasColumnName("max_capacity");
 
                     b.Property<int?>("MinTablePriceCents")
                         .HasColumnType("integer")
@@ -4536,6 +4754,10 @@ namespace Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("event_count");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
                     b.Property<string>("Meta")
                         .IsRequired()
                         .HasColumnType("jsonb")
@@ -4720,6 +4942,10 @@ namespace Db.Migrations
                     b.Property<int>("EventCount")
                         .HasColumnType("integer")
                         .HasColumnName("event_count");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
 
                     b.Property<string>("Meta")
                         .IsRequired()
@@ -4944,10 +5170,6 @@ namespace Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("capacity");
 
-                    b.Property<int>("ColSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("col_span");
-
                     b.Property<string>("Color")
                         .HasColumnType("text")
                         .HasColumnName("color");
@@ -4969,13 +5191,9 @@ namespace Db.Migrations
                         .HasColumnType("text")
                         .HasColumnName("event_table_label");
 
-                    b.Property<int>("GridCol")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_col");
-
-                    b.Property<int>("GridRow")
-                        .HasColumnType("integer")
-                        .HasColumnName("grid_row");
+                    b.Property<decimal>("Height")
+                        .HasColumnType("numeric")
+                        .HasColumnName("height");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
@@ -4998,13 +5216,17 @@ namespace Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("platform_fee_cents");
 
+                    b.Property<decimal>("PosX")
+                        .HasColumnType("numeric")
+                        .HasColumnName("pos_x");
+
+                    b.Property<decimal>("PosY")
+                        .HasColumnType("numeric")
+                        .HasColumnName("pos_y");
+
                     b.Property<int>("PriceCents")
                         .HasColumnType("integer")
                         .HasColumnName("price_cents");
-
-                    b.Property<int>("RowSpan")
-                        .HasColumnType("integer")
-                        .HasColumnName("row_span");
 
                     b.Property<string>("Shape")
                         .IsRequired()
@@ -5027,6 +5249,10 @@ namespace Db.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<decimal>("Width")
+                        .HasColumnType("numeric")
+                        .HasColumnName("width");
 
                     b.HasKey("TableId");
 
@@ -5631,24 +5857,12 @@ namespace Db.Migrations
 
             modelBuilder.Entity("Db.Entities.Booking", b =>
                 {
-                    b.HasOne("Db.Entities.EventTicketType", "EventTicketType")
-                        .WithMany()
-                        .HasForeignKey("EventTicketTypesId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_bookings_event_ticket_types_event_ticket_types_id");
-
                     b.HasOne("Db.Entities.Event", "Event")
                         .WithMany()
                         .HasForeignKey("EventsId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_bookings_events_events_id");
-
-                    b.HasOne("Db.Entities.Table", "Table")
-                        .WithMany()
-                        .HasForeignKey("TablesId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_bookings_tables_tables_id");
 
                     b.HasOne("Db.Entities.Tenant", "Tenant")
                         .WithMany()
@@ -5666,43 +5880,107 @@ namespace Db.Migrations
 
                     b.Navigation("Event");
 
-                    b.Navigation("EventTicketType");
-
-                    b.Navigation("Table");
-
                     b.Navigation("Tenant");
 
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Db.Entities.BookingTable", b =>
+            modelBuilder.Entity("Db.Entities.BookingLine", b =>
                 {
                     b.HasOne("Db.Entities.Booking", "Booking")
-                        .WithMany()
+                        .WithMany("Lines")
                         .HasForeignKey("BookingsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_booking_tables_bookings_bookings_id");
+                        .HasConstraintName("fk_booking_lines_bookings_bookings_id");
+
+                    b.HasOne("Db.Entities.EventTicketType", "EventTicketType")
+                        .WithMany()
+                        .HasForeignKey("EventTicketTypesId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_booking_lines_event_ticket_types_event_ticket_types_id");
+
+                    b.HasOne("Db.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventsId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_booking_lines_events_events_id");
+
+                    b.HasOne("Db.Entities.User", "GuestUser")
+                        .WithMany()
+                        .HasForeignKey("GuestUsersId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_booking_lines_users_guest_users_id");
+
+                    b.HasOne("Db.Entities.Price", "Price")
+                        .WithMany()
+                        .HasForeignKey("PricesId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_booking_lines_prices_prices_id");
 
                     b.HasOne("Db.Entities.Table", "Table")
                         .WithMany()
                         .HasForeignKey("TablesId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_booking_tables_tables_tables_id");
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_booking_lines_tables_tables_id");
 
                     b.HasOne("Db.Entities.Tenant", "Tenant")
                         .WithMany()
                         .HasForeignKey("TenantsId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_booking_tables_tenants_tenants_id");
+                        .HasConstraintName("fk_booking_lines_tenants_tenants_id");
 
                     b.Navigation("Booking");
+
+                    b.Navigation("Event");
+
+                    b.Navigation("EventTicketType");
+
+                    b.Navigation("GuestUser");
+
+                    b.Navigation("Price");
 
                     b.Navigation("Table");
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Db.Entities.CheckInLog", b =>
+                {
+                    b.HasOne("Db.Entities.Booking", "Booking")
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_checkin_logs_bookings_booking_id");
+
+                    b.HasOne("Db.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_checkin_logs_events_event_id");
+
+                    b.HasOne("Db.Entities.User", "StaffUser")
+                        .WithMany()
+                        .HasForeignKey("StaffUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_checkin_logs_users_staff_user_id");
+
+                    b.HasOne("Db.Entities.BookingLine", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_checkin_logs_booking_lines_ticket_id");
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Event");
+
+                    b.Navigation("StaffUser");
+
+                    b.Navigation("Ticket");
                 });
 
             modelBuilder.Entity("Db.Entities.DeviceSession", b =>
@@ -6005,6 +6283,12 @@ namespace Db.Migrations
 
             modelBuilder.Entity("Db.Entities.Invitation", b =>
                 {
+                    b.HasOne("Db.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_invitations_events_event_id");
+
                     b.HasOne("Db.Entities.User", "InvitedBy")
                         .WithMany()
                         .HasForeignKey("InvitedByUsersId")
@@ -6017,6 +6301,8 @@ namespace Db.Migrations
                         .HasForeignKey("TenantsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .HasConstraintName("fk_invitations_tenants_tenants_id");
+
+                    b.Navigation("Event");
 
                     b.Navigation("InvitedBy");
 
@@ -6095,12 +6381,6 @@ namespace Db.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_prices_fee_formulas_fee_formulas_id");
 
-                    b.HasOne("Db.Entities.Price", "ParentPrice")
-                        .WithMany()
-                        .HasForeignKey("ParentPricesId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_prices_prices_parent_prices_id");
-
                     b.HasOne("Db.Entities.Tenant", "Tenant")
                         .WithMany()
                         .HasForeignKey("TenantsId")
@@ -6111,8 +6391,6 @@ namespace Db.Migrations
                     b.Navigation("Event");
 
                     b.Navigation("FeeFormula");
-
-                    b.Navigation("ParentPrice");
 
                     b.Navigation("Tenant");
                 });
@@ -6145,6 +6423,27 @@ namespace Db.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Db.Entities.ScheduleItem", b =>
+                {
+                    b.HasOne("Db.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_schedule_items_events_events_id");
+
+                    b.HasOne("Db.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantsId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_schedule_items_tenants_tenants_id");
+
+                    b.Navigation("Event");
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("Db.Entities.Sponsor", b =>
                 {
                     b.HasOne("Db.Entities.Tenant", "Tenant")
@@ -6155,6 +6454,35 @@ namespace Db.Migrations
                         .HasConstraintName("fk_sponsors_tenants_tenants_id");
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Db.Entities.StaffEventAccess", b =>
+                {
+                    b.HasOne("Db.Entities.User", "AssignedByAdmin")
+                        .WithMany()
+                        .HasForeignKey("AssignedByAdminId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_staff_event_access_users_assigned_by_admin_id");
+
+                    b.HasOne("Db.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_staff_event_access_events_event_id");
+
+                    b.HasOne("Db.Entities.User", "StaffUser")
+                        .WithMany()
+                        .HasForeignKey("StaffUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_staff_event_access_users_staff_user_id");
+
+                    b.Navigation("AssignedByAdmin");
+
+                    b.Navigation("Event");
+
+                    b.Navigation("StaffUser");
                 });
 
             modelBuilder.Entity("Db.Entities.StripePayout", b =>
@@ -6289,7 +6617,15 @@ namespace Db.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_tenants_fee_formulas_default_fee_formulas_id");
 
+                    b.HasOne("Db.Entities.FeeFormula", "GatewayFeeFormula")
+                        .WithMany()
+                        .HasForeignKey("GatewayFeeFormulasId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_tenants_fee_formulas_gateway_fee_formulas_id");
+
                     b.Navigation("DefaultFeeFormula");
+
+                    b.Navigation("GatewayFeeFormula");
                 });
 
             modelBuilder.Entity("Db.Entities.TenantStripeProfile", b =>
@@ -6300,44 +6636,6 @@ namespace Db.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_tenant_stripe_profiles_tenants_tenants_id");
-
-                    b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("Db.Entities.Ticket", b =>
-                {
-                    b.HasOne("Db.Entities.Booking", "Booking")
-                        .WithMany("Tickets")
-                        .HasForeignKey("BookingsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_tickets_bookings_bookings_id");
-
-                    b.HasOne("Db.Entities.Event", "Event")
-                        .WithMany()
-                        .HasForeignKey("EventsId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_tickets_events_events_id");
-
-                    b.HasOne("Db.Entities.User", "GuestUser")
-                        .WithMany()
-                        .HasForeignKey("GuestUsersId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_tickets_users_guest_users_id");
-
-                    b.HasOne("Db.Entities.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantsId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_tickets_tenants_tenants_id");
-
-                    b.Navigation("Booking");
-
-                    b.Navigation("Event");
-
-                    b.Navigation("GuestUser");
 
                     b.Navigation("Tenant");
                 });
@@ -6377,35 +6675,6 @@ namespace Db.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_user_email_verification_tokens_users_users_id");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Db.Entities.UserEvent", b =>
-                {
-                    b.HasOne("Db.Entities.User", "AssignedByUser")
-                        .WithMany()
-                        .HasForeignKey("AssignedByUsersId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_user_events_users_assigned_by_users_id");
-
-                    b.HasOne("Db.Entities.Event", "Event")
-                        .WithMany()
-                        .HasForeignKey("EventsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_user_events_events_events_id");
-
-                    b.HasOne("Db.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UsersId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_user_events_users_users_id");
-
-                    b.Navigation("AssignedByUser");
-
-                    b.Navigation("Event");
 
                     b.Navigation("User");
                 });
@@ -6462,9 +6731,9 @@ namespace Db.Migrations
 
             modelBuilder.Entity("Db.Entities.Booking", b =>
                 {
-                    b.Navigation("StripeTransaction");
+                    b.Navigation("Lines");
 
-                    b.Navigation("Tickets");
+                    b.Navigation("StripeTransaction");
                 });
 
             modelBuilder.Entity("Db.Entities.EventTable", b =>

@@ -23,7 +23,7 @@ AS $$
             e.title AS event_title,
             p.total_cents, p.subtotal_cents, p.fee_cents,
             st.total_charged_cents, st.transfer_amount_cents,
-            st.stripe_fees_cents, st.tax_amount_cents, st.paid_at
+            st.stripe_fees_cents, 0 AS tax_amount_cents, st.paid_at
         FROM bookings p
         JOIN events e ON e.events_id = p.events_id
         LEFT JOIN stripe_transactions st ON st.bookings_id = p.bookings_id,

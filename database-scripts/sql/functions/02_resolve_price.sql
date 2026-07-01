@@ -1,5 +1,8 @@
--- Pricing Module core resolution functions. Single server-authoritative source
--- of truth for "what does this priceable cost right now". Built on app.compute_fee.
+-- Pricing Module core resolution. The SINGLE server-authoritative source of truth
+-- for "what does this priceable cost right now and how does the money split".
+-- Built on app.compute_fee. Every consumer — admin preview (sp_calculate_price),
+-- customer checkout quote, and the booking-write SPs — calls app.price_breakdown.
+-- No pricing math lives anywhere else.
 
 -- Resolves the effective fee formula for a price: the price's explicit override
 -- when set (developer-only), otherwise the owning tenant's default fee formula.
@@ -14,41 +17,69 @@ AS $$
     );
 $$;
 
--- Calculates the final price for a single line of a given price entity at a point
--- in time, for a seat count, given remaining inventory. Applies the
--- highest-priority active price_rule whose time window and inventory conditions
--- match (presale / last-minute / dynamic), then table per-attendee math, then the
--- resolved fee formula. Returns the whole-line subtotal/fee/total.
---   Table, all-inclusive : subtotal = resolved base
---   Table, per-attendee  : subtotal = resolved base + per_attendee_cents * seats
---   TicketTier / AddOn    : subtotal = resolved unit * seats (fee per seat)
-CREATE OR REPLACE FUNCTION app.resolve_price(
+-- Resolves the gateway (payment-processing) fee formula for a tenant. NULL when
+-- the tenant has none configured, which app.compute_fee treats as a zero fee.
+CREATE OR REPLACE FUNCTION app.resolve_gateway_formula(p_tenant uuid)
+RETURNS uuid
+LANGUAGE sql STABLE
+SET search_path = public, extensions, pg_catalog
+AS $$
+    SELECT gateway_fee_formulas_id FROM tenants WHERE tenants_id = p_tenant;
+$$;
+
+-- Resolve the active price for a sellable item, applying prioritized price rules,
+-- and computing server-authoritative fees.
+--
+-- Fee structures:
+--   1. platform fee = resolved fee_formulas (e.g. 6% + $1.50) applied to the selling price
+--   2. gateway fee  = fixed processing fee (e.g. 2.9% + $0.30) of total charged amount (selling + platform)
+--
+-- Returns a complete breakdown snapshot.
+
+CREATE OR REPLACE FUNCTION app.price_breakdown(
     p_prices_id uuid, p_at timestamptz, p_seats int, p_remaining int
 )
-RETURNS TABLE(subtotal_cents int, fee_cents int, total_cents int)
+RETURNS TABLE(
+    base_price_cents int,
+    selling_price_cents int,
+    discount_cents int,
+    applied_price_rules_id uuid,
+    applied_rule_name text,
+    platform_fee_cents int,
+    gateway_fee_cents int,
+    tax_cents int,
+    final_price_cents int,
+    organizer_net_cents int,
+    currency text
+)
 LANGUAGE plpgsql STABLE
 SET search_path = public, extensions, pg_catalog
 AS $$
 DECLARE
     v_tenant uuid; v_event uuid; v_type text; v_base int; v_per int; v_allinc bool; v_explicit uuid;
-    v_formula uuid; v_seats int := GREATEST(COALESCE(p_seats, 1), 1);
-    v_rule_price int; v_unit int; v_sub int; v_fee int;
+    v_formula uuid; v_gw_formula uuid;
+    v_seats int := GREATEST(COALESCE(p_seats, 1), 1);
+    v_rule_id uuid; v_rule_name text; v_rule_price int;
+    v_base_unit int; v_sell_unit int;
+    v_base_sub int; v_sell_sub int;
+    v_platform int; v_gateway int;
 BEGIN
-    SELECT tenants_id, events_id, pricing_type, base_price_cents, per_attendee_cents,
-           is_all_inclusive, fee_formulas_id
+    -- Alias every source column: the RETURNS TABLE OUT params share names with prices columns
+    SELECT pp.tenants_id, pp.events_id, pp.pricing_type, pp.base_price_cents, pp.per_attendee_cents,
+           pp.is_all_inclusive, pp.fee_formulas_id
       INTO v_tenant, v_event, v_type, v_base, v_per, v_allinc, v_explicit
-      FROM prices
-     WHERE prices_id = p_prices_id AND is_active = true;
+      FROM prices pp
+     WHERE pp.prices_id = p_prices_id AND pp.is_active = true;
     IF NOT FOUND THEN
         RETURN;
     END IF;
 
     v_formula := app.resolve_fee_formula(v_explicit, v_tenant);
+    v_gw_formula := app.resolve_gateway_formula(v_tenant);
 
-    -- Per-item wins: prefer a matching rule scoped to THIS price; only if none
-    -- matches fall back to an event-wide rule covering the price's event. Within
-    -- each scope the highest priority (then oldest) rule applies.
-    SELECT pr.price_cents INTO v_rule_price
+    -- Per-item wins: a matching rule scoped to THIS price beats an event-wide rule
+    SELECT pr.price_rules_id, pr.name, pr.price_cents
+      INTO v_rule_id, v_rule_name, v_rule_price
       FROM price_rules pr
      WHERE pr.scope = 'Price'
        AND pr.prices_id = p_prices_id
@@ -60,8 +91,9 @@ BEGIN
      ORDER BY pr.priority DESC, pr.created_at ASC
      LIMIT 1;
 
-    IF v_rule_price IS NULL THEN
-        SELECT pr.price_cents INTO v_rule_price
+    IF v_rule_id IS NULL THEN
+        SELECT pr.price_rules_id, pr.name, pr.price_cents
+          INTO v_rule_id, v_rule_name, v_rule_price
           FROM price_rules pr
          WHERE pr.scope = 'Event'
            AND pr.events_id = v_event
@@ -74,22 +106,51 @@ BEGIN
          LIMIT 1;
     END IF;
 
-    v_unit := COALESCE(v_rule_price, v_base);
+    v_base_unit := v_base;
+    v_sell_unit := COALESCE(v_rule_price, v_base);
 
     IF v_type = 'Table' THEN
         IF v_allinc THEN
-            v_sub := v_unit;
+            v_base_sub := v_base_unit;
+            v_sell_sub := v_sell_unit;
         ELSE
-            v_sub := v_unit + v_per * v_seats;
+            v_base_sub := v_base_unit + v_per * v_seats;
+            v_sell_sub := v_sell_unit + v_per * v_seats;
         END IF;
-        v_fee := app.compute_fee(v_sub, v_formula);
+        v_platform := app.compute_fee(v_sell_sub, v_formula);
     ELSE
-        v_sub := v_unit * v_seats;
-        v_fee := app.compute_fee(v_unit, v_formula) * v_seats;
+        v_base_sub := v_base_unit * v_seats;
+        v_sell_sub := v_sell_unit * v_seats;
+        v_platform := app.compute_fee(v_sell_unit, v_formula) * v_seats;
     END IF;
 
-    subtotal_cents := v_sub;
-    fee_cents := v_fee;
-    total_cents := v_sub + v_fee;
+    v_gateway := app.compute_fee(v_sell_sub + v_platform, v_gw_formula);
+
+    base_price_cents := v_base_sub;
+    selling_price_cents := v_sell_sub;
+    discount_cents := GREATEST(v_base_sub - v_sell_sub, 0);
+    applied_price_rules_id := v_rule_id;
+    applied_rule_name := v_rule_name;
+    platform_fee_cents := v_platform;
+    gateway_fee_cents := v_gateway;
+    tax_cents := 0;
+    final_price_cents := v_sell_sub + v_platform + v_gateway;
+    organizer_net_cents := v_sell_sub;
+    currency := 'usd';
     RETURN NEXT;
 END; $$;
+
+-- Back-compat thin wrapper: legacy callers that only need subtotal/fee/total.
+-- subtotal = selling price, fee = platform + gateway, total = final.
+CREATE OR REPLACE FUNCTION app.resolve_price(
+    p_prices_id uuid, p_at timestamptz, p_seats int, p_remaining int
+)
+RETURNS TABLE(subtotal_cents int, fee_cents int, total_cents int)
+LANGUAGE sql STABLE
+SET search_path = public, extensions, pg_catalog
+AS $$
+    SELECT selling_price_cents,
+           platform_fee_cents + gateway_fee_cents + tax_cents,
+           final_price_cents
+    FROM app.price_breakdown(p_prices_id, p_at, p_seats, p_remaining);
+$$;

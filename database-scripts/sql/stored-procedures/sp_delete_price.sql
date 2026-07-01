@@ -5,4 +5,5 @@ RETURNS void LANGUAGE plpgsql
 AS $$
 BEGIN
     UPDATE prices SET is_active = false, updated_at = now() WHERE prices_id = p_prices_id;
+    UPDATE event_ticket_types SET is_active = false, updated_at = now() WHERE prices_id = p_prices_id;
 END; $$;

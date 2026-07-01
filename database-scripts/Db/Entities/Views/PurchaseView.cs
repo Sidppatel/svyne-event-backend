@@ -45,12 +45,9 @@ public class BookingView
     // Stripe transaction
     public Guid? StripeTransactionId { get; set; }
     public string? PaymentIntentId { get; set; }
-    public string? TaxCalculationId { get; set; }
-    public string? TaxTransactionId { get; set; }
     public string? PaymentStatus { get; set; }
     public int? PaymentAmountCents { get; set; }
     public int? TotalChargedCents { get; set; }
-    public int? TaxAmountCents { get; set; }
     public int? StripeFeesCents { get; set; }
     public int? TransferAmountCents { get; set; }
     public DateTime? PaidAt { get; set; }

@@ -66,7 +66,7 @@ public static class BookingEmailSender
             // Now query tickets issued for this booking
             var ticketsList = new List<(string code, int seat)>();
             await using (var ticketCmd = new NpgsqlCommand(
-                "SELECT ticket_code, seat_number FROM tickets WHERE bookings_id = @id ORDER BY seat_number", conn))
+                "SELECT ticket_code, seat_number FROM booking_lines WHERE bookings_id = @id AND kind = 'Ticket' ORDER BY seat_number", conn))
             {
                 ticketCmd.Parameters.AddWithValue("id", bookingId);
                 await using var reader = await ticketCmd.ExecuteReaderAsync(ct);

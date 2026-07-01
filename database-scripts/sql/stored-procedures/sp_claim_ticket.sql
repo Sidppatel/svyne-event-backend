@@ -4,9 +4,9 @@ RETURNS TABLE(ticket_id uuid, bookings_id uuid) LANGUAGE plpgsql
 AS $$
 BEGIN
     RETURN QUERY
-    UPDATE tickets SET
+    UPDATE booking_lines SET
         guest_users_id = p_guest_user_id, claimed_at = now(),
         status = 'Claimed', updated_at = now()
-    WHERE invite_token_hash = p_invite_hash AND status = 'Invited' AND invite_expires_at > now()
-    RETURNING tickets.tickets_id AS ticket_id, tickets.bookings_id;
+    WHERE invite_token_hash = p_invite_hash AND status = 'Invited' AND invite_expires_at > now() AND kind = 'Ticket'
+    RETURNING booking_lines.booking_lines_id AS ticket_id, booking_lines.bookings_id;
 END; $$;

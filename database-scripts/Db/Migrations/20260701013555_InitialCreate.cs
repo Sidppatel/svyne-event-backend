@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using NpgsqlTypes;
 
@@ -108,6 +108,25 @@ namespace Db.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "fee_formulas",
+                columns: table => new
+                {
+                    fee_formulas_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    percent_bps = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    flat_cents = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    min_fee_cents = table.Column<int>(type: "integer", nullable: true),
+                    max_fee_cents = table.Column<int>(type: "integer", nullable: true),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_fee_formulas", x => x.fee_formulas_id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "magic_link_tokens",
                 columns: table => new
                 {
@@ -142,13 +161,59 @@ namespace Db.Migrations
                     stripe_details_submitted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     stripe_onboarded_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     stripe_requirements_due = table.Column<string>(type: "jsonb", nullable: true),
+                    phone = table.Column<string>(type: "text", nullable: true),
+                    address_line1 = table.Column<string>(type: "text", nullable: true),
+                    address_line2 = table.Column<string>(type: "text", nullable: true),
+                    city = table.Column<string>(type: "text", nullable: true),
+                    state = table.Column<string>(type: "text", nullable: true),
+                    zip = table.Column<string>(type: "text", nullable: true),
+                    logo_images_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    brand_primary = table.Column<string>(type: "text", nullable: true),
+                    brand_secondary = table.Column<string>(type: "text", nullable: true),
+                    brand_accent = table.Column<string>(type: "text", nullable: true),
                     archived_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    default_fee_formulas_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    gateway_fee_formulas_id = table.Column<Guid>(type: "uuid", nullable: true),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_tenants", x => x.tenants_id);
+                    table.ForeignKey(
+                        name: "fk_tenants_fee_formulas_default_fee_formulas_id",
+                        column: x => x.default_fee_formulas_id,
+                        principalTable: "fee_formulas",
+                        principalColumn: "fee_formulas_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_tenants_fee_formulas_gateway_fee_formulas_id",
+                        column: x => x.gateway_fee_formulas_id,
+                        principalTable: "fee_formulas",
+                        principalColumn: "fee_formulas_id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "floor_plan_templates",
+                columns: table => new
+                {
+                    floor_plan_templates_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_floor_plan_templates", x => x.floor_plan_templates_id);
+                    table.ForeignKey(
+                        name: "fk_floor_plan_templates_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -196,6 +261,7 @@ namespace Db.Migrations
                     slug = table.Column<string>(type: "character varying(220)", maxLength: 220, nullable: false),
                     primary_image_path = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
                     meta = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
@@ -220,6 +286,7 @@ namespace Db.Migrations
                     slug = table.Column<string>(type: "character varying(220)", maxLength: 220, nullable: false),
                     primary_image_path = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
                     meta = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
@@ -272,8 +339,9 @@ namespace Db.Migrations
                     default_shape = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     default_color = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     default_price_cents = table.Column<int>(type: "integer", nullable: false),
-                    default_row_span = table.Column<int>(type: "integer", nullable: false),
-                    default_col_span = table.Column<int>(type: "integer", nullable: false),
+                    default_width = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    default_height = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    default_is_all_inclusive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     is_active = table.Column<bool>(type: "boolean", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
@@ -290,6 +358,30 @@ namespace Db.Migrations
                         principalTable: "tenants",
                         principalColumn: "tenants_id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "tenant_stripe_profiles",
+                columns: table => new
+                {
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    business_type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    business_url = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    product_description = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    mcc = table.Column<string>(type: "character varying(4)", maxLength: 4, nullable: true),
+                    support_email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tenant_stripe_profiles", x => x.tenants_id);
+                    table.ForeignKey(
+                        name: "fk_tenant_stripe_profiles_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -320,6 +412,81 @@ namespace Db.Migrations
                         onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "fk_venues_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "floor_plan_template_objects",
+                columns: table => new
+                {
+                    floor_plan_template_objects_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    floor_plan_templates_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    object_type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    label = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    pos_x = table.Column<decimal>(type: "numeric(10,2)", nullable: false),
+                    pos_y = table.Column<decimal>(type: "numeric(10,2)", nullable: false),
+                    width = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    height = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    color = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    sort_order = table.Column<int>(type: "integer", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_floor_plan_template_objects", x => x.floor_plan_template_objects_id);
+                    table.CheckConstraint("CK_fpt_objects_ObjectType", "object_type IN ('Entry','Exit','Stage')");
+                    table.ForeignKey(
+                        name: "fk_floor_plan_template_objects_floor_plan_templates_floor_plan",
+                        column: x => x.floor_plan_templates_id,
+                        principalTable: "floor_plan_templates",
+                        principalColumn: "floor_plan_templates_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_floor_plan_template_objects_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "floor_plan_template_tables",
+                columns: table => new
+                {
+                    floor_plan_template_tables_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    floor_plan_templates_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    label = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    type_label = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    capacity = table.Column<int>(type: "integer", nullable: false),
+                    shape = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    color = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    price_cents = table.Column<int>(type: "integer", nullable: false),
+                    pos_x = table.Column<decimal>(type: "numeric(10,2)", nullable: false),
+                    pos_y = table.Column<decimal>(type: "numeric(10,2)", nullable: false),
+                    width = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    height = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    sort_order = table.Column<int>(type: "integer", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_floor_plan_template_tables", x => x.floor_plan_template_tables_id);
+                    table.CheckConstraint("CK_fpt_tables_Shape", "shape IN ('Round','Rectangle','Square','Cocktail')");
+                    table.ForeignKey(
+                        name: "fk_floor_plan_template_tables_floor_plan_templates_floor_plan_",
+                        column: x => x.floor_plan_templates_id,
+                        principalTable: "floor_plan_templates",
+                        principalColumn: "floor_plan_templates_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_floor_plan_template_tables_tenants_tenants_id",
                         column: x => x.tenants_id,
                         principalTable: "tenants",
                         principalColumn: "tenants_id",
@@ -404,6 +571,45 @@ namespace Db.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "table_template_price_rules",
+                columns: table => new
+                {
+                    table_template_price_rules_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    table_templates_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    rule_type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    priority = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    price_cents = table.Column<int>(type: "integer", nullable: false),
+                    active_from = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    active_until = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    min_remaining = table.Column<int>(type: "integer", nullable: true),
+                    max_remaining = table.Column<int>(type: "integer", nullable: true),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_table_template_price_rules", x => x.table_template_price_rules_id);
+                    table.CheckConstraint("CK_table_template_price_rules_PriceCents", "price_cents >= 0");
+                    table.CheckConstraint("CK_table_template_price_rules_RuleType", "rule_type IN ('Presale','LastMinute','TimeWindow','Dynamic')");
+                    table.CheckConstraint("CK_table_template_price_rules_Window", "active_from IS NULL OR active_until IS NULL OR active_until > active_from");
+                    table.ForeignKey(
+                        name: "fk_table_template_price_rules_table_templates_table_templates_",
+                        column: x => x.table_templates_id,
+                        principalTable: "table_templates",
+                        principalColumn: "table_templates_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_table_template_price_rules_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "venue_images",
                 columns: table => new
                 {
@@ -481,11 +687,11 @@ namespace Db.Migrations
                     image_path = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
                     is_featured = table.Column<bool>(type: "boolean", nullable: false),
                     layout_mode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    max_capacity = table.Column<int>(type: "integer", nullable: true),
+                    event_type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValue: "Open"),
                     published_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     scheduled_publish_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    grid_rows = table.Column<int>(type: "integer", nullable: true),
-                    grid_cols = table.Column<int>(type: "integer", nullable: true),
+                    fees_included = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    meta = table.Column<string>(type: "jsonb", nullable: false, defaultValueSql: "'[]'::jsonb"),
                     search_vector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true)
                         .Annotation("Npgsql:TsVectorConfig", "english")
                         .Annotation("Npgsql:TsVectorProperties", new[] { "title", "description" }),
@@ -502,9 +708,8 @@ namespace Db.Migrations
                     table.CheckConstraint("CK_events_CompletedRequiresPublish", "status <> 'Completed' OR published_at IS NOT NULL");
                     table.CheckConstraint("CK_events_DateRange", "end_date > start_date");
                     table.CheckConstraint("CK_events_DraftNoPublishDate", "status <> 'Draft' OR published_at IS NULL");
-                    table.CheckConstraint("CK_events_GridDimensions", "(grid_rows IS NULL OR grid_rows > 0) AND (grid_cols IS NULL OR grid_cols > 0)");
+                    table.CheckConstraint("CK_events_EventType", "event_type IN ('Open','Table','Both')");
                     table.CheckConstraint("CK_events_LayoutMode", "layout_mode IN ('Grid','Open')");
-                    table.CheckConstraint("CK_events_MaxCapacity", "max_capacity IS NULL OR max_capacity > 0");
                     table.CheckConstraint("CK_events_PublishLifecycle", "status <> 'Published' OR published_at IS NOT NULL");
                     table.CheckConstraint("CK_events_Status", "status IN ('Draft','Published','Completed','Cancelled')");
                     table.ForeignKey(
@@ -563,41 +768,6 @@ namespace Db.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "invitations",
-                columns: table => new
-                {
-                    invitations_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    tenants_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    token_hash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    role = table.Column<short>(type: "smallint", nullable: false),
-                    invited_by_users_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    accepted_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_invitations", x => x.invitations_id);
-                    table.CheckConstraint("CK_invitations_Role", "role IN (1, 2, 3, 99)");
-                    table.CheckConstraint("CK_invitations_Status", "status IN ('Pending','Accepted','Revoked','Expired')");
-                    table.ForeignKey(
-                        name: "fk_invitations_tenants_tenants_id",
-                        column: x => x.tenants_id,
-                        principalTable: "tenants",
-                        principalColumn: "tenants_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_invitations_users_invited_by_users_id",
-                        column: x => x.invited_by_users_id,
-                        principalTable: "users",
-                        principalColumn: "users_id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "password_reset_tokens",
                 columns: table => new
                 {
@@ -649,6 +819,54 @@ namespace Db.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "bookings",
+                columns: table => new
+                {
+                    bookings_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    booking_number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    users_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    subtotal_cents = table.Column<int>(type: "integer", nullable: false),
+                    fee_cents = table.Column<int>(type: "integer", nullable: false),
+                    total_cents = table.Column<int>(type: "integer", nullable: false),
+                    qr_token = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    hold_expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    seats_reserved = table.Column<int>(type: "integer", nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_bookings", x => x.bookings_id);
+                    table.CheckConstraint("CK_bookings_FeeCents", "fee_cents >= 0");
+                    table.CheckConstraint("CK_bookings_SeatsReserved", "seats_reserved IS NULL OR seats_reserved > 0");
+                    table.CheckConstraint("CK_bookings_Status", "status IN ('Pending','Paid','CheckedIn','Cancelled','Refunded','Expired')");
+                    table.CheckConstraint("CK_bookings_SubtotalCents", "subtotal_cents >= 0");
+                    table.CheckConstraint("CK_bookings_TotalCents", "total_cents >= 0");
+                    table.CheckConstraint("CK_bookings_TotalFormula", "total_cents = subtotal_cents + fee_cents");
+                    table.ForeignKey(
+                        name: "fk_bookings_events_events_id",
+                        column: x => x.events_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_bookings_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_bookings_users_users_id",
+                        column: x => x.users_id,
+                        principalTable: "users",
+                        principalColumn: "users_id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "event_images",
                 columns: table => new
                 {
@@ -658,12 +876,14 @@ namespace Db.Migrations
                     images_id = table.Column<Guid>(type: "uuid", nullable: false),
                     sort_order = table.Column<int>(type: "integer", nullable: false),
                     is_primary = table.Column<bool>(type: "boolean", nullable: false),
+                    type = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, defaultValue: "event_image"),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_event_images", x => x.event_images_id);
+                    table.CheckConstraint("CK_event_images_Type", "type IN ('event_image','event_thumbnail')");
                     table.ForeignKey(
                         name: "fk_event_images_events_events_id",
                         column: x => x.events_id,
@@ -753,267 +973,195 @@ namespace Db.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "event_tables",
+                name: "invitations",
                 columns: table => new
                 {
-                    event_tables_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    label = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    capacity = table.Column<int>(type: "integer", nullable: false),
-                    shape = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    color = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    price_cents = table.Column<int>(type: "integer", nullable: false),
-                    platform_fee_cents = table.Column<int>(type: "integer", nullable: true),
-                    row_span = table.Column<int>(type: "integer", nullable: true),
-                    col_span = table.Column<int>(type: "integer", nullable: true),
-                    is_active = table.Column<bool>(type: "boolean", nullable: false),
-                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    table_templates_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_event_tables", x => x.event_tables_id);
-                    table.CheckConstraint("CK_event_tables_Capacity", "capacity > 0");
-                    table.CheckConstraint("CK_event_tables_PriceCents", "price_cents >= 0");
-                    table.CheckConstraint("CK_event_tables_Shape", "shape IN ('Round','Rectangle','Square','Cocktail')");
-                    table.ForeignKey(
-                        name: "fk_event_tables_events_events_id",
-                        column: x => x.events_id,
-                        principalTable: "events",
-                        principalColumn: "events_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_event_tables_table_templates_table_templates_id",
-                        column: x => x.table_templates_id,
-                        principalTable: "table_templates",
-                        principalColumn: "table_templates_id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "fk_event_tables_tenants_tenants_id",
-                        column: x => x.tenants_id,
-                        principalTable: "tenants",
-                        principalColumn: "tenants_id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "event_ticket_types",
-                columns: table => new
-                {
-                    event_ticket_types_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    label = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    price_cents = table.Column<int>(type: "integer", nullable: false),
-                    platform_fee_cents = table.Column<int>(type: "integer", nullable: true),
-                    max_quantity = table.Column<int>(type: "integer", nullable: true),
-                    sort_order = table.Column<int>(type: "integer", nullable: false),
-                    description = table.Column<string>(type: "text", nullable: true),
-                    is_active = table.Column<bool>(type: "boolean", nullable: false),
-                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_event_ticket_types", x => x.event_ticket_types_id);
-                    table.CheckConstraint("CK_event_ticket_types_MaxQuantity", "max_quantity IS NULL OR max_quantity > 0");
-                    table.CheckConstraint("CK_event_ticket_types_PriceCents", "price_cents >= 0");
-                    table.CheckConstraint("CK_event_ticket_types_SortOrder", "sort_order >= 0");
-                    table.ForeignKey(
-                        name: "fk_event_ticket_types_events_events_id",
-                        column: x => x.events_id,
-                        principalTable: "events",
-                        principalColumn: "events_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_event_ticket_types_tenants_tenants_id",
-                        column: x => x.tenants_id,
-                        principalTable: "tenants",
-                        principalColumn: "tenants_id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "user_events",
-                columns: table => new
-                {
-                    user_events_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    users_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    assigned_by_users_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_user_events", x => x.user_events_id);
-                    table.ForeignKey(
-                        name: "fk_user_events_events_events_id",
-                        column: x => x.events_id,
-                        principalTable: "events",
-                        principalColumn: "events_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_user_events_users_assigned_by_users_id",
-                        column: x => x.assigned_by_users_id,
-                        principalTable: "users",
-                        principalColumn: "users_id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "fk_user_events_users_users_id",
-                        column: x => x.users_id,
-                        principalTable: "users",
-                        principalColumn: "users_id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "tables",
-                columns: table => new
-                {
-                    tables_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    label = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    grid_row = table.Column<int>(type: "integer", nullable: false),
-                    grid_col = table.Column<int>(type: "integer", nullable: false),
-                    row_span = table.Column<int>(type: "integer", nullable: false),
-                    col_span = table.Column<int>(type: "integer", nullable: false),
-                    is_active = table.Column<bool>(type: "boolean", nullable: false),
-                    sort_order = table.Column<int>(type: "integer", nullable: false),
-                    status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValue: "Available"),
-                    locked_by_users_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    lock_expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    event_tables_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_tables", x => x.tables_id);
-                    table.CheckConstraint("CK_tables_AvailableNoLock", "status <> 'Available' OR (locked_by_users_id IS NULL AND lock_expires_at IS NULL)");
-                    table.CheckConstraint("CK_tables_GridCol", "grid_col >= 0");
-                    table.CheckConstraint("CK_tables_GridRow", "grid_row >= 0");
-                    table.CheckConstraint("CK_tables_LockedRequiresOwner", "status <> 'Locked' OR (locked_by_users_id IS NOT NULL AND lock_expires_at IS NOT NULL)");
-                    table.CheckConstraint("CK_tables_Status", "status IN ('Available','Locked','Booked')");
-                    table.ForeignKey(
-                        name: "fk_tables_event_tables_event_tables_id",
-                        column: x => x.event_tables_id,
-                        principalTable: "event_tables",
-                        principalColumn: "event_tables_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_tables_events_events_id",
-                        column: x => x.events_id,
-                        principalTable: "events",
-                        principalColumn: "events_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_tables_tenants_tenants_id",
-                        column: x => x.tenants_id,
-                        principalTable: "tenants",
-                        principalColumn: "tenants_id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "fk_tables_users_locked_by_users_id",
-                        column: x => x.locked_by_users_id,
-                        principalTable: "users",
-                        principalColumn: "users_id",
-                        onDelete: ReferentialAction.SetNull);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "bookings",
-                columns: table => new
-                {
-                    bookings_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    booking_number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    invitations_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    token_hash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    role = table.Column<short>(type: "smallint", nullable: false),
+                    invited_by_users_id = table.Column<Guid>(type: "uuid", nullable: false),
                     status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    users_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    subtotal_cents = table.Column<int>(type: "integer", nullable: false),
-                    fee_cents = table.Column<int>(type: "integer", nullable: false),
-                    total_cents = table.Column<int>(type: "integer", nullable: false),
-                    qr_token = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    tables_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    seats_reserved = table.Column<int>(type: "integer", nullable: true),
-                    event_ticket_types_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    accepted_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    event_id = table.Column<Guid>(type: "uuid", nullable: true),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_bookings", x => x.bookings_id);
-                    table.CheckConstraint("CK_bookings_FeeCents", "fee_cents >= 0");
-                    table.CheckConstraint("CK_bookings_SeatsReserved", "seats_reserved IS NULL OR seats_reserved > 0");
-                    table.CheckConstraint("CK_bookings_Status", "status IN ('Pending','Paid','CheckedIn','Cancelled','Refunded','Expired')");
-                    table.CheckConstraint("CK_bookings_SubtotalCents", "subtotal_cents >= 0");
-                    table.CheckConstraint("CK_bookings_TotalCents", "total_cents >= 0");
-                    table.CheckConstraint("CK_bookings_TotalFormula", "total_cents = subtotal_cents + fee_cents");
+                    table.PrimaryKey("pk_invitations", x => x.invitations_id);
+                    table.CheckConstraint("CK_invitations_Role", "role IN (1, 2, 3, 99)");
+                    table.CheckConstraint("CK_invitations_Status", "status IN ('Pending','Accepted','Revoked','Expired')");
                     table.ForeignKey(
-                        name: "fk_bookings_event_ticket_types_event_ticket_types_id",
-                        column: x => x.event_ticket_types_id,
-                        principalTable: "event_ticket_types",
-                        principalColumn: "event_ticket_types_id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "fk_bookings_events_events_id",
-                        column: x => x.events_id,
+                        name: "fk_invitations_events_event_id",
+                        column: x => x.event_id,
                         principalTable: "events",
                         principalColumn: "events_id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "fk_bookings_tables_tables_id",
-                        column: x => x.tables_id,
-                        principalTable: "tables",
-                        principalColumn: "tables_id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "fk_bookings_tenants_tenants_id",
+                        name: "fk_invitations_tenants_tenants_id",
                         column: x => x.tenants_id,
                         principalTable: "tenants",
                         principalColumn: "tenants_id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "fk_bookings_users_users_id",
-                        column: x => x.users_id,
+                        name: "fk_invitations_users_invited_by_users_id",
+                        column: x => x.invited_by_users_id,
                         principalTable: "users",
                         principalColumn: "users_id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "layout_objects",
+                columns: table => new
+                {
+                    layout_objects_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    object_type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    label = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    pos_x = table.Column<decimal>(type: "numeric(10,2)", nullable: false),
+                    pos_y = table.Column<decimal>(type: "numeric(10,2)", nullable: false),
+                    width = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    height = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    color = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    sort_order = table.Column<int>(type: "integer", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_layout_objects", x => x.layout_objects_id);
+                    table.CheckConstraint("CK_layout_objects_ObjectType", "object_type IN ('Entry','Exit','Stage')");
+                    table.CheckConstraint("CK_layout_objects_PosX", "pos_x >= 0");
+                    table.CheckConstraint("CK_layout_objects_PosY", "pos_y >= 0");
+                    table.ForeignKey(
+                        name: "fk_layout_objects_events_events_id",
+                        column: x => x.events_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_layout_objects_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
                         onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
-                name: "booking_tables",
+                name: "prices",
                 columns: table => new
                 {
-                    bookings_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    tables_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false)
+                    prices_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    pricing_type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    base_price_cents = table.Column<int>(type: "integer", nullable: false),
+                    per_attendee_cents = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    is_all_inclusive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    fee_formulas_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    max_quantity = table.Column<int>(type: "integer", nullable: true),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_booking_tables", x => new { x.bookings_id, x.tables_id });
+                    table.PrimaryKey("pk_prices", x => x.prices_id);
+                    table.CheckConstraint("CK_prices_BasePriceCents", "base_price_cents >= 0");
+                    table.CheckConstraint("CK_prices_MaxQuantity", "max_quantity IS NULL OR max_quantity > 0");
+                    table.CheckConstraint("CK_prices_PerAttendeeCents", "per_attendee_cents >= 0");
+                    table.CheckConstraint("CK_prices_PricingType", "pricing_type IN ('TicketTier','Table')");
                     table.ForeignKey(
-                        name: "fk_booking_tables_bookings_bookings_id",
-                        column: x => x.bookings_id,
-                        principalTable: "bookings",
-                        principalColumn: "bookings_id",
+                        name: "fk_prices_events_events_id",
+                        column: x => x.events_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "fk_booking_tables_tables_tables_id",
-                        column: x => x.tables_id,
-                        principalTable: "tables",
-                        principalColumn: "tables_id",
-                        onDelete: ReferentialAction.Cascade);
+                        name: "fk_prices_fee_formulas_fee_formulas_id",
+                        column: x => x.fee_formulas_id,
+                        principalTable: "fee_formulas",
+                        principalColumn: "fee_formulas_id",
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
-                        name: "fk_booking_tables_tenants_tenants_id",
+                        name: "fk_prices_tenants_tenants_id",
                         column: x => x.tenants_id,
                         principalTable: "tenants",
                         principalColumn: "tenants_id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "schedule_items",
+                columns: table => new
+                {
+                    schedule_items_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    title = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    type_category = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    start_time = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    end_time = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_schedule_items", x => x.schedule_items_id);
+                    table.CheckConstraint("CK_schedule_items_TimeRange", "end_time > start_time");
+                    table.CheckConstraint("CK_schedule_items_TypeCategory", "type_category IN ('Performance','Break','Intermission','DJ Set','Networking','Other')");
+                    table.ForeignKey(
+                        name: "fk_schedule_items_events_events_id",
+                        column: x => x.events_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_schedule_items_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "staff_event_access",
+                columns: table => new
+                {
+                    staff_event_access_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    staff_user_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    event_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    assigned_by_admin_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_staff_event_access", x => x.staff_event_access_id);
+                    table.ForeignKey(
+                        name: "fk_staff_event_access_events_event_id",
+                        column: x => x.event_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_staff_event_access_users_assigned_by_admin_id",
+                        column: x => x.assigned_by_admin_id,
+                        principalTable: "users",
+                        principalColumn: "users_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_staff_event_access_users_staff_user_id",
+                        column: x => x.staff_user_id,
+                        principalTable: "users",
+                        principalColumn: "users_id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -1028,10 +1176,7 @@ namespace Db.Migrations
                     currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
                     amount_cents = table.Column<int>(type: "integer", nullable: false),
                     transfer_amount_cents = table.Column<int>(type: "integer", nullable: true),
-                    tax_calculation_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    tax_transaction_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     total_charged_cents = table.Column<int>(type: "integer", nullable: true),
-                    tax_amount_cents = table.Column<int>(type: "integer", nullable: true),
                     stripe_fees_cents = table.Column<int>(type: "integer", nullable: true),
                     paid_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     refund_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
@@ -1050,7 +1195,6 @@ namespace Db.Migrations
                     table.CheckConstraint("CK_stripe_transactions_RefundLifecycle", "status <> 'Refunded' OR refunded_at IS NOT NULL");
                     table.CheckConstraint("CK_stripe_transactions_Status", "status IN ('RequiresConfirmation','Succeeded','Failed','Refunded')");
                     table.CheckConstraint("CK_stripe_transactions_StripeFees", "stripe_fees_cents IS NULL OR stripe_fees_cents >= 0");
-                    table.CheckConstraint("CK_stripe_transactions_TaxAmount", "tax_amount_cents IS NULL OR tax_amount_cents >= 0");
                     table.CheckConstraint("CK_stripe_transactions_TotalCharged", "total_charged_cents IS NULL OR total_charged_cents >= 0");
                     table.CheckConstraint("CK_stripe_transactions_TransferAmount", "transfer_amount_cents IS NULL OR transfer_amount_cents >= 0");
                     table.ForeignKey(
@@ -1099,55 +1243,358 @@ namespace Db.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "tickets",
+                name: "event_tables",
                 columns: table => new
                 {
-                    tickets_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    event_tables_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
                     tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ticket_code = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    qr_token = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    seat_number = table.Column<int>(type: "integer", nullable: false),
-                    bookings_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    label = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    capacity = table.Column<int>(type: "integer", nullable: false),
+                    shape = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    color = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    price_cents = table.Column<int>(type: "integer", nullable: false),
+                    platform_fee_cents = table.Column<int>(type: "integer", nullable: true),
+                    fee_formulas_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    default_width = table.Column<decimal>(type: "numeric(10,2)", nullable: true),
+                    default_height = table.Column<decimal>(type: "numeric(10,2)", nullable: true),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
                     events_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    table_templates_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    prices_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_event_tables", x => x.event_tables_id);
+                    table.CheckConstraint("CK_event_tables_Capacity", "capacity > 0");
+                    table.CheckConstraint("CK_event_tables_PriceCents", "price_cents >= 0");
+                    table.CheckConstraint("CK_event_tables_Shape", "shape IN ('Round','Rectangle','Square','Cocktail')");
+                    table.ForeignKey(
+                        name: "fk_event_tables_events_events_id",
+                        column: x => x.events_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_event_tables_fee_formulas_fee_formulas_id",
+                        column: x => x.fee_formulas_id,
+                        principalTable: "fee_formulas",
+                        principalColumn: "fee_formulas_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_event_tables_prices_prices_id",
+                        column: x => x.prices_id,
+                        principalTable: "prices",
+                        principalColumn: "prices_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_event_tables_table_templates_table_templates_id",
+                        column: x => x.table_templates_id,
+                        principalTable: "table_templates",
+                        principalColumn: "table_templates_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_event_tables_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "event_ticket_types",
+                columns: table => new
+                {
+                    event_ticket_types_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    label = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    price_cents = table.Column<int>(type: "integer", nullable: false),
+                    platform_fee_cents = table.Column<int>(type: "integer", nullable: true),
+                    fee_formulas_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    max_quantity = table.Column<int>(type: "integer", nullable: true),
+                    capacity = table.Column<int>(type: "integer", nullable: true),
+                    sort_order = table.Column<int>(type: "integer", nullable: false),
+                    description = table.Column<string>(type: "text", nullable: true),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
+                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    prices_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_event_ticket_types", x => x.event_ticket_types_id);
+                    table.CheckConstraint("CK_event_ticket_types_Capacity", "capacity IS NULL OR capacity > 0");
+                    table.CheckConstraint("CK_event_ticket_types_MaxQuantity", "max_quantity IS NULL OR max_quantity > 0");
+                    table.CheckConstraint("CK_event_ticket_types_PriceCents", "price_cents >= 0");
+                    table.CheckConstraint("CK_event_ticket_types_SortOrder", "sort_order >= 0");
+                    table.ForeignKey(
+                        name: "fk_event_ticket_types_events_events_id",
+                        column: x => x.events_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_event_ticket_types_fee_formulas_fee_formulas_id",
+                        column: x => x.fee_formulas_id,
+                        principalTable: "fee_formulas",
+                        principalColumn: "fee_formulas_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_event_ticket_types_prices_prices_id",
+                        column: x => x.prices_id,
+                        principalTable: "prices",
+                        principalColumn: "prices_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_event_ticket_types_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "price_rules",
+                columns: table => new
+                {
+                    price_rules_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    scope = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValue: "Price"),
+                    prices_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    events_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    rule_type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    priority = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    price_cents = table.Column<int>(type: "integer", nullable: false),
+                    active_from = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    active_until = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    min_remaining = table.Column<int>(type: "integer", nullable: true),
+                    max_remaining = table.Column<int>(type: "integer", nullable: true),
+                    capacity = table.Column<int>(type: "integer", nullable: true),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_price_rules", x => x.price_rules_id);
+                    table.CheckConstraint("CK_price_rules_Capacity", "capacity IS NULL OR capacity > 0");
+                    table.CheckConstraint("CK_price_rules_PriceCents", "price_cents >= 0");
+                    table.CheckConstraint("CK_price_rules_RuleType", "rule_type IN ('Presale','LastMinute','TimeWindow','Dynamic')");
+                    table.CheckConstraint("CK_price_rules_Scope", "(scope = 'Price' AND prices_id IS NOT NULL AND events_id IS NULL) OR (scope = 'Event' AND events_id IS NOT NULL AND prices_id IS NULL)");
+                    table.CheckConstraint("CK_price_rules_Window", "active_from IS NULL OR active_until IS NULL OR active_until > active_from");
+                    table.ForeignKey(
+                        name: "fk_price_rules_events_events_id",
+                        column: x => x.events_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_price_rules_prices_prices_id",
+                        column: x => x.prices_id,
+                        principalTable: "prices",
+                        principalColumn: "prices_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_price_rules_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "tables",
+                columns: table => new
+                {
+                    tables_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    label = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    pos_x = table.Column<decimal>(type: "numeric(10,2)", nullable: false),
+                    pos_y = table.Column<decimal>(type: "numeric(10,2)", nullable: false),
+                    width = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    height = table.Column<decimal>(type: "numeric(10,2)", nullable: false, defaultValue: 80m),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
+                    sort_order = table.Column<int>(type: "integer", nullable: false),
+                    shape_override = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    color_override = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    capacity_override = table.Column<int>(type: "integer", nullable: true),
+                    status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValue: "Available"),
+                    locked_by_users_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    lock_expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    event_tables_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    events_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tables", x => x.tables_id);
+                    table.CheckConstraint("CK_tables_AvailableNoLock", "status <> 'Available' OR (locked_by_users_id IS NULL AND lock_expires_at IS NULL)");
+                    table.CheckConstraint("CK_tables_LockedRequiresOwner", "status <> 'Locked' OR (locked_by_users_id IS NOT NULL AND lock_expires_at IS NOT NULL)");
+                    table.CheckConstraint("CK_tables_PosX", "pos_x >= 0");
+                    table.CheckConstraint("CK_tables_PosY", "pos_y >= 0");
+                    table.CheckConstraint("CK_tables_Status", "status IN ('Available','Locked','Booked')");
+                    table.ForeignKey(
+                        name: "fk_tables_event_tables_event_tables_id",
+                        column: x => x.event_tables_id,
+                        principalTable: "event_tables",
+                        principalColumn: "event_tables_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_tables_events_events_id",
+                        column: x => x.events_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_tables_tenants_tenants_id",
+                        column: x => x.tenants_id,
+                        principalTable: "tenants",
+                        principalColumn: "tenants_id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_tables_users_locked_by_users_id",
+                        column: x => x.locked_by_users_id,
+                        principalTable: "users",
+                        principalColumn: "users_id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "booking_lines",
+                columns: table => new
+                {
+                    booking_lines_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    tenants_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    bookings_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    events_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    kind = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    event_ticket_types_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    tables_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    prices_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    seats = table.Column<int>(type: "integer", nullable: false),
+                    ticket_code = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    qr_token = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    seat_number = table.Column<int>(type: "integer", nullable: true),
+                    status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     guest_users_id = table.Column<Guid>(type: "uuid", nullable: true),
                     invite_token_hash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     invite_expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     invited_email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     invite_sent_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     claimed_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    base_price_cents = table.Column<int>(type: "integer", nullable: false),
+                    selling_price_cents = table.Column<int>(type: "integer", nullable: false),
+                    discount_cents = table.Column<int>(type: "integer", nullable: false),
+                    applied_price_rules_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    applied_rule_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    platform_fee_cents = table.Column<int>(type: "integer", nullable: false),
+                    gateway_fee_cents = table.Column<int>(type: "integer", nullable: false),
+                    final_price_cents = table.Column<int>(type: "integer", nullable: false),
+                    currency = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: false, defaultValue: "usd"),
+                    subtotal_cents = table.Column<int>(type: "integer", nullable: false),
+                    fee_cents = table.Column<int>(type: "integer", nullable: false),
+                    total_cents = table.Column<int>(type: "integer", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_tickets", x => x.tickets_id);
-                    table.CheckConstraint("CK_tickets_SeatNumber", "seat_number > 0");
-                    table.CheckConstraint("CK_tickets_Status", "status IN ('Unassigned','Invited','Claimed','CheckedIn')");
+                    table.PrimaryKey("pk_booking_lines", x => x.booking_lines_id);
+                    table.CheckConstraint("CK_booking_lines_FeeCents", "fee_cents >= 0");
+                    table.CheckConstraint("CK_booking_lines_Kind", "kind IN ('Ticket','Table')");
+                    table.CheckConstraint("CK_booking_lines_Ref", "(kind = 'Ticket' AND event_ticket_types_id IS NOT NULL AND tables_id IS NULL) OR (kind = 'Table' AND tables_id IS NOT NULL AND event_ticket_types_id IS NULL)");
+                    table.CheckConstraint("CK_booking_lines_Seats", "seats > 0");
+                    table.CheckConstraint("CK_booking_lines_SubtotalCents", "subtotal_cents >= 0");
+                    table.CheckConstraint("CK_booking_lines_TicketStatus", "status IN ('Unassigned','Invited','Claimed','CheckedIn')");
+                    table.CheckConstraint("CK_booking_lines_TotalFormula", "total_cents = subtotal_cents + fee_cents");
                     table.ForeignKey(
-                        name: "fk_tickets_bookings_bookings_id",
+                        name: "fk_booking_lines_bookings_bookings_id",
                         column: x => x.bookings_id,
                         principalTable: "bookings",
                         principalColumn: "bookings_id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "fk_tickets_events_events_id",
+                        name: "fk_booking_lines_event_ticket_types_event_ticket_types_id",
+                        column: x => x.event_ticket_types_id,
+                        principalTable: "event_ticket_types",
+                        principalColumn: "event_ticket_types_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_booking_lines_events_events_id",
                         column: x => x.events_id,
                         principalTable: "events",
                         principalColumn: "events_id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "fk_tickets_tenants_tenants_id",
+                        name: "fk_booking_lines_prices_prices_id",
+                        column: x => x.prices_id,
+                        principalTable: "prices",
+                        principalColumn: "prices_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_booking_lines_tables_tables_id",
+                        column: x => x.tables_id,
+                        principalTable: "tables",
+                        principalColumn: "tables_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_booking_lines_tenants_tenants_id",
                         column: x => x.tenants_id,
                         principalTable: "tenants",
                         principalColumn: "tenants_id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "fk_tickets_users_guest_users_id",
+                        name: "fk_booking_lines_users_guest_users_id",
                         column: x => x.guest_users_id,
                         principalTable: "users",
                         principalColumn: "users_id",
                         onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "checkin_logs",
+                columns: table => new
+                {
+                    checkin_logs_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    event_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    staff_user_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    booking_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    ticket_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    timestamp = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_checkin_logs", x => x.checkin_logs_id);
+                    table.ForeignKey(
+                        name: "fk_checkin_logs_booking_lines_ticket_id",
+                        column: x => x.ticket_id,
+                        principalTable: "booking_lines",
+                        principalColumn: "booking_lines_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_checkin_logs_bookings_booking_id",
+                        column: x => x.booking_id,
+                        principalTable: "bookings",
+                        principalColumn: "bookings_id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_checkin_logs_events_event_id",
+                        column: x => x.event_id,
+                        principalTable: "events",
+                        principalColumn: "events_id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_checkin_logs_users_staff_user_id",
+                        column: x => x.staff_user_id,
+                        principalTable: "users",
+                        principalColumn: "users_id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
@@ -1172,19 +1619,67 @@ namespace Db.Migrations
                 column: "tenants_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_booking_tables_tables_id",
-                table: "booking_tables",
+                name: "ix_booking_lines_bookings_id",
+                table: "booking_lines",
+                column: "bookings_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_booking_lines_bookings_id_seat_number",
+                table: "booking_lines",
+                columns: new[] { "bookings_id", "seat_number" },
+                unique: true,
+                filter: "seat_number IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_booking_lines_event_ticket_types_id",
+                table: "booking_lines",
+                column: "event_ticket_types_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_booking_lines_events_id",
+                table: "booking_lines",
+                column: "events_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_booking_lines_events_id_ticket_code",
+                table: "booking_lines",
+                columns: new[] { "events_id", "ticket_code" },
+                unique: true,
+                filter: "ticket_code IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_booking_lines_guest_users_id",
+                table: "booking_lines",
+                column: "guest_users_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_booking_lines_invite_token_hash",
+                table: "booking_lines",
+                column: "invite_token_hash",
+                unique: true,
+                filter: "invite_token_hash IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_booking_lines_prices_id",
+                table: "booking_lines",
+                column: "prices_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_booking_lines_qr_token",
+                table: "booking_lines",
+                column: "qr_token",
+                unique: true,
+                filter: "qr_token IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_booking_lines_tables_id",
+                table: "booking_lines",
                 column: "tables_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_booking_tables_tenants_id",
-                table: "booking_tables",
+                name: "ix_booking_lines_tenants_id",
+                table: "booking_lines",
                 column: "tenants_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_bookings_event_ticket_types_id",
-                table: "bookings",
-                column: "event_ticket_types_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_bookings_events_id_status",
@@ -1210,11 +1705,6 @@ namespace Db.Migrations
                 column: "status");
 
             migrationBuilder.CreateIndex(
-                name: "ix_bookings_tables_id",
-                table: "bookings",
-                column: "tables_id");
-
-            migrationBuilder.CreateIndex(
                 name: "ix_bookings_tenants_id",
                 table: "bookings",
                 column: "tenants_id");
@@ -1228,6 +1718,26 @@ namespace Db.Migrations
                 name: "ix_bookings_users_id_created_at",
                 table: "bookings",
                 columns: new[] { "users_id", "created_at" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_checkin_logs_booking_id",
+                table: "checkin_logs",
+                column: "booking_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_checkin_logs_event_id",
+                table: "checkin_logs",
+                column: "event_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_checkin_logs_staff_user_id",
+                table: "checkin_logs",
+                column: "staff_user_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_checkin_logs_ticket_id",
+                table: "checkin_logs",
+                column: "ticket_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_device_sessions_expires_at_revoked_at",
@@ -1263,13 +1773,6 @@ namespace Db.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_event_images_events_id",
-                table: "event_images",
-                column: "events_id",
-                unique: true,
-                filter: "is_primary = true");
-
-            migrationBuilder.CreateIndex(
                 name: "ix_event_images_events_id_images_id",
                 table: "event_images",
                 columns: new[] { "events_id", "images_id" },
@@ -1279,6 +1782,13 @@ namespace Db.Migrations
                 name: "ix_event_images_events_id_sort_order",
                 table: "event_images",
                 columns: new[] { "events_id", "sort_order" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_event_images_events_id_type",
+                table: "event_images",
+                columns: new[] { "events_id", "type" },
+                unique: true,
+                filter: "is_primary = true");
 
             migrationBuilder.CreateIndex(
                 name: "ix_event_images_images_id",
@@ -1326,6 +1836,16 @@ namespace Db.Migrations
                 columns: new[] { "events_id", "label" });
 
             migrationBuilder.CreateIndex(
+                name: "ix_event_tables_fee_formulas_id",
+                table: "event_tables",
+                column: "fee_formulas_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_event_tables_prices_id",
+                table: "event_tables",
+                column: "prices_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_event_tables_table_templates_id",
                 table: "event_tables",
                 column: "table_templates_id");
@@ -1344,6 +1864,16 @@ namespace Db.Migrations
                 name: "ix_event_ticket_types_events_id_sort_order",
                 table: "event_ticket_types",
                 columns: new[] { "events_id", "sort_order" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_event_ticket_types_fee_formulas_id",
+                table: "event_ticket_types",
+                column: "fee_formulas_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_event_ticket_types_prices_id",
+                table: "event_ticket_types",
+                column: "prices_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_event_ticket_types_tenants_id",
@@ -1418,6 +1948,31 @@ namespace Db.Migrations
                 column: "users_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_floor_plan_template_objects_floor_plan_templates_id",
+                table: "floor_plan_template_objects",
+                column: "floor_plan_templates_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_floor_plan_template_objects_tenants_id",
+                table: "floor_plan_template_objects",
+                column: "tenants_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_floor_plan_template_tables_floor_plan_templates_id",
+                table: "floor_plan_template_tables",
+                column: "floor_plan_templates_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_floor_plan_template_tables_tenants_id",
+                table: "floor_plan_template_tables",
+                column: "tenants_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_floor_plan_templates_tenants_id",
+                table: "floor_plan_templates",
+                column: "tenants_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_images_entity_type_entity_id",
                 table: "images",
                 columns: new[] { "entity_type", "entity_id" });
@@ -1431,6 +1986,11 @@ namespace Db.Migrations
                 name: "ix_invitations_email",
                 table: "invitations",
                 column: "email");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_invitations_event_id",
+                table: "invitations",
+                column: "event_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_invitations_invited_by_users_id",
@@ -1447,6 +2007,16 @@ namespace Db.Migrations
                 table: "invitations",
                 column: "token_hash",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_layout_objects_events_id",
+                table: "layout_objects",
+                column: "events_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_layout_objects_tenants_id",
+                table: "layout_objects",
+                column: "tenants_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_magic_link_tokens_email",
@@ -1513,6 +2083,46 @@ namespace Db.Migrations
                 column: "tag");
 
             migrationBuilder.CreateIndex(
+                name: "ix_price_rules_events_id_scope_priority",
+                table: "price_rules",
+                columns: new[] { "events_id", "scope", "priority" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_price_rules_prices_id_priority",
+                table: "price_rules",
+                columns: new[] { "prices_id", "priority" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_price_rules_tenants_id",
+                table: "price_rules",
+                column: "tenants_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_prices_events_id",
+                table: "prices",
+                column: "events_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_prices_fee_formulas_id",
+                table: "prices",
+                column: "fee_formulas_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_prices_tenants_id",
+                table: "prices",
+                column: "tenants_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_schedule_items_events_id_start_time",
+                table: "schedule_items",
+                columns: new[] { "events_id", "start_time" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_schedule_items_tenants_id",
+                table: "schedule_items",
+                column: "tenants_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_sponsors_name",
                 table: "sponsors",
                 column: "name");
@@ -1527,6 +2137,22 @@ namespace Db.Migrations
                 name: "ix_sponsors_tenants_id",
                 table: "sponsors",
                 column: "tenants_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_staff_event_access_assigned_by_admin_id",
+                table: "staff_event_access",
+                column: "assigned_by_admin_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_staff_event_access_event_id",
+                table: "staff_event_access",
+                column: "event_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_staff_event_access_staff_user_id_event_id",
+                table: "staff_event_access",
+                columns: new[] { "staff_user_id", "event_id" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_stripe_payouts_stripe_payout_id",
@@ -1578,9 +2204,32 @@ namespace Db.Migrations
                 column: "tenants_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_table_template_price_rules_table_templates_id_priority",
+                table: "table_template_price_rules",
+                columns: new[] { "table_templates_id", "priority" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_table_template_price_rules_tenants_id",
+                table: "table_template_price_rules",
+                column: "tenants_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_table_templates_tenants_id",
                 table: "table_templates",
                 column: "tenants_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_table_templates_tenants_id_default_color",
+                table: "table_templates",
+                columns: new[] { "tenants_id", "default_color" },
+                unique: true,
+                filter: "default_color IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_table_templates_tenants_id_name",
+                table: "table_templates",
+                columns: new[] { "tenants_id", "name" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_tables_event_tables_id",
@@ -1591,12 +2240,6 @@ namespace Db.Migrations
                 name: "ix_tables_events_id",
                 table: "tables",
                 column: "events_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_tables_events_id_grid_row_grid_col",
-                table: "tables",
-                columns: new[] { "events_id", "grid_row", "grid_col" },
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_tables_events_id_label",
@@ -1625,6 +2268,16 @@ namespace Db.Migrations
                 column: "archived_at");
 
             migrationBuilder.CreateIndex(
+                name: "ix_tenants_default_fee_formulas_id",
+                table: "tenants",
+                column: "default_fee_formulas_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tenants_gateway_fee_formulas_id",
+                table: "tenants",
+                column: "gateway_fee_formulas_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_tenants_slug",
                 table: "tenants",
                 column: "slug",
@@ -1636,41 +2289,6 @@ namespace Db.Migrations
                 column: "stripe_connected_account_id",
                 unique: true,
                 filter: "stripe_connected_account_id IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_tickets_bookings_id_seat_number",
-                table: "tickets",
-                columns: new[] { "bookings_id", "seat_number" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "ix_tickets_events_id_ticket_code",
-                table: "tickets",
-                columns: new[] { "events_id", "ticket_code" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "ix_tickets_guest_users_id",
-                table: "tickets",
-                column: "guest_users_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_tickets_invite_token_hash",
-                table: "tickets",
-                column: "invite_token_hash",
-                unique: true,
-                filter: "invite_token_hash IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_tickets_qr_token",
-                table: "tickets",
-                column: "qr_token",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "ix_tickets_tenants_id",
-                table: "tickets",
-                column: "tenants_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_user_email_verification_tokens_expires_at",
@@ -1687,22 +2305,6 @@ namespace Db.Migrations
                 name: "ix_user_email_verification_tokens_users_id",
                 table: "user_email_verification_tokens",
                 column: "users_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_user_events_assigned_by_users_id",
-                table: "user_events",
-                column: "assigned_by_users_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_user_events_events_id",
-                table: "user_events",
-                column: "events_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_user_events_users_id_events_id",
-                table: "user_events",
-                columns: new[] { "users_id", "events_id" },
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_users_addresses_id",
@@ -1774,6 +2376,12 @@ namespace Db.Migrations
                 name: "ix_venues_tenants_id",
                 table: "venues",
                 column: "tenants_id");
+
+            db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.functions");
+            db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.views");
+            db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.stored_procedures");
+            db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.policies");
+            db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.security");
         }
 
         /// <inheritdoc />
@@ -1786,7 +2394,7 @@ namespace Db.Migrations
                 name: "audit_logs");
 
             migrationBuilder.DropTable(
-                name: "booking_tables");
+                name: "checkin_logs");
 
             migrationBuilder.DropTable(
                 name: "device_sessions");
@@ -1810,7 +2418,16 @@ namespace Db.Migrations
                 name: "feedbacks");
 
             migrationBuilder.DropTable(
+                name: "floor_plan_template_objects");
+
+            migrationBuilder.DropTable(
+                name: "floor_plan_template_tables");
+
+            migrationBuilder.DropTable(
                 name: "invitations");
+
+            migrationBuilder.DropTable(
+                name: "layout_objects");
 
             migrationBuilder.DropTable(
                 name: "magic_link_tokens");
@@ -1822,6 +2439,15 @@ namespace Db.Migrations
                 name: "platform_images");
 
             migrationBuilder.DropTable(
+                name: "price_rules");
+
+            migrationBuilder.DropTable(
+                name: "schedule_items");
+
+            migrationBuilder.DropTable(
+                name: "staff_event_access");
+
+            migrationBuilder.DropTable(
                 name: "stripe_payouts");
 
             migrationBuilder.DropTable(
@@ -1831,22 +2457,28 @@ namespace Db.Migrations
                 name: "stripe_transfers");
 
             migrationBuilder.DropTable(
-                name: "tickets");
+                name: "table_template_price_rules");
+
+            migrationBuilder.DropTable(
+                name: "tenant_stripe_profiles");
 
             migrationBuilder.DropTable(
                 name: "user_email_verification_tokens");
 
             migrationBuilder.DropTable(
-                name: "user_events");
+                name: "venue_images");
 
             migrationBuilder.DropTable(
-                name: "venue_images");
+                name: "booking_lines");
 
             migrationBuilder.DropTable(
                 name: "performers");
 
             migrationBuilder.DropTable(
                 name: "sponsors");
+
+            migrationBuilder.DropTable(
+                name: "floor_plan_templates");
 
             migrationBuilder.DropTable(
                 name: "bookings");
@@ -1861,10 +2493,13 @@ namespace Db.Migrations
                 name: "event_tables");
 
             migrationBuilder.DropTable(
-                name: "events");
+                name: "prices");
 
             migrationBuilder.DropTable(
                 name: "table_templates");
+
+            migrationBuilder.DropTable(
+                name: "events");
 
             migrationBuilder.DropTable(
                 name: "users");
@@ -1880,6 +2515,9 @@ namespace Db.Migrations
 
             migrationBuilder.DropTable(
                 name: "tenants");
+
+            migrationBuilder.DropTable(
+                name: "fee_formulas");
         }
     }
 }

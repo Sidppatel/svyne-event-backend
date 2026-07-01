@@ -14,7 +14,7 @@ public class CheckInLog : BaseEntity
     public Booking? Booking { get; set; }
 
     public Guid? TicketId { get; set; }
-    public Ticket? Ticket { get; set; }
+    public BookingLine? Ticket { get; set; }
 
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

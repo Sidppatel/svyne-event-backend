@@ -17,9 +17,9 @@ AS $$
 DECLARE
     v_ticket_id uuid;
 BEGIN
-    SELECT tickets_id INTO v_ticket_id
-    FROM tickets
-    WHERE ticket_code = p_ticket_code AND events_id = p_event_id;
+    SELECT booking_lines_id INTO v_ticket_id
+    FROM booking_lines
+    WHERE ticket_code = p_ticket_code AND events_id = p_event_id AND kind = 'Ticket';
 
     IF NOT FOUND THEN
         RETURN QUERY SELECT false, 'Ticket code not found'::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::timestamptz;

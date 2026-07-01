@@ -66,13 +66,13 @@ BEGIN
 
     -- Log each ticket check-in and update ticket status
     INSERT INTO checkin_logs (checkin_logs_id, event_id, staff_user_id, booking_id, ticket_id, timestamp, created_at, updated_at)
-    SELECT gen_random_uuid(), p_event_id, p_staff_user_id, p_booking_id, t.tickets_id, now(), now(), now()
-    FROM tickets t
-    WHERE t.bookings_id = p_booking_id AND t.status <> 'CheckedIn';
+    SELECT gen_random_uuid(), p_event_id, p_staff_user_id, p_booking_id, t.booking_lines_id, now(), now(), now()
+    FROM booking_lines t
+    WHERE t.bookings_id = p_booking_id AND t.kind = 'Ticket' AND t.status <> 'CheckedIn';
 
-    UPDATE tickets
+    UPDATE booking_lines
        SET status = 'CheckedIn', updated_at = now()
-     WHERE bookings_id = p_booking_id AND status <> 'CheckedIn';
+     WHERE bookings_id = p_booking_id AND kind = 'Ticket' AND status <> 'CheckedIn';
 
     RETURN QUERY SELECT
         true, 'Booking check-in successful'::text,

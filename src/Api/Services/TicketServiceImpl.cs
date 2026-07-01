@@ -39,8 +39,11 @@ public sealed class TicketServiceImpl : TicketService.TicketServiceBase
         var ct = context.CancellationToken;
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT ticket_id, ticket_code, qr_token, seat_number, status, guest_users_id "
-            + "FROM vw_tickets WHERE ticket_id = @id", connection);
+            "SELECT t.ticket_id, t.ticket_code, t.qr_token, t.seat_number, t.status, t.guest_users_id, "
+            + "t.event_title, t.event_start_date, t.venue_name, e.slug AS event_slug, t.booking_number, t.ticket_type_label "
+            + "FROM vw_tickets t "
+            + "JOIN events e ON t.events_id = e.events_id "
+            + "WHERE t.ticket_id = @id", connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -56,8 +59,11 @@ public sealed class TicketServiceImpl : TicketService.TicketServiceBase
         var response = new ListTicketsResponse();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT ticket_id, ticket_code, qr_token, seat_number, status, guest_users_id "
-            + "FROM vw_tickets WHERE bookings_id = @p ORDER BY seat_number", connection);
+            "SELECT t.ticket_id, t.ticket_code, t.qr_token, t.seat_number, t.status, t.guest_users_id, "
+            + "t.event_title, t.event_start_date, t.venue_name, e.slug AS event_slug, t.booking_number, t.ticket_type_label "
+            + "FROM vw_tickets t "
+            + "JOIN events e ON t.events_id = e.events_id "
+            + "WHERE t.bookings_id = @p ORDER BY t.seat_number", connection);
         cmd.Parameters.AddWithValue("p", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -212,7 +218,7 @@ public sealed class TicketServiceImpl : TicketService.TicketServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT t.ticket_id, t.ticket_code, t.qr_token, t.seat_number, t.status, t.guest_users_id, "
-            + "t.event_title, t.event_start_date, t.venue_name, e.slug AS event_slug, t.booking_number "
+            + "t.event_title, t.event_start_date, t.venue_name, e.slug AS event_slug, t.booking_number, t.ticket_type_label "
             + "FROM vw_tickets t "
             + "JOIN events e ON t.events_id = e.events_id "
             + "WHERE t.guest_users_id = @u "
@@ -246,6 +252,10 @@ public sealed class TicketServiceImpl : TicketService.TicketServiceBase
             if (reader.FieldCount > 10)
             {
                 ticket.BookingNumber = reader.IsDBNull(10) ? string.Empty : reader.GetString(10);
+            }
+            if (reader.FieldCount > 11)
+            {
+                ticket.TicketTypeLabel = reader.IsDBNull(11) ? string.Empty : reader.GetString(11);
             }
         }
         return ticket;

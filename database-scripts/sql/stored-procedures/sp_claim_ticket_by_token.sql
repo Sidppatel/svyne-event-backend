@@ -13,10 +13,10 @@ DECLARE
     v_expires_at timestamptz;
     v_already_count int;
 BEGIN
-    SELECT id, bookings_id, status::text, guest_users_id, invite_expires_at
+    SELECT booking_lines_id, bookings_id, status::text, guest_users_id, invite_expires_at
         INTO v_id, v_booking_id, v_status, v_guest_user_id, v_expires_at
-        FROM tickets
-        WHERE invite_token_hash = p_invite_hash
+        FROM booking_lines
+        WHERE invite_token_hash = p_invite_hash AND kind = 'Ticket'
         FOR UPDATE;
 
     IF v_id IS NULL THEN
@@ -45,10 +45,10 @@ BEGIN
     END IF;
 
     SELECT COUNT(*) INTO v_already_count
-        FROM tickets
-        WHERE bookings_id = v_booking_id
+        FROM booking_lines
+        WHERE bookings_id = v_booking_id AND kind = 'Ticket'
           AND guest_users_id = p_guest_user_id
-          AND tickets_id <> v_id
+          AND booking_lines_id <> v_id
           AND status IN ('Claimed', 'CheckedIn');
 
     IF v_already_count > 0 THEN
@@ -56,13 +56,13 @@ BEGIN
         RETURN;
     END IF;
 
-    UPDATE tickets SET
+    UPDATE booking_lines SET
         guest_users_id = p_guest_user_id,
         claimed_at = now(),
         status = 'Claimed',
         invite_token_hash = NULL,
         updated_at = now()
-    WHERE tickets_id = v_id;
+    WHERE booking_lines_id = v_id;
 
     RETURN QUERY SELECT v_id, true, 'Ticket claimed successfully', false;
 END; $$;

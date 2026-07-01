@@ -27,18 +27,12 @@ public class Booking : BaseEntity
     /// </summary>
     public DateTime? HoldExpiresAt { get; set; }
 
-    public Guid? TablesId { get; set; }
-    public Table? Table { get; set; }
-
+    /// <summary>Total seats across this booking's lines (denormalized rollup for
+    /// analytics / display). Detail lives on <see cref="Lines"/>.</summary>
     public int? SeatsReserved { get; set; }
-
-    public Guid? EventTicketTypesId { get; set; }
-    public EventTicketType? EventTicketType { get; set; }
 
     public StripeTransaction? StripeTransaction { get; set; }
 
-    public ICollection<Ticket> Tickets { get; set; } = [];
-
-    /// <summary>Multi-item cart lines. Empty for single-line legacy bookings.</summary>
+    /// <summary>Multi-item cart lines (each booking line represents a single seat/ticket/table).</summary>
     public ICollection<BookingLine> Lines { get; set; } = [];
 }

@@ -5,6 +5,7 @@ package svyne.booking;
 option csharp_namespace = "Svyne.Protos.Booking";
 
 import "common.proto";
+import "pricing.proto";
 
 service BookingService {
   rpc ListEventTicketTypes (svyne.common.UuidValue) returns (ListEventTicketTypesResponse);
@@ -12,6 +13,10 @@ service BookingService {
   rpc ReserveOpenCapacity (ReserveOpenCapacityRequest) returns (CreateBookingResponse);
   // Cart checkout: one booking aggregating many ticket/table lines, one payment.
   rpc CreateMultiBooking (CreateMultiBookingRequest) returns (CreateBookingResponse);
+  // Preview a cart's full pricing breakdown WITHOUT reserving anything. Same engine
+  // as checkout (app.price_breakdown), so the customer checkout page and admin
+  // multi-item preview render identical numbers.
+  rpc QuoteCart (CreateMultiBookingRequest) returns (CartQuote);
   rpc CreatePaymentIntent (PaymentIntentRequest) returns (PaymentIntentResponse);
   rpc GetPaymentStatus (svyne.common.UuidValue) returns (PaymentStatusResponse);
   rpc ConfirmBooking (ConfirmBookingRequest) returns (svyne.common.AckResponse);
@@ -55,7 +60,9 @@ message Booking {
   repeated BookingLine lines = 11;
 }
 
-// One line of a multi-item booking, for display on checkout / booking detail.
+// One line of a booking, for display on checkout / booking detail. Carries the
+// immutable pricing snapshot captured at purchase so historical bookings always
+// show the original price even after rules/prices change.
 message BookingLine {
   string booking_lines_id = 1;
   string kind = 2;            // Ticket | Table
@@ -63,14 +70,47 @@ message BookingLine {
   string event_ticket_types_id = 4;
   string tables_id = 5;
   int32 seats = 6;
-  int32 subtotal_cents = 7;
-  int32 fee_cents = 8;
-  int32 total_cents = 9;
+  int32 subtotal_cents = 7;   // = selling
+  int32 fee_cents = 8;        // = platform + gateway + tax
+  int32 total_cents = 9;      // = final
+  int32 base_price_cents = 10;
+  int32 selling_price_cents = 11;
+  int32 discount_cents = 12;
+  string applied_rule_name = 13;   // empty = no rule
+  int32 platform_fee_cents = 14;
+  int32 gateway_fee_cents = 15;
+  int32 tax_cents = 16;
+  int32 final_price_cents = 17;
+  string currency = 18;
 }
 
 message CreateMultiBookingRequest {
   string events_id = 1;
   repeated BookingLineInput lines = 2;
+}
+
+// One previewed cart line: the sellable identity + its full breakdown.
+message CartQuoteLine {
+  string kind = 1;            // Ticket | Table
+  string ref_id = 2;          // event_ticket_types_id (Ticket) or tables_id (Table)
+  string label = 3;
+  int32 seats = 4;
+  svyne.pricing.PriceBreakdown breakdown = 5;
+}
+
+// A non-reserving preview of an entire cart: per-line breakdowns + summed totals.
+message CartQuote {
+  repeated CartQuoteLine lines = 1;
+  int32 base_total_cents = 2;        // sum of line base prices (pre-discount)
+  int32 subtotal_cents = 3;          // sum of selling prices
+  int32 discount_cents = 4;          // base_total - subtotal
+  int32 platform_fee_cents = 5;
+  int32 gateway_fee_cents = 6;
+  int32 tax_cents = 7;
+  int32 fee_cents = 8;               // platform + gateway + tax
+  int32 total_cents = 9;             // final amount the customer pays
+  int32 organizer_net_cents = 10;
+  string currency = 11;
 }
 
 message BookingLineInput {
@@ -174,6 +214,7 @@ message Ticket {
   string venue_name = 9;
   string event_slug = 10;
   string booking_number = 11;
+  string ticket_type_label = 12;
 }
 
 message ClaimTicketRequest {

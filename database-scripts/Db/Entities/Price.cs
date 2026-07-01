@@ -4,7 +4,7 @@ namespace Db.Entities;
 
 /// <summary>
 /// A priceable defined by the Pricing Module — the single source of truth for
-/// pricing on a sellable (ticket tier, table, or add-on). The effective fee is
+/// pricing on a sellable (ticket tier or table). The effective fee is
 /// resolved server-side from <see cref="FeeFormulasId"/> when set, otherwise the
 /// owning tenant's default fee formula. Time/inventory variation is expressed via
 /// <see cref="PriceRule"/> children evaluated by app.resolve_price().
@@ -31,10 +31,6 @@ public class Price : BaseEntity
     /// <summary>Developer-only override of the fee formula; null = tenant default.</summary>
     public Guid? FeeFormulasId { get; set; }
     public FeeFormula? FeeFormula { get; set; }
-
-    /// <summary>For AddOn prices: the base ticket/table price this layers on.</summary>
-    public Guid? ParentPricesId { get; set; }
-    public Price? ParentPrice { get; set; }
 
     public int? MaxQuantity { get; set; }
     public bool IsActive { get; set; } = true;

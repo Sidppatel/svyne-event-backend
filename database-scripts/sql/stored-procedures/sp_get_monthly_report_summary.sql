@@ -18,7 +18,7 @@ AS $$
     ),
     src AS (
         SELECT p.*, st.total_charged_cents, st.transfer_amount_cents,
-               st.stripe_fees_cents, st.tax_amount_cents, st.paid_at
+               st.stripe_fees_cents, 0 AS tax_amount_cents, st.paid_at
         FROM bookings p
         LEFT JOIN stripe_transactions st ON st.bookings_id = p.bookings_id,
         window_bounds wb

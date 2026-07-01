@@ -4,9 +4,10 @@ RETURNS boolean LANGUAGE sql STABLE
 AS $$
     SELECT EXISTS(
         SELECT 1 FROM bookings b
+        JOIN booking_lines bl ON bl.bookings_id = b.bookings_id
         WHERE b.events_id = p_event_id
-          AND b.tables_id IS NOT NULL
-          AND b.tables_id IN (SELECT tables_id FROM tables WHERE event_tables_id = p_event_table_id)
+          AND bl.kind = 'Table'
+          AND bl.tables_id IN (SELECT tables_id FROM tables WHERE event_tables_id = p_event_table_id)
           AND b.status IN ('Paid', 'CheckedIn', 'Pending')
     );
 $$;

@@ -9,15 +9,16 @@ AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport
 
 var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
 {
-    ["JWT_SIGNING_KEY"] = "local-development-jwt-signing-key-change-me-32chars",
+    ["JWT_SIGNING_KEY"] = "local-development-jwt-signing-key-change-me-32+chars",
     ["JWT_ISSUER"] = "svyne",
     ["JWT_AUDIENCE"] = "svyne-clients"
 }).Build();
 
 var jwt = new JwtTokenService(config);
-var (devToken, _) = jwt.Issue(Guid.NewGuid(), "dev@svyne.test", null, 99, "");
+var devUserId = Guid.Parse("22222222-2222-2222-2222-222222222220");
+var (devToken, _) = jwt.Issue(devUserId, "developer@svyne.test", null, 99, "");
 
-var channel = GrpcChannel.ForAddress("http://localhost:5599");
+var channel = GrpcChannel.ForAddress("http://localhost:5262");
 var headers = new Metadata { { "Authorization", $"Bearer {devToken}" } };
 var client = new TenantService.TenantServiceClient(channel);
 

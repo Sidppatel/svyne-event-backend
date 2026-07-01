@@ -123,11 +123,10 @@ public sealed class StripeWebhookHandler
 
         // Best-effort enrichment of what was actually charged.
         await using (var enrich = new NpgsqlCommand(
-            "SELECT sp_enrich_stripe_transaction(@id, @total, @tax, @fees)", conn))
+            "SELECT sp_enrich_stripe_transaction(@id, @total, @fees)", conn))
         {
             enrich.Parameters.AddWithValue("id", pi.Id);
             enrich.Parameters.AddWithValue("total", (int)pi.AmountReceived);
-            enrich.Parameters.AddWithValue("tax", DBNull.Value);
             enrich.Parameters.AddWithValue("fees", DBNull.Value);
             await enrich.ExecuteNonQueryAsync(ct);
         }

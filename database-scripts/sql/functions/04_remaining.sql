@@ -3,7 +3,7 @@
 -- when the sellable is effectively unlimited, which app.resolve_price treats as
 -- "skip the inventory gates".
 --   Table prices : count of Available individual tables of the linked table type
---   TicketTier/AddOn : configured cap minus seats already sold or actively held
+--   TicketTier    : configured cap minus seats already sold or actively held
 CREATE OR REPLACE FUNCTION app.remaining_for_price(p_prices_id uuid)
 RETURNS int
 LANGUAGE plpgsql STABLE
@@ -25,8 +25,8 @@ BEGIN
         RETURN v_remaining;
     END IF;
 
-    -- TicketTier / AddOn: fall back to the linked ticket type's cap when the
-    -- price itself sets none.
+    -- TicketTier: fall back to the linked ticket type's cap when the price itself
+    -- sets none.
     IF v_max IS NULL THEN
         SELECT max_quantity INTO v_max
           FROM event_ticket_types WHERE prices_id = p_prices_id LIMIT 1;

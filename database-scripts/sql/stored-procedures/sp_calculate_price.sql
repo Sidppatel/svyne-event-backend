@@ -1,13 +1,28 @@
--- Preview wrapper around app.resolve_price for admin previews and the public
--- floor-plan. p_at defaults to now() when null.
+DROP FUNCTION IF EXISTS sp_calculate_price(uuid, int, timestamptz, int);
+
+-- Preview wrapper around app.price_breakdown for admin previews, the customer
+-- checkout quote and the public floor-plan. p_at defaults to now() when null;
+-- remaining defaults to the live inventory for the price. Returns the full
+-- server-authoritative breakdown so every surface renders identical numbers.
 CREATE OR REPLACE FUNCTION sp_calculate_price(
     p_prices_id uuid, p_seats int, p_at timestamptz, p_remaining int
 )
-RETURNS TABLE(subtotal_cents int, fee_cents int, total_cents int)
+RETURNS TABLE(
+    base_price_cents int,
+    selling_price_cents int,
+    discount_cents int,
+    applied_price_rules_id uuid,
+    applied_rule_name text,
+    platform_fee_cents int,
+    gateway_fee_cents int,
+    tax_cents int,
+    final_price_cents int,
+    organizer_net_cents int,
+    currency text
+)
 LANGUAGE sql STABLE
     SET search_path = public, extensions, pg_catalog
 AS $$
-    SELECT subtotal_cents, fee_cents, total_cents
-    FROM app.resolve_price(p_prices_id, COALESCE(p_at, now()), p_seats,
+    SELECT * FROM app.price_breakdown(p_prices_id, COALESCE(p_at, now()), p_seats,
                            COALESCE(p_remaining, app.remaining_for_price(p_prices_id)));
 $$;

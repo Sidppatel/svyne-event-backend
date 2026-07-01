@@ -1,6 +1,12 @@
 DROP FUNCTION IF EXISTS sp_create_booking(uuid, uuid, uuid, int, uuid, int, int, int, text, text);
 DROP FUNCTION IF EXISTS sp_create_booking(uuid, uuid, uuid, int, uuid, int, int, int, text);
 
+-- Single-item booking (one table OR one open-ticket line). Like the cart path,
+-- pricing is fully server-authoritative via app.price_breakdown and the result is
+-- stored as booking_lines carrying the immutable snapshot. The bookings row
+-- holds only the aggregate totals.
+-- Client-sent amounts (p_subtotal_cents/p_fee_cents/p_total_cents) are accepted for
+-- signature compatibility but IGNORED.
 CREATE OR REPLACE FUNCTION sp_create_booking(
     p_user_id uuid, p_event_id uuid, p_table_id uuid, p_seats int,
     p_event_ticket_type_id uuid,
@@ -9,57 +15,48 @@ CREATE OR REPLACE FUNCTION sp_create_booking(
 ) RETURNS TABLE(bookings_id uuid, booking_number text) LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
-DECLARE v_id uuid; v_tenant uuid; v_number text; v_attempt int := 0; v_hold int; v_tbl_status text;
-        v_unit_price int; v_formula uuid; v_prices_id uuid;
-        v_subtotal int := p_subtotal_cents; v_fee int := p_fee_cents; v_total int := p_total_cents;
+DECLARE
+    v_id uuid; v_tenant uuid; v_number text; v_attempt int := 0; v_hold int; v_tbl_status text;
+    v_prices_id uuid; v_kind text; v_seats int := COALESCE(p_seats, 1);
+    v_bd record;
+    v_seat_idx int;
+    v_code text;
+    v_qr text;
 BEGIN
     SELECT tenants_id INTO v_tenant FROM events WHERE events_id = p_event_id;
 
-    -- Server-authoritative pricing via the Pricing Module: resolve subtotal/fee/
-    -- total from the linked price (app.resolve_price applies presale/last-minute/
-    -- dynamic rules, table per-attendee math and the resolved fee formula),
-    -- ignoring client-sent amounts. Falls back to the legacy cached price_cents +
-    -- compute_fee path for sellables not yet linked to a price.
     IF p_table_id IS NOT NULL THEN
-        SELECT et.prices_id, et.price_cents, et.fee_formulas_id
-          INTO v_prices_id, v_unit_price, v_formula
+        v_kind := 'Table';
+        SELECT COALESCE(t.capacity_override, et.capacity), et.prices_id
+          INTO v_seats, v_prices_id
           FROM tables t JOIN event_tables et ON et.event_tables_id = t.event_tables_id
          WHERE t.tables_id = p_table_id;
-        IF v_prices_id IS NOT NULL THEN
-            SELECT subtotal_cents, fee_cents, total_cents INTO v_subtotal, v_fee, v_total
-              FROM app.resolve_price(v_prices_id, now(), COALESCE(p_seats, 1),
-                                     app.remaining_for_price(v_prices_id));
-        ELSIF v_unit_price IS NOT NULL THEN
-            v_subtotal := v_unit_price;
-            v_fee := app.compute_fee(v_unit_price, v_formula);
-            v_total := v_subtotal + v_fee;
-        END IF;
+        v_seats := GREATEST(COALESCE(v_seats, 1), 1);
     ELSIF p_event_ticket_type_id IS NOT NULL THEN
-        SELECT prices_id, price_cents, fee_formulas_id
-          INTO v_prices_id, v_unit_price, v_formula
+        v_kind := 'Ticket';
+        v_seats := GREATEST(v_seats, 1);
+        SELECT prices_id INTO v_prices_id
           FROM event_ticket_types WHERE event_ticket_types_id = p_event_ticket_type_id;
-        IF v_prices_id IS NOT NULL THEN
-            SELECT subtotal_cents, fee_cents, total_cents INTO v_subtotal, v_fee, v_total
-              FROM app.resolve_price(v_prices_id, now(), COALESCE(p_seats, 1),
-                                     app.remaining_for_price(v_prices_id));
-        ELSIF v_unit_price IS NOT NULL THEN
-            v_subtotal := v_unit_price * COALESCE(p_seats, 1);
-            v_fee := app.compute_fee(v_unit_price, v_formula) * COALESCE(p_seats, 1);
-            v_total := v_subtotal + v_fee;
-        END IF;
+    ELSE
+        RAISE EXCEPTION 'Booking requires a table or ticket type' USING ERRCODE = '22023';
+    END IF;
+
+    IF v_prices_id IS NULL THEN
+        RAISE EXCEPTION 'Sellable has no linked price' USING ERRCODE = '22023';
     END IF;
 
     SELECT COALESCE((SELECT value::int FROM app_settings WHERE key = 'booking_hold_seconds'), 600)
       INTO v_hold;
 
-    -- Idempotency / resume: reuse this user's live Pending hold for the same
-    -- table (double-click, tab switch, mid-payment navigation).
+    -- Idempotency / resume: reuse this user's live Pending hold for the same table.
     IF p_status = 'Pending' AND p_table_id IS NOT NULL THEN
         SELECT b.bookings_id, b.booking_number INTO v_id, v_number
           FROM bookings b
+          JOIN booking_lines bl ON bl.bookings_id = b.bookings_id
           WHERE b.users_id = p_user_id
             AND b.events_id = p_event_id
-            AND b.tables_id = p_table_id
+            AND bl.tables_id = p_table_id
+            AND bl.kind = 'Table'
             AND b.status = 'Pending'
             AND (b.hold_expires_at IS NULL OR b.hold_expires_at > now())
           ORDER BY b.created_at DESC
@@ -86,7 +83,6 @@ BEGIN
             RAISE EXCEPTION 'Table already booked' USING ERRCODE = '23514';
         END IF;
         IF v_tbl_status = 'Locked' THEN
-            -- Allow only if the existing lock is stale.
             IF EXISTS (SELECT 1 FROM tables
                        WHERE tables_id = p_table_id
                          AND lock_expires_at IS NOT NULL AND lock_expires_at > now()) THEN
@@ -95,16 +91,27 @@ BEGIN
         END IF;
     END IF;
 
+    -- Calculate price breakdown
+    IF v_kind = 'Ticket' THEN
+        SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), 1,
+                                 app.remaining_for_price(v_prices_id));
+    ELSE
+        SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), v_seats,
+                                 app.remaining_for_price(v_prices_id));
+    END IF;
+
     -- Booking number BK-* must be unique per (event, user); retry on collision.
     LOOP
         v_attempt := v_attempt + 1;
         v_number := 'BK-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 10));
         BEGIN
-            INSERT INTO bookings (tenants_id, booking_number, status, users_id, events_id, tables_id,
-                seats_reserved, event_ticket_types_id, subtotal_cents, fee_cents, total_cents,
-                hold_expires_at, created_at, updated_at)
-            VALUES (v_tenant, v_number, p_status, p_user_id, p_event_id, p_table_id,
-                p_seats, p_event_ticket_type_id, v_subtotal, v_fee, v_total,
+            INSERT INTO bookings (tenants_id, booking_number, status, users_id, events_id,
+                subtotal_cents, fee_cents, total_cents, seats_reserved, hold_expires_at, created_at, updated_at)
+            VALUES (v_tenant, v_number, p_status, p_user_id, p_event_id,
+                CASE WHEN v_kind = 'Ticket' THEN v_bd.selling_price_cents * v_seats ELSE v_bd.selling_price_cents END,
+                CASE WHEN v_kind = 'Ticket' THEN (v_bd.platform_fee_cents + v_bd.gateway_fee_cents) * v_seats ELSE (v_bd.platform_fee_cents + v_bd.gateway_fee_cents) END,
+                CASE WHEN v_kind = 'Ticket' THEN v_bd.final_price_cents * v_seats ELSE v_bd.final_price_cents END,
+                v_seats,
                 CASE WHEN p_status = 'Pending' THEN now() + make_interval(secs => v_hold) ELSE NULL END,
                 now(), now())
             RETURNING bookings.bookings_id INTO v_id;
@@ -114,11 +121,49 @@ BEGIN
         END;
     END LOOP;
 
-    IF p_table_id IS NOT NULL THEN
-        INSERT INTO booking_tables (tenants_id, bookings_id, tables_id)
-        VALUES (v_tenant, v_id, p_table_id);
+    IF v_kind = 'Ticket' THEN
+        FOR v_seat_idx IN 1..v_seats LOOP
+            v_code := 'TK-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 8));
+            v_qr := encode(gen_random_bytes(32), 'hex');
 
-        -- Lock the table for the hold window (only for unpaid holds).
+            INSERT INTO booking_lines (tenants_id, bookings_id, events_id, kind, event_ticket_types_id,
+                tables_id, prices_id, seats, ticket_code, qr_token, seat_number, status,
+                base_price_cents, selling_price_cents, discount_cents,
+                applied_price_rules_id, applied_rule_name,
+                platform_fee_cents, gateway_fee_cents,
+                subtotal_cents, fee_cents, total_cents, final_price_cents, currency,
+                created_at, updated_at)
+            VALUES (v_tenant, v_id, p_event_id, 'Ticket', p_event_ticket_type_id,
+                NULL, v_prices_id, 1, v_code, v_qr, v_seat_idx, 'Unassigned',
+                v_bd.base_price_cents, v_bd.selling_price_cents, v_bd.discount_cents,
+                v_bd.applied_price_rules_id, v_bd.applied_rule_name,
+                v_bd.platform_fee_cents, v_bd.gateway_fee_cents,
+                v_bd.selling_price_cents,
+                v_bd.platform_fee_cents + v_bd.gateway_fee_cents,
+                v_bd.final_price_cents, v_bd.final_price_cents, v_bd.currency,
+                now(), now());
+        END LOOP;
+    ELSIF v_kind = 'Table' THEN
+        v_code := 'TBL-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 8));
+        v_qr := encode(gen_random_bytes(32), 'hex');
+
+        INSERT INTO booking_lines (tenants_id, bookings_id, events_id, kind, event_ticket_types_id,
+            tables_id, prices_id, seats, ticket_code, qr_token, status,
+            base_price_cents, selling_price_cents, discount_cents,
+            applied_price_rules_id, applied_rule_name,
+            platform_fee_cents, gateway_fee_cents,
+            subtotal_cents, fee_cents, total_cents, final_price_cents, currency,
+            created_at, updated_at)
+        VALUES (v_tenant, v_id, p_event_id, 'Table', NULL,
+            p_table_id, v_prices_id, v_seats, v_code, v_qr, 'Unassigned',
+            v_bd.base_price_cents, v_bd.selling_price_cents, v_bd.discount_cents,
+            v_bd.applied_price_rules_id, v_bd.applied_rule_name,
+            v_bd.platform_fee_cents, v_bd.gateway_fee_cents,
+            v_bd.selling_price_cents,
+            v_bd.platform_fee_cents + v_bd.gateway_fee_cents,
+            v_bd.final_price_cents, v_bd.final_price_cents, v_bd.currency,
+            now(), now());
+
         IF p_status = 'Pending' THEN
             UPDATE tables
                SET status = 'Locked', locked_by_users_id = p_user_id,

@@ -43,7 +43,7 @@ BEGIN
     v_shape := COALESCE(v_shape, NULLIF(p_shape, ''), 'Round');
 
     v_prices_id := app.create_price(p_event_id, p_label, 'Table', p_price_cents,
-        p_per_attendee_cents, p_is_all_inclusive, p_fee_formulas_id, NULL, NULL);
+        p_per_attendee_cents, p_is_all_inclusive, p_fee_formulas_id, NULL);
 
     -- Auto-apply the tenant's default fee when the admin sets no explicit override,
     -- so every new table carries the tenant fee (the developer override wins when set).

@@ -9,6 +9,6 @@ BEGIN
 
     UPDATE tables SET status = 'Available', locked_by_users_id = NULL,
         lock_expires_at = NULL, updated_at = now()
-    WHERE tables_id IN (SELECT tables_id FROM booking_tables WHERE bookings_id = p_booking_id)
+    WHERE tables_id IN (SELECT tables_id FROM booking_lines WHERE bookings_id = p_booking_id AND kind = 'Table')
       AND status IN ('Locked', 'Booked');
 END; $$;

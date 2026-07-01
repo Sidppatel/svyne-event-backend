@@ -11,8 +11,8 @@ DECLARE
 BEGIN
     SELECT bookings_id, status::text
         INTO v_booking_id, v_status
-        FROM tickets
-        WHERE tickets_id = p_ticket_id
+        FROM booking_lines
+        WHERE booking_lines_id = p_ticket_id AND kind = 'Ticket'
         FOR UPDATE;
 
     IF v_booking_id IS NULL THEN
@@ -26,10 +26,10 @@ BEGIN
     END IF;
 
     SELECT COUNT(*) INTO v_already_count
-        FROM tickets
-        WHERE bookings_id = v_booking_id
+        FROM booking_lines
+        WHERE bookings_id = v_booking_id AND kind = 'Ticket'
           AND guest_users_id = p_user_id
-          AND tickets_id <> p_ticket_id
+          AND booking_lines_id <> p_ticket_id
           AND status IN ('Claimed', 'CheckedIn');
 
     IF v_already_count > 0 THEN
@@ -37,7 +37,7 @@ BEGIN
         RETURN;
     END IF;
 
-    UPDATE tickets SET
+    UPDATE booking_lines SET
         guest_users_id = p_user_id,
         status = 'Claimed',
         claimed_at = now(),
@@ -46,7 +46,7 @@ BEGIN
         invited_email = NULL,
         invite_sent_at = NULL,
         updated_at = now()
-    WHERE tickets_id = p_ticket_id
+    WHERE booking_lines_id = p_ticket_id
       AND status IN ('Unassigned', 'Invited');
     GET DIAGNOSTICS v_updated = ROW_COUNT;
 

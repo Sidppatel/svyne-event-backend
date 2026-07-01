@@ -26,6 +26,7 @@ BEGIN
     v_fee := app.compute_fee(p_base_price_cents, v_formula);
 
     UPDATE event_ticket_types SET price_cents = p_base_price_cents,
+        label = p_name,
         platform_fee_cents = v_fee, updated_at = now()
     WHERE prices_id = p_prices_id;
     UPDATE event_tables SET price_cents = p_base_price_cents,

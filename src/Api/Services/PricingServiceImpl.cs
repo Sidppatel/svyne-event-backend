@@ -31,7 +31,7 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         RequireTenant();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_create_price(@ev, @name, @type, @base, @per, @allinc, @fee, @parent, @max)", connection);
+            "SELECT sp_create_price(@ev, @name, @type, @base, @per, @allinc, @fee, @max)", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
         cmd.Parameters.AddWithValue("name", request.Name);
         cmd.Parameters.AddWithValue("type", string.IsNullOrEmpty(request.PricingType) ? "TicketTier" : request.PricingType);
@@ -42,7 +42,6 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         cmd.Parameters.AddWithValue("fee",
             tenantContext.IsDeveloper && !string.IsNullOrEmpty(request.FeeFormulasId)
                 ? Guid.Parse(request.FeeFormulasId) : (object)DBNull.Value);
-        cmd.Parameters.AddWithValue("parent", string.IsNullOrEmpty(request.ParentPricesId) ? DBNull.Value : Guid.Parse(request.ParentPricesId));
         cmd.Parameters.AddWithValue("max", request.MaxQuantity == 0 ? DBNull.Value : request.MaxQuantity);
         var id = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
         return new UuidValue { Value = id.ToString() };
@@ -86,7 +85,6 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
     public override async Task<ListPricesResponse> ListPricesForEvent(UuidValue request, ServerCallContext context)
     {
         var ct = context.CancellationToken;
-        RequireUser();
         var response = new ListPricesResponse();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand("SELECT * FROM sp_list_prices_for_event(@ev)", connection);
@@ -158,7 +156,6 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
     private async Task<ListPriceRulesResponse> ListRules(string sql, UuidValue request, ServerCallContext context)
     {
         var ct = context.CancellationToken;
-        RequireUser();
         var response = new ListPriceRulesResponse();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(sql, connection);
@@ -203,12 +200,32 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         {
             throw new RpcException(new Status(StatusCode.NotFound, "Price not found or inactive"));
         }
-        return new PriceBreakdown
+        return MapBreakdown(reader);
+    }
+
+    // sp_calculate_price / app.price_breakdown column order:
+    // base, selling, discount, rule_id, rule_name, platform, gateway, tax, final, net, currency
+    internal static PriceBreakdown MapBreakdown(NpgsqlDataReader r)
+    {
+        var bd = new PriceBreakdown
         {
-            SubtotalCents = reader.GetInt32(0),
-            FeeCents = reader.GetInt32(1),
-            TotalCents = reader.GetInt32(2)
+            BasePriceCents = r.GetInt32(0),
+            SellingPriceCents = r.GetInt32(1),
+            DiscountCents = r.GetInt32(2),
+            AppliedPriceRulesId = r.IsDBNull(3) ? string.Empty : r.GetGuid(3).ToString(),
+            AppliedRuleName = r.IsDBNull(4) ? string.Empty : r.GetString(4),
+            PlatformFeeCents = r.GetInt32(5),
+            GatewayFeeCents = r.GetInt32(6),
+            TaxCents = r.GetInt32(7),
+            FinalPriceCents = r.GetInt32(8),
+            OrganizerNetCents = r.GetInt32(9),
+            Currency = r.IsDBNull(10) ? "usd" : r.GetString(10)
         };
+        // Convenience aggregates: subtotal = selling, fee = platform+gateway+tax, total = final.
+        bd.SubtotalCents = bd.SellingPriceCents;
+        bd.FeeCents = bd.PlatformFeeCents + bd.GatewayFeeCents + bd.TaxCents;
+        bd.TotalCents = bd.FinalPriceCents;
+        return bd;
     }
 
     public override async Task<AckResponse> SetTenantDefaultFeeFormula(SetTenantDefaultFeeFormulaRequest request, ServerCallContext context)
@@ -233,9 +250,8 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         PerAttendeeCents = r.GetInt32(5),
         IsAllInclusive = r.GetBoolean(6),
         FeeFormulasId = r.IsDBNull(7) ? string.Empty : r.GetGuid(7).ToString(),
-        ParentPricesId = r.IsDBNull(8) ? string.Empty : r.GetGuid(8).ToString(),
-        MaxQuantity = r.IsDBNull(9) ? 0 : r.GetInt32(9),
-        IsActive = r.GetBoolean(10)
+        MaxQuantity = r.IsDBNull(8) ? 0 : r.GetInt32(8),
+        IsActive = r.GetBoolean(9)
     };
 
     private static object ToTimestamp(long unixSeconds) =>

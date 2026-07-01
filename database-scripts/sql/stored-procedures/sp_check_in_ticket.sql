@@ -29,10 +29,10 @@ DECLARE
     v_event_id uuid;
     v_all_checked boolean;
 BEGIN
-    SELECT t.tickets_id, t.bookings_id, t.status, t.seat_number, t.guest_users_id, t.updated_at, t.events_id
+    SELECT t.booking_lines_id, t.bookings_id, t.status::text, t.seat_number, t.guest_users_id, t.updated_at, t.events_id
       INTO v_ticket_id, v_booking_id, v_ticket_status, v_seat_number, v_guest_user_id, v_ticket_updated_at, v_event_id
-    FROM tickets t
-    WHERE t.tickets_id = p_ticket_id
+    FROM booking_lines t
+    WHERE t.booking_lines_id = p_ticket_id AND t.kind = 'Ticket'
     FOR UPDATE;
 
     IF NOT FOUND THEN
@@ -92,17 +92,17 @@ BEGIN
     END IF;
 
     -- Update ticket status to CheckedIn
-    UPDATE tickets
+    UPDATE booking_lines
        SET status = 'CheckedIn', updated_at = now()
-     WHERE tickets_id = v_ticket_id;
+     WHERE booking_lines_id = v_ticket_id;
 
     -- Insert log
     INSERT INTO checkin_logs (checkin_logs_id, event_id, staff_user_id, booking_id, ticket_id, timestamp, created_at, updated_at)
     VALUES (gen_random_uuid(), p_event_id, p_staff_user_id, v_booking_id, v_ticket_id, now(), now(), now());
 
     SELECT NOT EXISTS (
-        SELECT 1 FROM tickets
-         WHERE bookings_id = v_booking_id AND status <> 'CheckedIn'
+        SELECT 1 FROM booking_lines
+         WHERE bookings_id = v_booking_id AND kind = 'Ticket' AND status <> 'CheckedIn'
     ) INTO v_all_checked;
 
     IF v_all_checked THEN

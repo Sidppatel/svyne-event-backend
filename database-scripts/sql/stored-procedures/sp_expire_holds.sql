@@ -19,17 +19,18 @@ BEGIN
         UPDATE tables t
            SET status = 'Available', locked_by_users_id = NULL,
                lock_expires_at = NULL, updated_at = now()
-          FROM booking_tables bt
-         WHERE bt.tables_id = t.tables_id
-           AND bt.bookings_id IN (SELECT bookings_id FROM expired)
+          FROM booking_lines bl
+         WHERE bl.tables_id = t.tables_id
+           AND bl.kind = 'Table'
+           AND bl.bookings_id IN (SELECT bookings_id FROM expired)
            AND t.status = 'Locked'
         RETURNING t.tables_id
     ),
     failed_tx AS (
         UPDATE stripe_transactions
            SET status = 'Failed', updated_at = now()
-         WHERE bookings_id IN (SELECT bookings_id FROM expired)
-           AND status NOT IN ('Succeeded', 'Refunded')
+          WHERE bookings_id IN (SELECT bookings_id FROM expired)
+            AND status NOT IN ('Succeeded', 'Refunded')
         RETURNING stripe_transactions_id
     )
     SELECT count(*) INTO v_count FROM expired;

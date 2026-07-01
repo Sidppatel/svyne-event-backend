@@ -9,13 +9,15 @@ LANGUAGE sql STABLE
 SET search_path = public, extensions, pg_catalog
 AS $$
     SELECT
-        p.tables_id                                        AS tables_id,
+        bl.tables_id                                       AS tables_id,
         COUNT(*)::int                                      AS booking_count,
-        COALESCE(SUM(p.seats_reserved), 0)::int           AS seats_booked,
-        COALESCE(SUM(p.subtotal_cents)::bigint, 0)        AS subtotal_cents
-    FROM bookings p
-    WHERE p.events_id = p_event_id
-      AND p.tables_id IS NOT NULL
-      AND p.status::text IN ('Paid','CheckedIn')
-    GROUP BY p.tables_id;
+        COALESCE(SUM(bl.seats), 0)::int                    AS seats_booked,
+        COALESCE(SUM(bl.subtotal_cents)::bigint, 0)        AS subtotal_cents
+    FROM booking_lines bl
+    JOIN bookings b ON b.bookings_id = bl.bookings_id
+    WHERE b.events_id = p_event_id
+      AND bl.kind = 'Table'
+      AND bl.tables_id IS NOT NULL
+      AND b.status::text IN ('Paid','CheckedIn')
+    GROUP BY bl.tables_id;
 $$;

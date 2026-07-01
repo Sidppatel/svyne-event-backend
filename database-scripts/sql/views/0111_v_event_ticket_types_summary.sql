@@ -11,8 +11,10 @@ SELECT
     END::int AS available_count
 FROM event_ticket_types ett
 LEFT JOIN LATERAL (
-    SELECT COALESCE(SUM(b.seats_reserved), 0)::int AS sold
-    FROM bookings b
-    WHERE b.event_ticket_types_id = ett.event_ticket_types_id
+    SELECT COALESCE(SUM(bl.seats), 0)::int AS sold
+    FROM booking_lines bl
+    JOIN bookings b ON b.bookings_id = bl.bookings_id
+    WHERE bl.kind = 'Ticket'
+      AND bl.event_ticket_types_id = ett.event_ticket_types_id
       AND b.status IN ('Pending', 'Paid', 'CheckedIn')
 ) bs ON true;

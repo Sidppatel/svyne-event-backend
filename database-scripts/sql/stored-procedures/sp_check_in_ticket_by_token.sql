@@ -17,9 +17,9 @@ AS $$
 DECLARE
     v_ticket_id uuid;
 BEGIN
-    SELECT tickets_id INTO v_ticket_id
-    FROM tickets
-    WHERE qr_token = p_qr_token;
+    SELECT booking_lines_id INTO v_ticket_id
+    FROM booking_lines
+    WHERE qr_token = p_qr_token AND kind = 'Ticket';
 
     IF NOT FOUND THEN
         RETURN QUERY SELECT false, 'Ticket not found'::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::timestamptz;

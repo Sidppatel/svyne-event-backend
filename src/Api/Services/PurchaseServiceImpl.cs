@@ -6,6 +6,7 @@ using Svyne.Api.Payments;
 using Svyne.Api.Security;
 using Svyne.Protos.Common;
 using Svyne.Protos.Booking;
+using Svyne.Protos.Pricing;
 
 using Svyne.Api.Email;
 
@@ -141,6 +142,63 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         {
             throw MapPostgres(ex);
         }
+    }
+
+    public override async Task<CartQuote> QuoteCart(CreateMultiBookingRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        var linesJson = System.Text.Json.JsonSerializer.Serialize(
+            request.Lines.Select(l => new { kind = l.Kind, ref_id = l.RefId, seats = l.Seats }));
+
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand("SELECT * FROM sp_quote_cart(@ev, @lines::jsonb)", connection);
+        cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
+        cmd.Parameters.AddWithValue("lines", linesJson);
+
+        var quote = new CartQuote { Currency = "usd" };
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            // Columns: kind, ref_id, label, seats, then the 11 breakdown columns.
+            var bd = new PriceBreakdown
+            {
+                BasePriceCents = reader.GetInt32(4),
+                SellingPriceCents = reader.GetInt32(5),
+                DiscountCents = reader.GetInt32(6),
+                AppliedPriceRulesId = reader.IsDBNull(7) ? string.Empty : reader.GetGuid(7).ToString(),
+                AppliedRuleName = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                PlatformFeeCents = reader.GetInt32(9),
+                GatewayFeeCents = reader.GetInt32(10),
+                TaxCents = reader.GetInt32(11),
+                FinalPriceCents = reader.GetInt32(12),
+                OrganizerNetCents = reader.GetInt32(13),
+                Currency = reader.IsDBNull(14) ? "usd" : reader.GetString(14)
+            };
+            bd.SubtotalCents = bd.SellingPriceCents;
+            bd.FeeCents = bd.PlatformFeeCents + bd.GatewayFeeCents + bd.TaxCents;
+            bd.TotalCents = bd.FinalPriceCents;
+
+            quote.Lines.Add(new CartQuoteLine
+            {
+                Kind = reader.GetString(0),
+                RefId = reader.GetGuid(1).ToString(),
+                Label = reader.GetString(2),
+                Seats = reader.GetInt32(3),
+                Breakdown = bd
+            });
+
+            quote.BaseTotalCents += bd.BasePriceCents;
+            quote.SubtotalCents += bd.SellingPriceCents;
+            quote.PlatformFeeCents += bd.PlatformFeeCents;
+            quote.GatewayFeeCents += bd.GatewayFeeCents;
+            quote.TaxCents += bd.TaxCents;
+            quote.TotalCents += bd.FinalPriceCents;
+            quote.OrganizerNetCents += bd.OrganizerNetCents;
+            quote.Currency = bd.Currency;
+        }
+        quote.DiscountCents = quote.BaseTotalCents - quote.SubtotalCents;
+        quote.FeeCents = quote.PlatformFeeCents + quote.GatewayFeeCents + quote.TaxCents;
+        return quote;
     }
 
     public override async Task<PaymentIntentResponse> CreatePaymentIntent(PaymentIntentRequest request, ServerCallContext context)
@@ -388,7 +446,10 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         await using (var lc = new NpgsqlCommand(
             "SELECT bl.booking_lines_id, bl.kind, "
             + "COALESCE(ett.label, t.label, '') AS label, bl.event_ticket_types_id, bl.tables_id, "
-            + "bl.seats, bl.subtotal_cents, bl.fee_cents, bl.total_cents "
+            + "bl.seats, bl.subtotal_cents, bl.fee_cents, bl.total_cents, "
+            + "bl.base_price_cents, bl.selling_price_cents, bl.discount_cents, "
+            + "COALESCE(bl.applied_rule_name, ''), bl.platform_fee_cents, bl.gateway_fee_cents, "
+            + "0 as tax_cents, bl.final_price_cents, bl.currency "
             + "FROM booking_lines bl "
             + "LEFT JOIN event_ticket_types ett ON ett.event_ticket_types_id = bl.event_ticket_types_id "
             + "LEFT JOIN tables t ON t.tables_id = bl.tables_id "
@@ -408,7 +469,16 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
                     Seats = lr.GetInt32(5),
                     SubtotalCents = lr.GetInt32(6),
                     FeeCents = lr.GetInt32(7),
-                    TotalCents = lr.GetInt32(8)
+                    TotalCents = lr.GetInt32(8),
+                    BasePriceCents = lr.GetInt32(9),
+                    SellingPriceCents = lr.GetInt32(10),
+                    DiscountCents = lr.GetInt32(11),
+                    AppliedRuleName = lr.GetString(12),
+                    PlatformFeeCents = lr.GetInt32(13),
+                    GatewayFeeCents = lr.GetInt32(14),
+                    TaxCents = lr.GetInt32(15),
+                    FinalPriceCents = lr.GetInt32(16),
+                    Currency = lr.GetString(17)
                 });
             }
         }

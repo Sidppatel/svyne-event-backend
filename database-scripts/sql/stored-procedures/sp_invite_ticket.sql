@@ -4,9 +4,9 @@ CREATE OR REPLACE FUNCTION sp_invite_ticket(
     SET search_path = public, extensions, pg_catalog
 AS $$
 BEGIN
-    UPDATE tickets SET
+    UPDATE booking_lines SET
         invite_token_hash = p_invite_hash, invited_email = p_email,
         invite_sent_at = now(), invite_expires_at = p_expires_at,
         status = 'Invited', updated_at = now()
-    WHERE tickets_id = p_ticket_id;
+    WHERE booking_lines_id = p_ticket_id AND kind = 'Ticket';
 END; $$;

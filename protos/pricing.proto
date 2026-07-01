@@ -29,12 +29,12 @@ message Price {
   string prices_id = 1;
   string events_id = 2;
   string name = 3;
-  string pricing_type = 4;          // TicketTier | Table | AddOn
+  string pricing_type = 4;          // TicketTier | Table
   int32 base_price_cents = 5;
   int32 per_attendee_cents = 6;
   bool is_all_inclusive = 7;
   string fee_formulas_id = 8;        // developer-only override; empty = tenant default
-  string parent_prices_id = 9;       // AddOn parent; empty = none
+  reserved 9;                        // was parent_prices_id (add-ons removed)
   int32 max_quantity = 10;           // 0 = unlimited
   bool is_active = 11;
 }
@@ -47,7 +47,7 @@ message CreatePriceRequest {
   int32 per_attendee_cents = 5;
   bool is_all_inclusive = 6;
   string fee_formulas_id = 7;        // honored only for developers
-  string parent_prices_id = 8;
+  reserved 8;                        // was parent_prices_id (add-ons removed)
   int32 max_quantity = 9;
 }
 
@@ -124,10 +124,26 @@ message CalculatePriceRequest {
   int32 remaining = 4;               // -1 = unknown
 }
 
+// Full server-authoritative breakdown for one priced line. Every surface (admin
+// preview, customer checkout, persisted booking snapshot) renders these numbers;
+// pricing math lives only in the backend engine (app.price_breakdown).
+//   subtotal_cents/fee_cents/total_cents are retained as convenience aggregates:
+//   subtotal = selling, fee = platform + gateway + tax, total = final.
 message PriceBreakdown {
   int32 subtotal_cents = 1;
   int32 fee_cents = 2;
   int32 total_cents = 3;
+  int32 base_price_cents = 4;        // original price before any rule
+  int32 selling_price_cents = 5;     // price after the active rule
+  int32 discount_cents = 6;          // base - selling (>= 0)
+  string applied_price_rules_id = 7; // empty = no rule active
+  string applied_rule_name = 8;      // empty = no rule active
+  int32 platform_fee_cents = 9;
+  int32 gateway_fee_cents = 10;
+  int32 tax_cents = 11;
+  int32 final_price_cents = 12;      // what the customer pays
+  int32 organizer_net_cents = 13;    // what the organizer receives (= selling)
+  string currency = 14;
 }
 
 message SetTenantDefaultFeeFormulaRequest {

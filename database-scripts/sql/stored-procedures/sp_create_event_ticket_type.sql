@@ -26,7 +26,7 @@ BEGIN
     END IF;
 
     v_prices_id := app.create_price(p_event_id, p_label, 'TicketTier', p_price_cents,
-        0, false, p_fee_formulas_id, NULL, p_max_quantity);
+        0, false, p_fee_formulas_id, p_max_quantity);
 
     -- Auto-apply the tenant's default fee when the admin sets no explicit override,
     -- so every new tier carries the tenant fee (the developer override wins when set).

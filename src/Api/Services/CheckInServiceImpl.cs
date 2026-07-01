@@ -52,7 +52,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
 
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'CheckedIn') FROM tickets WHERE events_id = @ev", connection);
+            "SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'CheckedIn') FROM booking_lines WHERE events_id = @ev AND kind = 'Ticket'", connection);
         cmd.Parameters.AddWithValue("ev", eventId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -147,15 +147,15 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
 
         // Fetch tickets
         await using (var cmd = new NpgsqlCommand(
-            @"SELECT t.tickets_id, t.bookings_id, t.ticket_code, 
+            @"SELECT t.booking_lines_id, t.bookings_id, t.ticket_code, 
                      gu.first_name, gu.last_name, bu.first_name, bu.last_name, 
-                     t.status, t.seat_number, 
-                     (SELECT timestamp FROM checkin_logs WHERE ticket_id = t.tickets_id ORDER BY timestamp DESC LIMIT 1) as checked_in_time
-              FROM tickets t
+                     t.status::text, t.seat_number, 
+                     (SELECT timestamp FROM checkin_logs WHERE ticket_id = t.booking_lines_id ORDER BY timestamp DESC LIMIT 1) as checked_in_time
+              FROM booking_lines t
               LEFT JOIN users gu ON gu.users_id = t.guest_users_id
               JOIN bookings b ON b.bookings_id = t.bookings_id
               JOIN users bu ON bu.users_id = b.users_id
-              WHERE t.events_id = @ev AND b.status IN ('Paid', 'CheckedIn')
+              WHERE t.events_id = @ev AND t.kind = 'Ticket' AND b.status IN ('Paid', 'CheckedIn')
               ORDER BY t.seat_number", connection))
         {
             cmd.Parameters.AddWithValue("ev", eventId);

@@ -17,11 +17,7 @@ public class StripeTransaction : BaseEntity
     public int AmountCents { get; set; }
     public int? TransferAmountCents { get; set; }
 
-    public string? TaxCalculationId { get; set; }
-    public string? TaxTransactionId { get; set; }
-
     public int? TotalChargedCents { get; set; }
-    public int? TaxAmountCents { get; set; }
     public int? StripeFeesCents { get; set; }
 
     public DateTime? PaidAt { get; set; }
