@@ -41,6 +41,8 @@ public sealed class StartupSeeder
             new[] { ("Warning", 0), ("Error", 1), ("Critical", 2) }),
         new("AuditActorType", "audit_logs.actor_type", "Kind of actor that produced an audit event.",
             new[] { ("User", 0), ("Admin", 1), ("Developer", 2), ("System", 3) }),
+        new("UserRole", "users.role", "The access level or role of a user.",
+            new[] { ("Attendee", 0), ("Admin", 1), ("Staff", 2), ("SubTenant", 3), ("Developer", 99) }),
     };
 
     private static readonly (string Key, string Value, string Description)[] AppSettings =

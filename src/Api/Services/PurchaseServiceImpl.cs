@@ -46,9 +46,14 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         var response = new ListEventTicketTypesResponse();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT event_ticket_types_id, label, price_cents, COALESCE(platform_fee_cents, 0), "
-            + "COALESCE(max_quantity, 0), COALESCE(description, ''), fee_formulas_id, COALESCE(capacity, 0) "
-            + "FROM event_ticket_types WHERE events_id = @ev AND is_active = true ORDER BY sort_order, label", connection);
+            "SELECT tt.event_ticket_types_id, tt.label, tt.price_cents, COALESCE(tt.platform_fee_cents, 0), "
+            + "COALESCE(tt.max_quantity, 0), COALESCE(tt.description, ''), tt.fee_formulas_id, COALESCE(tt.capacity, 0), "
+            + "COALESCE(bp.selling_price_cents, tt.price_cents) "
+            + "FROM event_ticket_types tt "
+            + "LEFT JOIN prices p ON p.events_id = tt.events_id AND p.pricing_type = 'TicketTier' "
+            + "AND lower(p.name) = lower(tt.label) AND p.is_active "
+            + "LEFT JOIN LATERAL sp_calculate_price(p.prices_id, 1, now(), -1) bp ON p.prices_id IS NOT NULL "
+            + "WHERE tt.events_id = @ev AND tt.is_active = true ORDER BY tt.sort_order, tt.label", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -62,7 +67,8 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
                 MaxQuantity = reader.GetInt32(4),
                 Description = reader.GetString(5),
                 FeeFormulasId = reader.IsDBNull(6) ? string.Empty : reader.GetGuid(6).ToString(),
-                Capacity = reader.GetInt32(7)
+                Capacity = reader.GetInt32(7),
+                SellingPriceCents = reader.GetInt32(8)
             });
         }
         return response;

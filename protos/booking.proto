@@ -98,6 +98,7 @@ message EventTableType {
   // Default pixel footprint used when placing this type on the floor plan.
   double default_width = 8;
   double default_height = 9;
+  int32 platform_fee_cents = 10;
 }
 
 message ListEventTableTypesResponse {

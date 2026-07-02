@@ -38,12 +38,13 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
         {
             return new MonthlyReport();
         }
-        var gross = reader.GetInt64(0);
-        var fees = reader.GetInt64(1);
+        // Platform-fee figures are developer-only: tenant admins see just their
+        // own payout (their ticket prices), never the fee split or gross charge.
+        var isDeveloper = tenantContext.IsDeveloper;
         return new MonthlyReport
         {
-            GrossCents = gross,
-            FeesCents = fees,
+            GrossCents = isDeveloper ? reader.GetInt64(0) : 0,
+            FeesCents = isDeveloper ? reader.GetInt64(1) : 0,
             NetCents = reader.GetInt64(2),
             TicketsSold = (int)reader.GetInt64(3)
         };

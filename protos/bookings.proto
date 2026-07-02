@@ -152,6 +152,9 @@ message EventTicketType {
   string description = 6;
   string fee_formulas_id = 7;
   int32 capacity = 8;                 // seats this tier contributes to event capacity (0 = uncapped)
+  // Current selling price after active price rules (equals price_cents when no
+  // discount applies). Display hint; QuoteCart is authoritative at booking time.
+  int32 selling_price_cents = 9;
 }
 
 message ListEventTicketTypesResponse {

@@ -107,7 +107,7 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT event_tables_id, label, capacity, shape, COALESCE(color, ''), price_cents, prices_id, "
-            + "COALESCE(default_width, 80), COALESCE(default_height, 80) "
+            + "COALESCE(default_width, 80), COALESCE(default_height, 80), COALESCE(platform_fee_cents, 0) "
             + "FROM event_tables WHERE events_id = @ev AND is_active = true ORDER BY label", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -123,7 +123,8 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
                 PriceCents = reader.GetInt32(5),
                 PricesId = reader.IsDBNull(6) ? string.Empty : reader.GetGuid(6).ToString(),
                 DefaultWidth = (double)reader.GetDecimal(7),
-                DefaultHeight = (double)reader.GetDecimal(8)
+                DefaultHeight = (double)reader.GetDecimal(8),
+                PlatformFeeCents = reader.GetInt32(9)
             });
         }
         return response;
