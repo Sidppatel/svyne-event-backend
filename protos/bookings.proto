@@ -58,6 +58,12 @@ message Booking {
   int32 seats_reserved = 10;
   // Cart lines (empty for single-line legacy bookings).
   repeated BookingLine lines = 11;
+  string event_title = 12;
+  string event_slug = 13;
+  int64 event_start_date = 14;
+  int32 tickets_total = 15;
+  // Tickets on this booking with status Claimed or CheckedIn.
+  int32 tickets_claimed = 16;
 }
 
 // One line of a booking, for display on checkout / booking detail. Carries the
@@ -111,6 +117,8 @@ message CartQuote {
   int32 total_cents = 9;             // final amount the customer pays
   int32 organizer_net_cents = 10;
   string currency = 11;
+  // Cart hold window in seconds, from app_settings.booking_hold_seconds.
+  int32 hold_seconds = 12;
 }
 
 message BookingLineInput {
