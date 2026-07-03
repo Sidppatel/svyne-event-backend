@@ -9,6 +9,14 @@ CREATE OR REPLACE FUNCTION sp_update_table(
     SET search_path = public, extensions, pg_catalog
 AS $$
 BEGIN
+    IF p_event_table_id IS NOT NULL AND EXISTS(
+        SELECT 1 FROM tables
+        WHERE tables_id = p_id
+          AND event_tables_id IS DISTINCT FROM p_event_table_id
+          AND (status = 'Booked' OR (status = 'Locked' AND lock_expires_at > now()))
+    ) THEN
+        RAISE EXCEPTION 'This table has been sold or is currently held and cannot be moved to a different table type.';
+    END IF;
     UPDATE tables SET
         label = COALESCE(p_label, label),
         event_tables_id = COALESCE(p_event_table_id, event_tables_id),

@@ -17,4 +17,10 @@ public class CheckInLog : BaseEntity
     public BookingLine? Ticket { get; set; }
 
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+    public string Method { get; set; } = "qr_scan";
+
+    public string Status { get; set; } = "success";
+
+    public string? FailureReason { get; set; }
 }

@@ -60,19 +60,45 @@ END; $$;
 
 -- Attach a formula to a ticket type ('ticket') or table ('table') and resolve
 -- its cached platform_fee_cents. p_formula NULL clears the formula (fee 0).
+-- Returns the previously assigned formula for audit logging.
+DROP FUNCTION IF EXISTS sp_set_fee_formula(text, uuid, uuid);
+
 CREATE OR REPLACE FUNCTION sp_set_fee_formula(
     p_kind text, p_target uuid, p_formula uuid
-) RETURNS void LANGUAGE plpgsql
+) RETURNS uuid LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
+DECLARE v_old uuid; v_sold int;
 BEGIN
     IF p_kind = 'ticket' THEN
+        SELECT fee_formulas_id INTO v_old FROM event_ticket_types WHERE event_ticket_types_id = p_target;
+        IF NOT app.is_developer() AND v_old IS DISTINCT FROM p_formula THEN
+            SELECT COALESCE(SUM(bl.seats), 0)::int INTO v_sold
+              FROM booking_lines bl
+              JOIN bookings b ON b.bookings_id = bl.bookings_id
+             WHERE bl.kind = 'Ticket'
+               AND bl.event_ticket_types_id = p_target
+               AND b.status IN ('Pending', 'Paid', 'CheckedIn');
+            IF v_sold > 0 THEN
+                RAISE EXCEPTION 'This ticket type has % sold tickets and its fee cannot be modified.', v_sold;
+            END IF;
+        END IF;
         UPDATE event_ticket_types
            SET fee_formulas_id = p_formula,
                platform_fee_cents = app.compute_fee(price_cents, p_formula),
                updated_at = now()
          WHERE event_ticket_types_id = p_target;
     ELSIF p_kind = 'table' THEN
+        SELECT fee_formulas_id INTO v_old FROM event_tables WHERE event_tables_id = p_target;
+        IF NOT app.is_developer() AND v_old IS DISTINCT FROM p_formula THEN
+            SELECT COUNT(*)::int INTO v_sold
+              FROM tables
+             WHERE event_tables_id = p_target
+               AND (status = 'Booked' OR (status = 'Locked' AND lock_expires_at > now()));
+            IF v_sold > 0 THEN
+                RAISE EXCEPTION 'This table type has % sold or held tables and its fee cannot be modified.', v_sold;
+            END IF;
+        END IF;
         UPDATE event_tables
            SET fee_formulas_id = p_formula,
                platform_fee_cents = app.compute_fee(price_cents, p_formula),
@@ -81,4 +107,5 @@ BEGIN
     ELSE
         RAISE EXCEPTION 'Unknown target kind %', p_kind USING ERRCODE = '22023';
     END IF;
+    RETURN v_old;
 END; $$;

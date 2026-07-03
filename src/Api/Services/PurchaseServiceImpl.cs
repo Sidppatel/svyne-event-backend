@@ -48,8 +48,9 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         await using var cmd = new NpgsqlCommand(
             "SELECT tt.event_ticket_types_id, tt.label, tt.price_cents, COALESCE(tt.platform_fee_cents, 0), "
             + "COALESCE(tt.max_quantity, 0), COALESCE(tt.description, ''), tt.fee_formulas_id, COALESCE(tt.capacity, 0), "
-            + "COALESCE(bp.selling_price_cents, tt.price_cents) "
+            + "COALESCE(bp.selling_price_cents, tt.price_cents), COALESCE(vs.sold_count, 0) "
             + "FROM event_ticket_types tt "
+            + "LEFT JOIN vw_event_ticket_types_summary vs ON vs.event_ticket_types_id = tt.event_ticket_types_id "
             + "LEFT JOIN prices p ON p.events_id = tt.events_id AND p.pricing_type = 'TicketTier' "
             + "AND lower(p.name) = lower(tt.label) AND p.is_active "
             + "LEFT JOIN LATERAL sp_calculate_price(p.prices_id, 1, now(), -1) bp ON p.prices_id IS NOT NULL "
@@ -68,7 +69,8 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
                 Description = reader.GetString(5),
                 FeeFormulasId = reader.IsDBNull(6) ? string.Empty : reader.GetGuid(6).ToString(),
                 Capacity = reader.GetInt32(7),
-                SellingPriceCents = reader.GetInt32(8)
+                SellingPriceCents = reader.GetInt32(8),
+                SoldCount = reader.GetInt32(9)
             });
         }
         return response;

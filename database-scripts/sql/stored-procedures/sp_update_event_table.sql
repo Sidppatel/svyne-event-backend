@@ -10,12 +10,31 @@ CREATE OR REPLACE FUNCTION sp_update_event_table(
 ) RETURNS void LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
-DECLARE v_price int; v_formula uuid;
+DECLARE
+    v_price int; v_formula uuid;
+    v_old_price int; v_old_formula uuid; v_old_capacity int; v_sold int;
 BEGIN
     SELECT COALESCE(p_price_cents, price_cents),
-           app.resolve_fee_formula(p_fee_formulas_id, tenants_id)
-      INTO v_price, v_formula
+           app.resolve_fee_formula(p_fee_formulas_id, tenants_id),
+           price_cents, fee_formulas_id, capacity
+      INTO v_price, v_formula, v_old_price, v_old_formula, v_old_capacity
       FROM event_tables WHERE event_tables_id = p_id;
+
+    SELECT COUNT(*)::int INTO v_sold
+      FROM tables
+     WHERE event_tables_id = p_id
+       AND (status = 'Booked' OR (status = 'Locked' AND lock_expires_at > now()));
+
+    IF v_sold > 0 THEN
+        IF (p_price_cents IS NOT NULL AND p_price_cents IS DISTINCT FROM v_old_price)
+           OR (p_fee_formulas_id IS DISTINCT FROM v_old_formula) THEN
+            RAISE EXCEPTION 'This table type has % sold or held tables and its price cannot be modified.', v_sold;
+        END IF;
+        IF p_capacity IS NOT NULL AND p_capacity < v_old_capacity THEN
+            RAISE EXCEPTION 'This table type has % sold or held tables and its capacity cannot be reduced.', v_sold;
+        END IF;
+    END IF;
+
     UPDATE event_tables SET
         label = COALESCE(p_label, label),
         capacity = COALESCE(p_capacity, capacity),

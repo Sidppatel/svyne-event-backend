@@ -26,7 +26,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
 
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT success, message, guest_name, status_str FROM sp_check_in_ticket_by_token(@qr, @ev, @staff)", connection);
+            "SELECT success, message, guest_name, status_str FROM sp_check_in_ticket_by_token(@qr, @ev, @staff, 'qr_scan')", connection);
         cmd.Parameters.AddWithValue("qr", request.QrToken);
         cmd.Parameters.AddWithValue("ev", eventId);
         cmd.Parameters.AddWithValue("staff", tenantContext.UsersId!);
@@ -234,7 +234,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
         {
             // Try by booking number
             await using (var cmd = new NpgsqlCommand(
-                "SELECT success, message, guest_name, status_str FROM sp_check_in_booking_by_number(@code, @ev, @staff)", connection))
+                "SELECT success, message, guest_name, status_str FROM sp_check_in_booking_by_number(@code, @ev, @staff, 'manual_entry')", connection))
             {
                 cmd.Parameters.AddWithValue("code", request.CodeOrId);
                 cmd.Parameters.AddWithValue("ev", eventId);
@@ -253,7 +253,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
             if (!success)
             {
                 await using (var cmd = new NpgsqlCommand(
-                    "SELECT success, message, guest_name, status_str FROM sp_check_in_booking_by_token(@code, @ev, @staff)", connection))
+                    "SELECT success, message, guest_name, status_str FROM sp_check_in_booking_by_token(@code, @ev, @staff, 'manual_entry')", connection))
                 {
                     cmd.Parameters.AddWithValue("code", request.CodeOrId);
                     cmd.Parameters.AddWithValue("ev", eventId);
@@ -273,7 +273,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
             if (!success && Guid.TryParse(request.CodeOrId, out var bookingGuid))
             {
                 await using (var cmd = new NpgsqlCommand(
-                    "SELECT success, message, guest_name, status_str FROM sp_check_in_booking(@id, @ev, @staff)", connection))
+                    "SELECT success, message, guest_name, status_str FROM sp_check_in_booking(@id, @ev, @staff, 'manual_entry')", connection))
                 {
                     cmd.Parameters.AddWithValue("id", bookingGuid);
                     cmd.Parameters.AddWithValue("ev", eventId);
@@ -293,7 +293,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
         {
             // Try by ticket code
             await using (var cmd = new NpgsqlCommand(
-                "SELECT success, message, guest_name, status_str FROM sp_check_in_ticket_by_code(@code, @ev, @staff)", connection))
+                "SELECT success, message, guest_name, status_str FROM sp_check_in_ticket_by_code(@code, @ev, @staff, 'manual_entry')", connection))
             {
                 cmd.Parameters.AddWithValue("code", request.CodeOrId);
                 cmd.Parameters.AddWithValue("ev", eventId);
@@ -312,7 +312,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
             if (!success)
             {
                 await using (var cmd = new NpgsqlCommand(
-                    "SELECT success, message, guest_name, status_str FROM sp_check_in_ticket_by_token(@code, @ev, @staff)", connection))
+                    "SELECT success, message, guest_name, status_str FROM sp_check_in_ticket_by_token(@code, @ev, @staff, 'manual_entry')", connection))
                 {
                     cmd.Parameters.AddWithValue("code", request.CodeOrId);
                     cmd.Parameters.AddWithValue("ev", eventId);
@@ -332,7 +332,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
             if (!success && Guid.TryParse(request.CodeOrId, out var ticketGuid))
             {
                 await using (var cmd = new NpgsqlCommand(
-                    "SELECT success, message, guest_name, status_str FROM sp_check_in_ticket(@id, @ev, @staff)", connection))
+                    "SELECT success, message, guest_name, status_str FROM sp_check_in_ticket(@id, @ev, @staff, 'manual_entry')", connection))
                 {
                     cmd.Parameters.AddWithValue("id", ticketGuid);
                     cmd.Parameters.AddWithValue("ev", eventId);
@@ -356,6 +356,62 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
             HolderName = holderName,
             Status = status
         };
+    }
+
+    public override async Task<ListCheckInLogsResponse> ListCheckInLogs(ListCheckInLogsRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        var eventId = Guid.Parse(request.EventsId);
+        await VerifyAccessAsync(eventId, ct);
+
+        var pageSize = request.PageSize is > 0 and <= 500 ? request.PageSize : 50;
+        var offset = request.Page > 0 ? (request.Page - 1) * pageSize : 0;
+
+        var response = new ListCheckInLogsResponse();
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT checkin_logs_id, staff_name, attendee_name, booking_number, ticket_code, ticket_type_label, "
+            + "timestamp, method, status, failure_reason, COUNT(*) OVER() "
+            + "FROM vw_checkin_logs WHERE events_id = @ev "
+            + "AND (@staff IS NULL OR staff_user_id = @staff) "
+            + "AND (@method IS NULL OR method = @method) "
+            + "AND (@status IS NULL OR status = @status) "
+            + "ORDER BY timestamp DESC LIMIT @limit OFFSET @offset", connection);
+        cmd.Parameters.AddWithValue("ev", eventId);
+        cmd.Parameters.Add(new NpgsqlParameter("staff", NpgsqlTypes.NpgsqlDbType.Uuid)
+        {
+            Value = string.IsNullOrEmpty(request.StaffUserId) ? DBNull.Value : Guid.Parse(request.StaffUserId)
+        });
+        cmd.Parameters.Add(new NpgsqlParameter("method", NpgsqlTypes.NpgsqlDbType.Text)
+        {
+            Value = string.IsNullOrEmpty(request.Method) ? DBNull.Value : request.Method
+        });
+        cmd.Parameters.Add(new NpgsqlParameter("status", NpgsqlTypes.NpgsqlDbType.Text)
+        {
+            Value = string.IsNullOrEmpty(request.Status) ? DBNull.Value : request.Status
+        });
+        cmd.Parameters.AddWithValue("limit", pageSize);
+        cmd.Parameters.AddWithValue("offset", offset);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            response.TotalCount = (int)reader.GetInt64(10);
+            response.Logs.Add(new CheckInLogEntry
+            {
+                CheckinLogsId = reader.GetGuid(0).ToString(),
+                StaffName = reader.GetString(1),
+                AttendeeName = reader.GetString(2),
+                BookingNumber = reader.GetString(3),
+                TicketCode = reader.GetString(4),
+                TicketTypeLabel = reader.GetString(5),
+                Timestamp = new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(6), DateTimeKind.Utc)).ToUnixTimeSeconds(),
+                Method = reader.GetString(7),
+                Status = reader.GetString(8),
+                FailureReason = reader.GetString(9)
+            });
+        }
+        return response;
     }
 
     private async Task VerifyAccessAsync(Guid eventId, CancellationToken ct)

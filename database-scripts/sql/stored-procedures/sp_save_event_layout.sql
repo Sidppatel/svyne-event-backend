@@ -26,12 +26,27 @@ BEGIN
     DELETE FROM tables
     WHERE events_id = p_event_id
       AND tables_id <> ALL(v_request_ids)
-      AND tables_id <> ALL(p_locked_ids);
+      AND tables_id <> ALL(p_locked_ids)
+      AND status <> 'Booked'
+      AND NOT (status = 'Locked' AND lock_expires_at > now());
 
     FOR v_table IN SELECT * FROM jsonb_array_elements(p_tables)
     LOOP
         v_id := NULLIF(v_table->>'Id', '')::uuid;
         IF v_id IS NOT NULL AND v_id = ANY(p_locked_ids) THEN
+            CONTINUE;
+        END IF;
+        IF v_id IS NOT NULL AND EXISTS(
+            SELECT 1 FROM tables
+            WHERE tables_id = v_id
+              AND (status = 'Booked' OR (status = 'Locked' AND lock_expires_at > now()))
+        ) THEN
+            UPDATE tables SET
+                pos_x = (v_table->>'PosX')::numeric,
+                pos_y = (v_table->>'PosY')::numeric,
+                sort_order = (v_table->>'SortOrder')::int,
+                updated_at = now()
+            WHERE tables_id = v_id;
             CONTINUE;
         END IF;
 

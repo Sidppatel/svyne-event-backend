@@ -702,6 +702,9 @@ public class EventPlatformDbContext(
                 .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Ticket).WithMany().HasForeignKey(e => e.TicketId)
                 .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            entity.Property(e => e.Method).HasMaxLength(20).HasDefaultValue("qr_scan");
+            entity.Property(e => e.Status).HasMaxLength(10).HasDefaultValue("success");
+            entity.Property(e => e.FailureReason).HasMaxLength(60);
         });
 
         modelBuilder.Entity<Table>(entity =>

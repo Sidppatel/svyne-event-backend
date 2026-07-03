@@ -68,4 +68,5 @@ message AssignFeeFormulaRequest {
   string kind = 1;           // "ticket" | "table"
   string target_id = 2;
   string fee_formulas_id = 3; // empty clears the formula
+  string reason = 4;         // required audit note for developer overrides
 }

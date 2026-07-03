@@ -149,4 +149,5 @@ message PriceBreakdown {
 message SetTenantDefaultFeeFormulaRequest {
   string tenants_id = 1;
   string fee_formulas_id = 2;        // empty = clear default
+  string reason = 3;                 // required audit note
 }

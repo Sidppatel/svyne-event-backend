@@ -109,12 +109,37 @@ public sealed class FeeServiceImpl : FeeService.FeeServiceBase
         {
             throw new RpcException(new Status(StatusCode.InvalidArgument, "kind must be 'ticket' or 'table'"));
         }
+        if (tenantContext.IsDeveloper && string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "An override reason is required"));
+        }
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-        await using var cmd = new NpgsqlCommand("SELECT sp_set_fee_formula(@kind, @target, @formula)", connection);
-        cmd.Parameters.AddWithValue("kind", request.Kind);
-        cmd.Parameters.AddWithValue("target", Guid.Parse(request.TargetId));
-        cmd.Parameters.AddWithValue("formula", string.IsNullOrEmpty(request.FeeFormulasId) ? DBNull.Value : Guid.Parse(request.FeeFormulasId));
-        await cmd.ExecuteNonQueryAsync(ct);
+        string previousFormula;
+        await using (var cmd = new NpgsqlCommand("SELECT sp_set_fee_formula(@kind, @target, @formula)", connection))
+        {
+            cmd.Parameters.AddWithValue("kind", request.Kind);
+            cmd.Parameters.AddWithValue("target", Guid.Parse(request.TargetId));
+            cmd.Parameters.AddWithValue("formula", string.IsNullOrEmpty(request.FeeFormulasId) ? DBNull.Value : Guid.Parse(request.FeeFormulasId));
+            var oldValue = await cmd.ExecuteScalarAsync(ct);
+            previousFormula = oldValue is Guid oldId ? oldId.ToString() : string.Empty;
+        }
+
+        var metadataJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            kind = request.Kind,
+            from = previousFormula,
+            to = request.FeeFormulasId,
+            reason = request.Reason
+        });
+        await using (var auditCmd = new NpgsqlCommand(
+            "SELECT sp_create_audit_log('FeeOverride', @actorType, @actor, 'FeeTarget', @subject, 'fee_formula_assigned', @meta, NULL, NULL)", connection))
+        {
+            auditCmd.Parameters.AddWithValue("actorType", tenantContext.IsDeveloper ? "Developer" : "Admin");
+            auditCmd.Parameters.AddWithValue("actor", (object?)tenantContext.UsersId ?? DBNull.Value);
+            auditCmd.Parameters.AddWithValue("subject", Guid.Parse(request.TargetId));
+            auditCmd.Parameters.AddWithValue("meta", metadataJson);
+            await auditCmd.ExecuteNonQueryAsync(ct);
+        }
         return new AckResponse { Success = true, Message = "Fee formula assigned" };
     }
 

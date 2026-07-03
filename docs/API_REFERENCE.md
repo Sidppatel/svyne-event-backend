@@ -40,11 +40,13 @@ Client setup (React/Next.js/mobile, codegen, auth interceptor): see [FRONTEND_IN
 
 - Booking: Create, ReserveOpenCapacity, Confirm, Cancel, Refund, Get, List, GetBookingStats.
 - Ticket: Get, ListTickets, Claim, Invite.
-- CheckIn: Scan(qr_token), GetCheckInStats.
+- CheckIn: Scan(qr_token), GetCheckInStats, ListEventsForStaff, GetGuestList, CheckInGuest, `ListCheckInLogs(events_id, staff_user_id?, method?, status?, page, page_size)` → paged audit entries (staff name, attendee, booking #, ticket code/type, timestamp, method ∈ {qr_scan, manual_entry}, status ∈ {success, failed}, failure_reason ∈ {invalid_ticket, wrong_event, already_checked_in, booking_not_paid, ticket_not_claimed, booking_not_found}). Staff limited to assigned events within the ±24h window; admins/developers unrestricted. Every check-in attempt (success and failure) is persisted to `checkin_logs` with method/status/failure_reason; reads via `vw_checkin_logs`.
+- `ListEventTicketTypes` items include `sold_count` (Pending/Paid/CheckedIn seats) so admin UIs can render sale locks.
 
 ### TableBookingService (booking.proto)
 
 - ListTablesForEvent, SaveEventLayout, LockTable, ReleaseTableLock, Create/Delete EventTable, Create/Delete EventTicketType.
+- **Sale locking** (enforced in `sp_*`, surfaced as `FailedPrecondition` with a human-readable message): once a ticket type has Pending/Paid/CheckedIn seats its label, price, and fee formula are immutable and it cannot be deleted; capacity/quantity cannot drop below sold. Once a table is Booked (or actively Locked) it cannot be deleted or moved to another table type, and its table type's price/fee cannot change nor capacity shrink; `SaveEventLayout` silently preserves sold/held tables (position-only updates). `ChangeEventStatus` refuses reverting an event with sales to Draft; `DeleteEvent` refuses when active orders exist (mark the event Cancelled instead). Metadata (description, sort order, colors, positions) stays editable.
 
 ### admin.proto
 
@@ -72,6 +74,11 @@ All revenue figures are the organizer's own prices (`subtotal_cents` / `selling_
 - `ListTenantReportingAccess(PageRequest)` → all tenants with tier, override flag, and effective advanced access (search on name/slug; from `vw_tenant_reporting_access`).
 - `SetTenantTier(tenants_id, tier)` → Ack — tier ∈ {free, starter, professional, business, enterprise}; audited (`TenantTier` / `tier_changed` with from/to); takes effect immediately (access cache invalidated).
 - `SetTenantAdvancedReporting(tenants_id, enabled)` → Ack — developer override; audited (`advanced_reporting_toggled`); immediate.
+
+### Fee overrides (fees.proto / pricing.proto) — audited
+
+- `FeeService.AssignFeeFormula(kind, target_id, fee_formulas_id, reason)` → Ack — attaches/clears a formula on a ticket type or table type. `reason` required for developers; every change writes an `audit_logs` row (`FeeOverride` / `fee_formula_assigned` with kind, from, to, reason). Non-developers are blocked from changing the fee on items with sales (same sale-locking rule).
+- `PricingService.SetTenantDefaultFeeFormula(tenants_id, fee_formulas_id, reason)` → Ack — developer-only tenant-level override; `reason` required; audited (`FeeOverride` / `tenant_default_fee_changed` with from/to/reason).
 
 ## REST endpoints (exceptions)
 

@@ -1,7 +1,10 @@
+DROP FUNCTION IF EXISTS sp_check_in_booking_by_token(text, uuid, uuid);
+
 CREATE OR REPLACE FUNCTION sp_check_in_booking_by_token(
     p_qr_token text,
     p_event_id uuid,
-    p_staff_user_id uuid
+    p_staff_user_id uuid,
+    p_method text DEFAULT 'qr_scan'
 )
 RETURNS TABLE(
     success boolean,
@@ -22,10 +25,11 @@ BEGIN
     WHERE qr_token = p_qr_token;
 
     IF NOT FOUND THEN
+        PERFORM sp_log_checkin_attempt(p_event_id, p_staff_user_id, NULL, NULL, p_method, 'failed', 'booking_not_found');
         RETURN QUERY SELECT false, 'Booking not found'::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::timestamptz;
         RETURN;
     END IF;
 
-    RETURN QUERY SELECT * FROM sp_check_in_booking(v_booking_id, p_event_id, p_staff_user_id);
+    RETURN QUERY SELECT * FROM sp_check_in_booking(v_booking_id, p_event_id, p_staff_user_id, p_method);
 END;
 $$;

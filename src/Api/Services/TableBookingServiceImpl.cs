@@ -234,7 +234,14 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         cmd.Parameters.AddWithValue("cap", request.Capacity == 0 ? DBNull.Value : request.Capacity);
         cmd.Parameters.AddWithValue("active", request.IsActive);
         cmd.Parameters.AddWithValue("desc", (object?)NullIfEmpty(request.Description) ?? DBNull.Value);
-        await cmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (PostgresException ex)
+        {
+            throw MapSaleLockConflict(ex);
+        }
         return new AckResponse { Success = true, Message = "Ticket type updated" };
     }
 
@@ -385,6 +392,10 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
     public override Task<AckResponse> DeleteTableTemplate(UuidValue request, ServerCallContext context)
         => RunVoid("SELECT sp_deactivate_table_template(@id)", request.Value, context, "Table template deactivated");
 
+    private static RpcException MapSaleLockConflict(PostgresException ex) => ex.SqlState == "P0001"
+        ? new RpcException(new Status(StatusCode.FailedPrecondition, ex.MessageText))
+        : new RpcException(new Status(StatusCode.Internal, ex.MessageText));
+
     private static RpcException MapTemplateConflict(PostgresException ex) => ex.SqlState == "23505"
         ? new RpcException(new Status(StatusCode.AlreadyExists,
             ex.ConstraintName?.Contains("color") == true
@@ -405,7 +416,14 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(sql, connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(id));
-        await cmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (PostgresException ex)
+        {
+            throw MapSaleLockConflict(ex);
+        }
         return new AckResponse { Success = true, Message = okMessage };
     }
 

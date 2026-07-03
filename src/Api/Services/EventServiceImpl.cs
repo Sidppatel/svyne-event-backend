@@ -67,7 +67,14 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         await using var cmd = new NpgsqlCommand("SELECT sp_change_event_status(@id, @status)", connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(request.EventsId));
         cmd.Parameters.AddWithValue("status", request.Status);
-        await cmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (PostgresException ex)
+        {
+            throw MapPostgres(ex);
+        }
         return new AckResponse { Success = true, Message = "Status updated", Code = 0 };
     }
 
@@ -171,7 +178,14 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand("SELECT sp_delete_event(@id)", connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(request.Value));
-        await cmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (PostgresException ex)
+        {
+            throw MapPostgres(ex);
+        }
         return new AckResponse { Success = true, Message = "Event deleted" };
     }
 

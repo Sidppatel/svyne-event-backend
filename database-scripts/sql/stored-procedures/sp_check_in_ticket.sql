@@ -1,7 +1,10 @@
+DROP FUNCTION IF EXISTS sp_check_in_ticket(uuid, uuid, uuid);
+
 CREATE OR REPLACE FUNCTION sp_check_in_ticket(
     p_ticket_id uuid,
     p_event_id uuid,
-    p_staff_user_id uuid
+    p_staff_user_id uuid,
+    p_method text DEFAULT 'qr_scan'
 )
 RETURNS TABLE(
     success boolean,
@@ -36,10 +39,12 @@ BEGIN
     FOR UPDATE;
 
     IF NOT FOUND THEN
+        PERFORM sp_log_checkin_attempt(p_event_id, p_staff_user_id, NULL, NULL, p_method, 'failed', 'invalid_ticket');
         RETURN;
     END IF;
 
     IF v_event_id <> p_event_id THEN
+        PERFORM sp_log_checkin_attempt(p_event_id, p_staff_user_id, v_booking_id, v_ticket_id, p_method, 'failed', 'wrong_event');
         RETURN QUERY SELECT
             false, 'Ticket is for a different event'::text,
             NULL::text, NULL::text, NULL::text, NULL::text, NULL::timestamptz;
@@ -62,6 +67,7 @@ BEGIN
     END IF;
 
     IF v_ticket_status = 'CheckedIn' THEN
+        PERFORM sp_log_checkin_attempt(p_event_id, p_staff_user_id, v_booking_id, v_ticket_id, p_method, 'failed', 'already_checked_in');
         RETURN QUERY SELECT
             false,
             ('Ticket already checked in (Seat #' || v_seat_number || ')')::text,
@@ -71,6 +77,7 @@ BEGIN
     END IF;
 
     IF v_booking_status NOT IN ('Paid', 'CheckedIn') THEN
+        PERFORM sp_log_checkin_attempt(p_event_id, p_staff_user_id, v_booking_id, v_ticket_id, p_method, 'failed', 'booking_not_paid');
         RETURN QUERY SELECT
             false,
             ('Booking is ' || v_booking_status || ' — cannot check in')::text,
@@ -80,6 +87,7 @@ BEGIN
     END IF;
 
     IF v_ticket_status <> 'Claimed' AND v_ticket_status <> 'Unassigned' THEN
+        PERFORM sp_log_checkin_attempt(p_event_id, p_staff_user_id, v_booking_id, v_ticket_id, p_method, 'failed', 'ticket_not_claimed');
         RETURN QUERY SELECT
             false,
             CASE WHEN v_ticket_status = 'Invited'
@@ -91,14 +99,11 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Update ticket status to CheckedIn
     UPDATE booking_lines
        SET status = 'CheckedIn', updated_at = now()
      WHERE booking_lines_id = v_ticket_id;
 
-    -- Insert log
-    INSERT INTO checkin_logs (checkin_logs_id, event_id, staff_user_id, booking_id, ticket_id, timestamp, created_at, updated_at)
-    VALUES (gen_random_uuid(), p_event_id, p_staff_user_id, v_booking_id, v_ticket_id, now(), now(), now());
+    PERFORM sp_log_checkin_attempt(p_event_id, p_staff_user_id, v_booking_id, v_ticket_id, p_method, 'success', NULL);
 
     SELECT NOT EXISTS (
         SELECT 1 FROM booking_lines

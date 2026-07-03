@@ -43,6 +43,7 @@ service CheckInService {
   rpc ListEventsForStaff (svyne.common.Empty) returns (ListEventsForStaffResponse);
   rpc GetGuestList (svyne.common.UuidValue) returns (GetGuestListResponse);
   rpc CheckInGuest (CheckInGuestRequest) returns (ScanResponse);
+  rpc ListCheckInLogs (ListCheckInLogsRequest) returns (ListCheckInLogsResponse);
 }
 
 message Booking {
@@ -164,6 +165,7 @@ message EventTicketType {
   // Current selling price after active price rules (equals price_cents when no
   // discount applies). Display hint; QuoteCart is authoritative at booking time.
   int32 selling_price_cents = 9;
+  int32 sold_count = 10;
 }
 
 message ListEventTicketTypesResponse {
@@ -258,6 +260,33 @@ message CheckInStats {
   int32 total = 1;
   int32 checked_in = 2;
   int32 remaining = 3;
+}
+
+message ListCheckInLogsRequest {
+  string events_id = 1;
+  string staff_user_id = 2;
+  string method = 3;
+  string status = 4;
+  int32 page = 5;
+  int32 page_size = 6;
+}
+
+message CheckInLogEntry {
+  string checkin_logs_id = 1;
+  string staff_name = 2;
+  string attendee_name = 3;
+  string booking_number = 4;
+  string ticket_code = 5;
+  string ticket_type_label = 6;
+  int64 timestamp = 7;
+  string method = 8;
+  string status = 9;
+  string failure_reason = 10;
+}
+
+message ListCheckInLogsResponse {
+  repeated CheckInLogEntry logs = 1;
+  int32 total_count = 2;
 }
 
 message StaffEvent {
