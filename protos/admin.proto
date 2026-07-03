@@ -38,6 +38,10 @@ service LogService {
   rpc GetAdminLogs (LogQuery) returns (LogPage);
   rpc GetDeveloperLogs (LogQuery) returns (LogPage);
   rpc GetSystemLogs (LogQuery) returns (LogPage);
+  rpc GetErrorLogs (ErrorLogQuery) returns (ErrorLogPage);
+  rpc GetErrorLogStats (svyne.common.Empty) returns (ErrorLogStats);
+  rpc ResolveErrorLog (ResolveErrorLogRequest) returns (svyne.common.AckResponse);
+  rpc ReportClientErrors (ClientErrorBatch) returns (svyne.common.AckResponse);
 }
 
 service FeedbackService {
@@ -165,6 +169,82 @@ message LogEntry {
 message LogPage {
   repeated LogEntry entries = 1;
   svyne.common.PageMeta meta = 2;
+}
+
+message ErrorLogQuery {
+  svyne.common.PageRequest page = 1;
+  string severity = 2;
+  string source = 3;
+  int32 resolved_filter = 4;
+  string search = 5;
+  int64 from = 6;
+  int64 to = 7;
+}
+
+message ErrorLogEntry {
+  string id = 1;
+  int64 timestamp = 2;
+  string severity = 3;
+  string message = 4;
+  string exception_type = 5;
+  string stack_trace = 6;
+  string request_path = 7;
+  string request_method = 8;
+  int32 status_code = 9;
+  string users_id = 10;
+  string tenants_id = 11;
+  string ip_address = 12;
+  string correlation_id = 13;
+  string source = 14;
+  bool resolved = 15;
+  string resolved_notes = 16;
+  string resolved_by = 17;
+  int64 resolved_at = 18;
+  string metadata_json = 19;
+}
+
+message ErrorLogPage {
+  repeated ErrorLogEntry entries = 1;
+  svyne.common.PageMeta meta = 2;
+}
+
+message ErrorLogCount {
+  string key = 1;
+  int32 count = 2;
+}
+
+message ErrorLogStats {
+  int32 total_today = 1;
+  int32 total_week = 2;
+  int32 total_month = 3;
+  int32 unresolved = 4;
+  repeated ErrorLogCount by_severity = 5;
+  repeated ErrorLogCount daily = 6;
+  repeated ErrorLogCount top_types = 7;
+  repeated ErrorLogCount top_tenants = 8;
+}
+
+message ResolveErrorLogRequest {
+  string error_log_id = 1;
+  string notes = 2;
+}
+
+message ClientErrorReport {
+  string error_type = 1;
+  string message = 2;
+  string stack_trace = 3;
+  string severity = 4;
+  string page_url = 5;
+  string previous_url = 6;
+  string screen_size = 7;
+  string viewport_size = 8;
+  string session_id = 9;
+  string breadcrumbs_json = 10;
+  int64 occurred_at = 11;
+}
+
+message ClientErrorBatch {
+  repeated ClientErrorReport reports = 1;
 }
 
 message CreateFeedbackRequest {

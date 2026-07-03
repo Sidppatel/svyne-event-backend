@@ -1,4 +1,5 @@
 using Svyne.Api.Data;
+using Svyne.Api.ErrorHandling;
 
 namespace Svyne.Api.Payments;
 
@@ -12,11 +13,13 @@ public sealed class HoldExpiryWorker : BackgroundService
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
     private readonly Db db;
     private readonly ILogger<HoldExpiryWorker> logger;
+    private readonly ErrorLogger errorLogger;
 
-    public HoldExpiryWorker(Db db, ILogger<HoldExpiryWorker> logger)
+    public HoldExpiryWorker(Db db, ILogger<HoldExpiryWorker> logger, ErrorLogger errorLogger)
     {
         this.db = db;
         this.logger = logger;
+        this.errorLogger = errorLogger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -42,7 +45,13 @@ public sealed class HoldExpiryWorker : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Hold expiry sweep failed");
+                    await errorLogger.LogErrorAsync(
+                        ErrorSeverity.Medium,
+                        "HoldExpirySweepFailure",
+                        "Hold expiry sweep failed",
+                        ex,
+                        new ErrorContext { RequestPath = "background:HoldExpiryWorker" },
+                        CancellationToken.None);
                 }
             }
             while (await timer.WaitForNextTickAsync(stoppingToken));

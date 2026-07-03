@@ -55,6 +55,7 @@ Client setup (React/Next.js/mobile, codegen, auth interceptor): see [FRONTEND_IN
 - StaffService: ListStaffForEvent, AssignStaff, UnassignStaff.
 - InvitationService: CreateInvitation, AcceptInvitation, RevokeInvitation, ListInvitations.
 - LogService: GetAdminLogs, GetSystemLogs, GetDeveloperLogs.
+- LogService (error logging): `GetErrorLogs(ErrorLogQuery)` → filtered/paged error entries (severity, source backend|frontend, resolved, search on message/path/error-id/correlation-id) — developer-only, reads `sp_get_error_logs`/`sp_count_error_logs`; `GetErrorLogStats()` → today/7d/30d totals, unresolved count, by-severity/daily/top-types/top-tenants breakdowns — developer-only, reads `sp_get_error_log_stats`; `ResolveErrorLog(error_log_id, notes)` → Ack — developer-only, writes resolution into `audit_logs.metadata_json` via `sp_resolve_error_log`; `ReportClientErrors(ClientErrorBatch)` → Ack — anonymous frontend error intake (max 20/batch, 60/IP/minute, client severity capped at High), persisted through the central `ErrorLogger`.
 - FeedbackService: CreateFeedback, ListFeedback, DeleteFeedback.
 - HealthService: Check.
 
@@ -89,6 +90,17 @@ All revenue figures are the organizer's own prices (`subtotal_cents` / `selling_
 ## Config (env)
 
 `DATABASE_URL`, `JWT_SIGNING_KEY`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_LIFETIME_MINUTES`, `PASSWORD_PEPPER_V<n>`, `PASSWORD_PEPPER_CURRENT`, `STRIPE_WEBHOOK_SECRET`, `PUBLIC_BASE_URL`, `GRPC_HTTP2_ONLY` (local plaintext native-gRPC testing).
+
+Error logging/alerting (all optional): `ERROR_LOGGING_DISABLED=true` turns persistence off; `ERROR_ALERTS_SLACK_WEBHOOK_URL` enables Slack notifications for Critical/High errors; `ERROR_ALERTS_EMAIL_TO` (+ `ERROR_ALERTS_EMAIL_FROM`) enables email notifications for Critical errors. Unset in development = log to DB only, no notifications.
+
+## Error handling architecture
+
+- Central class: `src/Api/ErrorHandling/ErrorLogger.cs` — `LogErrorAsync(severity, type, message, exception?, ErrorContext?)` / `LogWarningAsync` / `LogInfoAsync`, all returning the error id. Severities: Critical, High, Medium, Low, Warning, Info. Persists into the unified `audit_logs` table (actor_type `System`, event_type `Exception|Warning|Info`, full context in `metadata_json`) via `sp_log_system_error` on the bootstrap connection so RLS can never block error capture. Never throws — falls back to `ILogger` if persistence fails.
+- Automatic capture: `ErrorLoggingInterceptor` wraps every gRPC unary call (unexpected exceptions logged as High, rethrown as `Internal` with an error reference); `ErrorLoggingMiddleware` wraps the REST endpoints (uploads, images, redirects) and returns 500 with the error reference; Stripe webhook failures log as Critical with the Stripe event id; `HoldExpiryWorker` sweep failures log as Medium.
+- Correlation: `TenantContext.CorrelationId` (new Guid per request) is stamped on every logged error.
+- Frontend intake: `src/shared/errorReporter.ts` captures window errors, unhandled promise rejections, console.error calls, React render errors (`ErrorBoundary`), and failed RPCs (INTERNAL/UNKNOWN/UNAVAILABLE/DEADLINE_EXCEEDED via `callRpc`); batches with session-level dedupe (max 30/session), queues to localStorage when offline, and ships to `LogService.ReportClientErrors` with page/previous URL, screen/viewport size, session id, and last-10-click breadcrumbs.
+- Dashboard: developer portal `/logs` — totals, severity/type/tenant breakdowns, filterable + searchable list, per-error detail (stack trace, request/user/business context, correlation id), resolve-with-notes.
+- Retention: `sp_cleanup_old_logs` (existing) covers `audit_logs` rows.
 
 ## Run
 

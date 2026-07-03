@@ -49,7 +49,9 @@ builder.Services.AddCors(options =>
             .WithExposedHeaders("grpc-status", "grpc-message", "grpc-status-details-bin");
     }));
 
-builder.Services.AddGrpc();
+builder.Services.AddGrpc(options => options.Interceptors.Add<Svyne.Api.ErrorHandling.ErrorLoggingInterceptor>());
+builder.Services.AddSingleton<Svyne.Api.ErrorHandling.ErrorLogger>();
+builder.Services.AddSingleton<Svyne.Api.ErrorHandling.ErrorLoggingInterceptor>();
 builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<StartupSeeder>();
 builder.Services.AddSingleton<AppSettingsProvider>();
@@ -96,6 +98,7 @@ var app = builder.Build();
 
 await app.Services.GetRequiredService<StartupSeeder>().SeedAsync(CancellationToken.None);
 
+app.UseMiddleware<Svyne.Api.ErrorHandling.ErrorLoggingMiddleware>();
 app.UseRouting();
 app.UseCors(CorsPolicy);
 app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
@@ -147,7 +150,7 @@ app.MapPost("/webhooks/stripe", async (
     HttpRequest request,
     IConfiguration config,
     Svyne.Api.Payments.StripeWebhookHandler handler,
-    ILoggerFactory loggerFactory,
+    Svyne.Api.ErrorHandling.ErrorLogger errorLogger,
     CancellationToken ct) =>
 {
     using var reader = new StreamReader(request.Body);
@@ -175,9 +178,23 @@ app.MapPost("/webhooks/stripe", async (
     }
     catch (Exception ex)
     {
-        // Return 500 so Stripe retries; never swallow a processing failure.
-        loggerFactory.CreateLogger("StripeWebhook")
-            .LogError(ex, "Failed handling Stripe event {Type} {Id}", stripeEvent.Type, stripeEvent.Id);
+        await errorLogger.LogErrorAsync(
+            Svyne.Api.ErrorHandling.ErrorSeverity.Critical,
+            "StripeWebhookFailure",
+            $"Failed handling Stripe event {stripeEvent.Type} {stripeEvent.Id}",
+            ex,
+            new Svyne.Api.ErrorHandling.ErrorContext
+            {
+                RequestPath = "/webhooks/stripe",
+                RequestMethod = "POST",
+                StatusCode = StatusCodes.Status500InternalServerError,
+                Extra = new Dictionary<string, string>
+                {
+                    ["stripe_event_type"] = stripeEvent.Type,
+                    ["stripe_event_id"] = stripeEvent.Id
+                }
+            },
+            ct);
         return Results.StatusCode(StatusCodes.Status500InternalServerError);
     }
 
