@@ -3,8 +3,6 @@ using System.Net.Http.Json;
 
 namespace Svyne.Api.Email;
 
-// Sends via Resend (https://resend.com/docs/api-reference/emails/send-email).
-// Used in non-local environments; LocalFileEmailService handles dev. See Program.cs.
 public sealed class ResendEmailService : IEmailService
 {
     private static readonly HttpClient http = new() { BaseAddress = new Uri("https://api.resend.com") };

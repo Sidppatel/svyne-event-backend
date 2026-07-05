@@ -38,8 +38,6 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
         {
             return new MonthlyReport();
         }
-        // Platform-fee figures are developer-only: tenant admins see just their
-        // own payout (their ticket prices), never the fee split or gross charge.
         var isDeveloper = tenantContext.IsDeveloper;
         return new MonthlyReport
         {
@@ -55,9 +53,6 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
         var ct = context.CancellationToken;
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
 
-        // Pull the connected account id so we can refresh capability flags live
-        // from Stripe. Locally there are no account.updated webhooks, so the DB
-        // flags would otherwise stay stale after onboarding completes.
         string? accountId = null;
         await using (var look = new NpgsqlCommand(
             "SELECT stripe_connected_account_id FROM tenants WHERE tenants_id = @t", connection))
@@ -98,7 +93,6 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
             }
             catch (Stripe.StripeException)
             {
-                // Fall back to the persisted flags below if Stripe is unreachable.
             }
         }
 
@@ -133,8 +127,6 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
 
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
 
-        // Reuse the tenant's connected account or create a fresh Express one,
-        // pre-filled from the prefill captured on the tenant record.
         string? accountId;
         var prefill = new StripeAccountPrefill();
         await using (var cmd = new NpgsqlCommand(

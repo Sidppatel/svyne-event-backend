@@ -71,16 +71,16 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         
         NpgsqlCommand cmd;
-        if (tenantContext.IsDeveloper || tenantContext.Role == 1 || tenantContext.Role == 3)
+        if (tenantContext.IsDeveloper || tenantContext.Role == Lookups.UserRoles.Admin || tenantContext.Role == Lookups.UserRoles.SubTenant)
         {
             cmd = new NpgsqlCommand(
-                "SELECT events_id, title, slug, start_date, end_date, status, (SELECT name FROM venues WHERE venues_id = e.venues_id) FROM events e WHERE e.tenants_id = @t AND e.status IN ('Published', 'Completed') ORDER BY e.start_date", connection);
+                "SELECT events_id, title, slug, start_date, end_date, status, venue_name FROM vw_events WHERE tenants_id = @t AND status IN ('Published', 'Completed') ORDER BY start_date", connection);
             cmd.Parameters.AddWithValue("t", tenantContext.TenantsId!);
         }
         else
         {
             cmd = new NpgsqlCommand(
-                "SELECT events_id, title, slug, start_date, end_date, status, (SELECT name FROM venues WHERE venues_id = e.venues_id) FROM sp_list_events_for_staff(@u, 24) e", connection);
+                "SELECT v.events_id, v.title, v.slug, v.start_date, v.end_date, v.status, v.venue_name FROM vw_events v WHERE v.events_id IN (SELECT events_id FROM sp_list_events_for_staff(@u, 24)) ORDER BY v.start_date", connection);
             cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
         }
 
@@ -416,11 +416,11 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
 
     private async Task VerifyAccessAsync(Guid eventId, CancellationToken ct)
     {
-        if (tenantContext.IsDeveloper || tenantContext.Role == 1 || tenantContext.Role == 3)
+        if (tenantContext.IsDeveloper || tenantContext.Role == Lookups.UserRoles.Admin || tenantContext.Role == Lookups.UserRoles.SubTenant)
         {
             return;
         }
-        if (tenantContext.Role == 2)
+        if (tenantContext.Role == Lookups.UserRoles.Staff)
         {
             
             await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
@@ -431,7 +431,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
             var allowed = (bool)(await cmd.ExecuteScalarAsync(ct))!;
             if (allowed) return;
         }
-        if (tenantContext.Role == 4)
+        if (tenantContext.Role == Lookups.UserRoles.EventManager)
         {
             
             await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);

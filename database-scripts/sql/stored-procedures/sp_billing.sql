@@ -1,13 +1,4 @@
--- Developer billing lifecycle: trials, subscriptions, Pay Per Event upgrades,
--- add-ons, and event-level fee overrides. All money amounts land in the
--- billing_charges ledger (source of truth for developer revenue reports).
--- Callers (DeveloperBillingServiceImpl) are developer-gated and write audit
--- logs; these functions hold the state transitions only.
---
--- ponytail: charges are ledger rows only — actual Stripe collection for
--- subscriptions/PPE is deferred; stripe_* id columns exist for when it lands.
 
--- ============ Trials ============
 
 CREATE OR REPLACE FUNCTION sp_start_trial(p_tenants_id uuid)
 RETURNS uuid LANGUAGE plpgsql
@@ -30,7 +21,6 @@ BEGIN
     RETURN v_id;
 END; $$;
 
--- Expires overdue trials back to the free tier. Returns count expired.
 CREATE OR REPLACE FUNCTION sp_expire_trials()
 RETURNS int LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
@@ -48,7 +38,6 @@ BEGIN
     RETURN v_count;
 END; $$;
 
--- Trials due a day-10 or day-13 reminder that has not been sent yet.
 CREATE OR REPLACE FUNCTION sp_trial_reminders_due()
 RETURNS TABLE(tenant_subscriptions_id uuid, tenants_id uuid, reminder_day int, trial_ends_at timestamptz)
 LANGUAGE sql STABLE
@@ -71,10 +60,7 @@ AS $$
      WHERE tenant_subscriptions_id = p_id;
 $$;
 
--- ============ Subscriptions ============
 
--- Creates a subscription (also converts a live trial). First month prorated to
--- the 1st of next month; renewals happen on the 1st (sp_renew_subscriptions).
 CREATE OR REPLACE FUNCTION sp_create_subscription(p_tenants_id uuid, p_tier text)
 RETURNS uuid LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
@@ -84,7 +70,6 @@ BEGIN
     IF p_tier NOT IN ('starter','professional','business','enterprise') THEN
         RAISE EXCEPTION 'invalid subscription tier: %', p_tier;
     END IF;
-    -- A live trial converts; a live paid subscription blocks (use change-tier).
     UPDATE tenant_subscriptions SET status = 'canceled', canceled_at = now(), updated_at = now()
      WHERE tenants_id = p_tenants_id AND status = 'trial';
     IF EXISTS (SELECT 1 FROM tenant_subscriptions
@@ -94,7 +79,6 @@ BEGIN
 
     SELECT * INTO t FROM app.tier_pricing(p_tier);
     v_period_end := date_trunc('month', now()) + interval '1 month';
-    -- Prorate the first month by remaining fraction of the current month.
     v_charge := round(t.monthly_cents *
         extract(epoch FROM (v_period_end - now()))
         / extract(epoch FROM (v_period_end - date_trunc('month', now()))))::int;
@@ -114,8 +98,6 @@ BEGIN
     RETURN v_id;
 END; $$;
 
--- Upgrade: prorated difference charged now, tier switches immediately.
--- Downgrade: takes effect at period end via pending_tier. Returns old tier.
 CREATE OR REPLACE FUNCTION sp_change_subscription_tier(p_tenants_id uuid, p_tier text)
 RETURNS text LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
@@ -136,7 +118,6 @@ BEGIN
 
     SELECT * INTO t FROM app.tier_pricing(p_tier);
     IF t.monthly_cents > s.monthly_price_cents THEN
-        -- Upgrade now: charge the prorated difference for the rest of the period.
         v_delta := round((t.monthly_cents - s.monthly_price_cents) *
             GREATEST(extract(epoch FROM (s.current_period_end - now())), 0)
             / extract(epoch FROM interval '1 month'))::int;
@@ -148,7 +129,6 @@ BEGIN
             format('Upgrade %s → %s (prorated)', s.tier, p_tier), now(), now());
         PERFORM sp_set_tenant_tier(p_tenants_id, p_tier);
     ELSE
-        -- Downgrade at period end; features remain until then. No refunds.
         UPDATE tenant_subscriptions SET pending_tier = p_tier, updated_at = now()
          WHERE tenant_subscriptions_id = s.tenant_subscriptions_id;
     END IF;
@@ -176,9 +156,6 @@ BEGIN
     END IF;
 END; $$;
 
--- Rolls all subscriptions past their period end: cancel-at-period-end and
--- pending downgrades apply, everything else renews with a fresh monthly charge.
--- Run by BillingWorker. Returns rows processed.
 CREATE OR REPLACE FUNCTION sp_renew_subscriptions()
 RETURNS int LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
@@ -214,7 +191,6 @@ BEGIN
     RETURN v_count;
 END; $$;
 
--- ============ Pay Per Event ============
 
 CREATE OR REPLACE FUNCTION sp_activate_event_upgrade(p_events_id uuid, p_tier text)
 RETURNS uuid LANGUAGE plpgsql
@@ -244,7 +220,6 @@ BEGIN
     VALUES (gen_random_uuid(), v_tenant, 'pay_per_event', p_tier, p_events_id, t.price_cents,
         format('Pay Per Event: %s', replace(initcap(replace(p_tier, '_', ' ')), ' Event', ' Event')), now(), now());
 
-    -- Point the event's fee override at the PPE tier formula (beats tenant default).
     v_formula := app.ensure_tier_formula('ppe:' || p_tier, t.percent_bps, t.flat_cents, t.min_fee_cents);
     UPDATE events SET fee_formulas_id = v_formula, fee_override_expires_at = NULL, updated_at = now()
      WHERE events_id = p_events_id;
@@ -276,7 +251,6 @@ BEGIN
     PERFORM app.recompute_event_cached_fees(p_events_id);
 END; $$;
 
--- ============ Add-ons ============
 
 CREATE OR REPLACE FUNCTION sp_provision_addon(p_tenants_id uuid, p_type text, p_billing_period text, p_quantity int)
 RETURNS uuid LANGUAGE plpgsql
@@ -331,7 +305,6 @@ BEGIN
     END IF;
 END; $$;
 
--- Renews add-ons past their period end with a fresh charge. Returns count.
 CREATE OR REPLACE FUNCTION sp_renew_addons()
 RETURNS int LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
@@ -353,11 +326,7 @@ BEGIN
     RETURN v_count;
 END; $$;
 
--- ============ Event fee overrides ============
 
--- Re-resolves cached platform_fee_cents on an event's sellables that have no
--- explicit price-level formula (those keep their own). Cached values are
--- display-only; checkout always computes live via app.price_breakdown.
 CREATE OR REPLACE FUNCTION app.recompute_event_cached_fees(p_events_id uuid)
 RETURNS void LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
@@ -374,9 +343,6 @@ BEGIN
      WHERE events_id = p_events_id;
 END; $$;
 
--- Manual event-level fee override (non-profits, promos). Creates/updates a
--- dedicated 'override:event:<id>' formula and points the event at it. Silent
--- to tenants; audit is written by the calling service with the required reason.
 CREATE OR REPLACE FUNCTION sp_set_event_fee_override(
     p_events_id uuid, p_percent_bps int, p_flat_cents int,
     p_min_fee_cents int, p_max_fee_cents int, p_expires_at timestamptz

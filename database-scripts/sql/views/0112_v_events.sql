@@ -22,6 +22,7 @@ SELECT
     e.created_by_users_id AS users_id,
     e.created_at AS created_at,
     e.updated_at AS updated_at,
+    e.tenants_id AS tenants_id,
     v.name AS venue_name,
     COALESCE(a.line1, '') AS venue_address,
     COALESCE(a.city, '') AS venue_city,

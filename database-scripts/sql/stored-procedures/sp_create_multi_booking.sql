@@ -1,17 +1,5 @@
 DROP FUNCTION IF EXISTS sp_create_multi_booking(uuid, uuid, jsonb);
 
--- Cart checkout: create ONE Pending booking that aggregates many lines (any mix
--- of ticket tiers and tables) into a single transaction / Stripe PaymentIntent.
--- Pricing is fully server-authoritative (app.price_breakdown per line); the client
--- never supplies amounts. Each line stores an IMMUTABLE pricing snapshot (base,
--- selling, discount, applied rule, platform/gateway fees, final, currency) so
--- historical bookings never drift when rules or prices change later. Table lines
--- reserve the WHOLE table (seats = capacity) and lock the table row atomically for
--- the hold window. The whole cart succeeds or fails together.
---
--- p_lines: jsonb array of {"kind":"Ticket"|"Table","ref_id":uuid,"seats":int}
---   Ticket -> ref_id = event_ticket_types_id, seats = requested quantity
---   Table  -> ref_id = tables_id,            seats ignored (= table capacity)
 CREATE OR REPLACE FUNCTION sp_create_multi_booking(
     p_user_id uuid, p_event_id uuid, p_lines jsonb
 ) RETURNS TABLE(bookings_id uuid, booking_number text) LANGUAGE plpgsql
@@ -45,8 +33,6 @@ BEGIN
     SELECT COALESCE((SELECT value::int FROM app_settings WHERE key = 'booking_hold_seconds'), 600)
       INTO v_hold;
 
-    -- Pass 1: validate + resolve every line, locking each table row. No booking
-    -- writes yet, so any failure here aborts the whole cart cleanly.
     FOR v_line IN SELECT * FROM jsonb_array_elements(p_lines) LOOP
         v_kind := v_line->>'kind';
         v_ref := (v_line->>'ref_id')::uuid;
@@ -68,7 +54,6 @@ BEGIN
                 RAISE EXCEPTION 'Ticket type has no linked price' USING ERRCODE = '22023';
             END IF;
 
-            -- Per-tier cap: live seats already taken + this line.
             IF v_tt_max IS NOT NULL THEN
                 v_tt_sold := app.ticket_type_seats_live(v_ref);
                 IF v_tt_sold + v_seats > v_tt_max THEN
@@ -77,7 +62,6 @@ BEGIN
                 END IF;
             END IF;
 
-            -- Calculate single ticket unit price breakdown
             SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), 1,
                                      app.remaining_for_price(v_prices_id));
 
@@ -114,7 +98,6 @@ BEGIN
             IF v_tbl_status = 'Booked' THEN
                 RAISE EXCEPTION 'Table % already booked', v_ref USING ERRCODE = '23514';
             END IF;
-            -- A live lock owned by another user blocks; the buyer's own lock is fine.
             IF v_tbl_status = 'Locked' AND v_lock_exp IS NOT NULL AND v_lock_exp > now()
                AND v_locked_by IS DISTINCT FROM p_user_id THEN
                 RAISE EXCEPTION 'Table is currently held by another user' USING ERRCODE = '23514';
@@ -122,7 +105,6 @@ BEGIN
 
             v_seats := GREATEST(COALESCE(v_cap, 1), 1);
 
-            -- Calculate total table breakdown
             SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), v_seats,
                                      app.remaining_for_price(v_prices_id));
 
@@ -144,8 +126,6 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- Create the aggregate booking. All detail lives on the lines; booking totals
-    -- are the cart sum (total = subtotal + fee invariant preserved).
     LOOP
         v_attempt := v_attempt + 1;
         v_number := 'BK-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 10));
@@ -162,7 +142,6 @@ BEGIN
         END;
     END LOOP;
 
-    -- Pass 2: persist lines (with full immutable snapshot) + lock table rows.
     FOR v_line IN SELECT * FROM jsonb_array_elements(v_resolved) LOOP
         v_kind := v_line->>'kind';
         IF v_kind = 'Ticket' THEN

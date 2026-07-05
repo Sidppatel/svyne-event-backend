@@ -106,10 +106,8 @@ public sealed class InvitationServiceImpl : InvitationService.InvitationServiceB
             eventId = reader.IsDBNull(4) ? (Guid?)null : reader.GetGuid(4);
         }
 
-        // Hash the password
         var passwordHash = passwordHasher.Hash(request.Password);
 
-        // Sign up the user (create user account)
         Guid userId;
         await using (var signup = new NpgsqlCommand(
             "SELECT users_id FROM sp_signup_user(@tenant, @email, @hash, @first, @last, @pwd, @pv, @role)", connection))
@@ -125,14 +123,12 @@ public sealed class InvitationServiceImpl : InvitationService.InvitationServiceB
             userId = (Guid)(await signup.ExecuteScalarAsync(ct))!;
         }
 
-        // Accept invitation
         await using (var cmd = new NpgsqlCommand("SELECT sp_accept_invitation(@id)", connection))
         {
             cmd.Parameters.AddWithValue("id", id);
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
-        // If there was an associated event, automatically assign them access
         if (eventId.HasValue)
         {
             await using (var assign = new NpgsqlCommand(
@@ -140,7 +136,7 @@ public sealed class InvitationServiceImpl : InvitationService.InvitationServiceB
             {
                 assign.Parameters.AddWithValue("user", userId);
                 assign.Parameters.AddWithValue("event", eventId.Value);
-                assign.Parameters.AddWithValue("by", DBNull.Value); // Assigned automatically
+                assign.Parameters.AddWithValue("by", DBNull.Value);
                 await assign.ExecuteNonQueryAsync(ct);
             }
         }

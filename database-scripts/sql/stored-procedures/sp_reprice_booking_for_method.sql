@@ -1,16 +1,5 @@
 DROP FUNCTION IF EXISTS sp_reprice_booking_for_method(uuid, uuid, text);
 
--- Re-price a Pending booking for a chosen payment method WITHOUT touching the
--- immutable selling-price snapshot. Only the fee leg is swapped:
---   'card' -> service fee (resolved formula) + gateway fee (today's behavior)
---   'ach'  -> flat ACH fee replaces the service fee, gateway suppressed
--- Because the ACH fee is smaller than the service fee, the buyer's total drops;
--- baseline_total_cents (the card total) lets the UI show the savings. Fees are
--- server-authoritative — the client never supplies amounts.
---
--- Guards match sp_get_booking_for_payment: booking must exist, be owned by the
--- caller, be Pending, and hold must still be live. 'ach' is rejected unless the
--- tenant is ACH-enabled AND the event opted in.
 CREATE OR REPLACE FUNCTION sp_reprice_booking_for_method(
     p_booking_id uuid, p_user_id uuid, p_method text
 ) RETURNS TABLE(
@@ -66,7 +55,6 @@ BEGIN
     v_gw_formula := app.resolve_gateway_formula(v_tenant);
     v_ach_formula := app.resolve_ach_formula(v_tenant);
 
-    -- Re-fee every priced line (skip the zero-price child seats of a table).
     FOR v_line IN
         SELECT bl.booking_lines_id, bl.selling_price_cents, p.fee_formulas_id AS explicit_formula
           FROM booking_lines bl
@@ -76,7 +64,6 @@ BEGIN
     LOOP
         v_svc_formula := app.resolve_fee_formula(v_line.explicit_formula, v_event, v_tenant);
 
-        -- Card baseline (for savings), always computed.
         v_card_platform := app.compute_fee(v_line.selling_price_cents, v_svc_formula);
         v_card_gateway := app.compute_fee(v_line.selling_price_cents + v_card_platform, v_gw_formula);
 

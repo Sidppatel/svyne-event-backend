@@ -2,12 +2,6 @@ using Db;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-// Supabase exposes two pooler endpoints: transaction (port 6543) for runtime
-// queries and session (port 5432) for DDL. EF migrations need session.
-// MIGRATION_DATABASE_URL takes precedence so backend's runtime DATABASE_URL
-// (transaction pooler) doesn't have to change. Fall back to DATABASE_URL when
-// MIGRATION_DATABASE_URL is unset (e.g. local Supabase where one URL works
-// for both).
 var migrationUrl = Environment.GetEnvironmentVariable("MIGRATION_DATABASE_URL");
 if (!string.IsNullOrEmpty(migrationUrl))
 {

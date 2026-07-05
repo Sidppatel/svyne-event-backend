@@ -1,10 +1,3 @@
--- Row-level audit trigger emitting entity-change events into the unified audit_logs
--- table. Actor and tenant are read from the per-connection GUCs that Db.OpenAsync
--- sets from the caller's JWT (app.current_user_id / app.current_tenant), so every
--- write is attributed to who made it without any handler-side logging code. The
--- subject id is the table's PK column, which the model names <table>_id. A soft
--- delete (is_active true -> false) is recorded as a Delete, not an Update, so the
--- audit trail reads as the intent. Bound below to the pricing tables.
 CREATE OR REPLACE FUNCTION fn_audit_trigger() RETURNS trigger LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$

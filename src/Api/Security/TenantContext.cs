@@ -8,7 +8,7 @@ public sealed class TenantContext
     public int Role { get; set; }
     public string TenantSlug { get; set; } = string.Empty;
 
-    public bool IsDeveloper => Role == 99;
+    public bool IsDeveloper => Role == Lookups.UserRoles.Developer;
 
-    public bool IsEventScoped => Role == 2 || Role == 4;
+    public bool IsEventScoped => Role == Lookups.UserRoles.Staff || Role == Lookups.UserRoles.EventManager;
 }

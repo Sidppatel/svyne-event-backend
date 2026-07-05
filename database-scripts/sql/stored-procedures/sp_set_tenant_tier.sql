@@ -1,10 +1,5 @@
 DROP FUNCTION IF EXISTS sp_set_tenant_tier(uuid, text);
 
--- Assigns a tenant tier and re-points the tenant's default fee formula at the
--- tier's canonical rates (app.tier_pricing). A manually-set custom formula
--- (name not starting 'tier:') is preserved — a developer fee override outlives
--- tier switches. 'suspended' keeps the previous formula; sales are blocked by
--- app.assert_tenant_sellable.
 CREATE OR REPLACE FUNCTION sp_set_tenant_tier(p_tenants_id uuid, p_tier text)
 RETURNS text
 LANGUAGE plpgsql
@@ -25,7 +20,6 @@ BEGIN
 
     IF p_tier <> 'suspended' THEN
         SELECT name INTO v_current_name FROM fee_formulas WHERE fee_formulas_id = v_current_formula;
-        -- Only replace tier-managed (or missing) formulas; custom overrides stay.
         IF v_current_formula IS NULL OR v_current_name LIKE 'tier:%' THEN
             SELECT * INTO t FROM app.tier_pricing(p_tier);
             v_formula := app.ensure_tier_formula('tier:' || p_tier, t.percent_bps, t.flat_cents, t.min_fee_cents);

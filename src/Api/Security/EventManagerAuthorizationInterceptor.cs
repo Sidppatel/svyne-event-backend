@@ -3,16 +3,9 @@ using Grpc.Core.Interceptors;
 
 namespace Svyne.Api.Security;
 
-// Event managers (role 4) are scoped admins: full event-editing on assigned events,
-// nothing tenant-wide (financials, settings, invitations, staff management, other
-// events' bookings). Enforcement is fail-closed by a service whitelist — any gRPC
-// service not listed here is denied for role 4, so a service added later stays
-// locked until someone deliberately opens it. Per-event scoping (which events they
-// may touch inside the allowed services) is enforced separately by RLS and the
-// app.can_access_event() guards in the service methods.
 public sealed class EventManagerAuthorizationInterceptor : Interceptor
 {
-    private const int EventManagerRole = 4;
+    private const int EventManagerRole = Lookups.UserRoles.EventManager;
 
     private static readonly HashSet<string> AllowedServices = new(StringComparer.Ordinal)
     {
@@ -42,7 +35,6 @@ public sealed class EventManagerAuthorizationInterceptor : Interceptor
         return await continuation(request, context);
     }
 
-    // context.Method looks like "/svyne.event.EventService/GetEvent".
     private static bool IsAllowed(string method)
     {
         var segments = method.Split('/');

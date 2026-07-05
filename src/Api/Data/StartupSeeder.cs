@@ -99,7 +99,6 @@ public sealed class StartupSeeder
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
-        // Default service-fee formula: 6% of ticket price + $1.50 flat.
         await using (var formula = new NpgsqlCommand(
             "INSERT INTO fee_formulas (fee_formulas_id, name, percent_bps, flat_cents, is_active, created_at, updated_at) "
             + "SELECT gen_random_uuid(), @name, 600, 150, true, now(), now() "

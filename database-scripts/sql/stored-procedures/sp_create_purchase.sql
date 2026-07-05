@@ -1,12 +1,6 @@
 DROP FUNCTION IF EXISTS sp_create_booking(uuid, uuid, uuid, int, uuid, int, int, int, text, text);
 DROP FUNCTION IF EXISTS sp_create_booking(uuid, uuid, uuid, int, uuid, int, int, int, text);
 
--- Single-item booking (one table OR one open-ticket line). Like the cart path,
--- pricing is fully server-authoritative via app.price_breakdown and the result is
--- stored as booking_lines carrying the immutable snapshot. The bookings row
--- holds only the aggregate totals.
--- Client-sent amounts (p_subtotal_cents/p_fee_cents/p_total_cents) are accepted for
--- signature compatibility but IGNORED.
 CREATE OR REPLACE FUNCTION sp_create_booking(
     p_user_id uuid, p_event_id uuid, p_table_id uuid, p_seats int,
     p_event_ticket_type_id uuid,
@@ -48,7 +42,6 @@ BEGIN
     SELECT COALESCE((SELECT value::int FROM app_settings WHERE key = 'booking_hold_seconds'), 600)
       INTO v_hold;
 
-    -- Idempotency / resume: reuse this user's live Pending hold for the same table.
     IF p_status = 'Pending' AND p_table_id IS NOT NULL THEN
         SELECT b.bookings_id, b.booking_number INTO v_id, v_number
           FROM bookings b
@@ -76,7 +69,6 @@ BEGIN
         END IF;
     END IF;
 
-    -- Guard: do not let two users hold the same table at once.
     IF p_table_id IS NOT NULL THEN
         SELECT status INTO v_tbl_status FROM tables WHERE tables_id = p_table_id FOR UPDATE;
         IF v_tbl_status = 'Booked' THEN
@@ -91,7 +83,6 @@ BEGIN
         END IF;
     END IF;
 
-    -- Calculate price breakdown
     IF v_kind = 'Ticket' THEN
         SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), 1,
                                  app.remaining_for_price(v_prices_id));
@@ -100,7 +91,6 @@ BEGIN
                                  app.remaining_for_price(v_prices_id));
     END IF;
 
-    -- Booking number BK-* must be unique per (event, user); retry on collision.
     LOOP
         v_attempt := v_attempt + 1;
         v_number := 'BK-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 10));

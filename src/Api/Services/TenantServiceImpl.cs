@@ -66,9 +66,6 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         var adminUsersId = reader.GetGuid(1);
         await reader.CloseAsync();
 
-        // Persist the Stripe onboarding prefill in the tenant's profile row so it
-        // can be edited later (developer-only) and reused when the account is
-        // created at onboarding time.
         await using (var prefillCmd = new NpgsqlCommand(
             "INSERT INTO tenant_stripe_profiles "
             + "(tenants_id, business_type, business_url, product_description, mcc, support_email, created_at, updated_at) "
@@ -83,9 +80,6 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
             await prefillCmd.ExecuteNonQueryAsync(ct);
         }
 
-        // Pre-create the Stripe connected account with prefill so the seller's
-        // Express onboarding form starts populated. Best-effort: a Stripe failure
-        // must not abort tenant creation (account is created lazily otherwise).
         if (stripe.Configured)
         {
             try
@@ -116,22 +110,17 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
             }
         }
 
-        // Setup opens on the admin portal host. {slug} still supported for back-compat if configured.
         var setupBase = await settings.GetStringAsync("tenant_setup_link_base", "http://admin.localhost:5173/set-password", ct);
         setupBase = string.IsNullOrEmpty(request.Slug)
             ? setupBase.Replace("{slug}.", string.Empty).Replace("{slug}", string.Empty)
             : setupBase.Replace("{slug}", request.Slug);
         var separator = setupBase.Contains('?') ? "&" : "?";
         var setupUrl = $"{setupBase}{separator}token={magicToken}";
-        // The admin portal is a shared host (admin.localhost); carry the tenant slug
-        // so the portal stores it and login can resolve the correct tenant.
         if (!string.IsNullOrEmpty(request.Slug))
         {
             setupUrl += $"&tenant={Uri.EscapeDataString(request.Slug)}";
         }
 
-        // Local dev writes the email as .html to LOCAL_EMAIL_DIR instead of sending.
-        // Best-effort: a delivery failure must not abort tenant creation.
         try
         {
             var fromAddress = await settings.GetStringAsync("tenant_setup_email", "noreply@svyne.com", ct);
@@ -455,8 +444,6 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
 
     public override async Task<TenantStripeProfile> GetTenantStripeProfile(UuidValue request, ServerCallContext context)
     {
-        // Developer or the tenant's own admin may view. Only developer may edit
-        // (see UpdateTenantStripeProfile) — the data is developer-owned.
         RequireDeveloperOrOwnTenant(request.Value);
         var ct = context.CancellationToken;
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
@@ -491,8 +478,6 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         var tenantsId = Guid.Parse(request.TenantsId);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
 
-        // Keep legal_name in sync with the business name the developer entered,
-        // and grab the connected account id (if any) to push edits to Stripe.
         string? accountId;
         await using (var cmd = new NpgsqlCommand(
             "UPDATE tenants SET legal_name = COALESCE(@bizname, legal_name), updated_at = now() "
@@ -503,7 +488,6 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
             accountId = await cmd.ExecuteScalarAsync(ct) as string;
         }
 
-        // Upsert the developer-owned Stripe profile row.
         await using (var cmd = new NpgsqlCommand(
             "INSERT INTO tenant_stripe_profiles "
             + "(tenants_id, business_type, business_url, product_description, mcc, support_email, created_at, updated_at) "
@@ -522,7 +506,6 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
-        // If the connected account already exists, push the edits to Stripe too.
         if (stripe.Configured && !string.IsNullOrEmpty(accountId))
         {
             try
@@ -555,7 +538,6 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         }
     }
 
-    // Read-only access: a developer (any tenant) or a member of the requested tenant.
     private void RequireDeveloperOrOwnTenant(string tenantsId)
     {
         if (tenantContext.IsDeveloper)

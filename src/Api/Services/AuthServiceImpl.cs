@@ -8,7 +8,7 @@ using Svyne.Protos.Auth;
 
 namespace Svyne.Api.Services;
 
-public sealed class AuthServiceImpl : AuthService.AuthServiceBase
+public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
 {
     private readonly Db db;
     private readonly PasswordHasher passwordHasher;
@@ -37,10 +37,6 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
     {
         var ct = context.CancellationToken;
         var emailHash = EmailHasher.Hash(request.Email);
-        // Public attendees can share one email across tenants, so the public portal
-        // must disambiguate by tenant slug. Admin/staff/developer accounts are
-        // single-tenant: the tenant comes from the matched user row, and the slug
-        // (which may be a stale value left in the client) is ignored.
         var portal = request.Portal ?? string.Empty;
         var slugScoped = portal.Length == 0 || portal == "public";
         var tenantsId = slugScoped ? await ResolveTenantAsync(request.TenantSlug, ct) : null;
@@ -56,18 +52,13 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
         {
             var rowTenant = reader.IsDBNull(1) ? (Guid?)null : reader.GetGuid(1);
             var role = reader.GetInt16(4);
-            // Skip rows whose role this portal does not serve. This lets a single
-            // email that exists in several tenants/roles resolve to the right account
-            // (e.g. attendee row skipped on the admin portal) instead of failing.
             if (!PortalAllowsRole(portal, role))
             {
                 continue;
             }
-            // Public portal: tenant must match the requested slug. Other portals:
-            // accept the row and take the tenant from it.
             if (slugScoped)
             {
-                var matchesTenant = role == 99 ? rowTenant is null : rowTenant == tenantsId;
+                var matchesTenant = role == Lookups.UserRoles.Developer ? rowTenant is null : rowTenant == tenantsId;
                 if (!matchesTenant)
                 {
                     continue;
@@ -93,7 +84,6 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
             var lastName = reader.GetString(7);
             var emailVerified = reader.GetBoolean(8);
             await reader.CloseAsync();
-            // Use the account's real tenant slug, not the (possibly stale) request slug.
             var tenantSlug = rowTenant is { } rt
                 ? await ResolveSlugAsync(rt, ct) ?? request.TenantSlug
                 : string.Empty;
@@ -195,7 +185,7 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
         cmd.Parameters.AddWithValue("h", emailHash);
         cmd.Parameters.AddWithValue("first", payload.GivenName ?? string.Empty);
         cmd.Parameters.AddWithValue("last", payload.FamilyName ?? string.Empty);
-        cmd.Parameters.AddWithValue("role", (short)0);
+        cmd.Parameters.AddWithValue("role", (short)Lookups.UserRoles.PublicViewer);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -370,216 +360,6 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
     private static object NullIfEmpty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? DBNull.Value : value;
 
-    public override async Task<Svyne.Protos.Common.AckResponse> RequestMagicLink(MagicLinkRequest request, ServerCallContext context)
-    {
-        var ct = context.CancellationToken;
-        var tenantsId = await ResolveTenantAsync(request.TenantSlug, ct);
-        var token = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
-        var hash = EmailHasher.Hash(token);
-        await using var connection = await db.OpenAsync(null, null, ct);
-        await using var cmd = new NpgsqlCommand("SELECT sp_create_magic_link(@email, @hash, @exp, @t)", connection);
-        cmd.Parameters.AddWithValue("email", request.Email);
-        cmd.Parameters.AddWithValue("hash", hash);
-        cmd.Parameters.AddWithValue("exp", DateTime.UtcNow.AddMinutes(15));
-        cmd.Parameters.AddWithValue("t", (object?)tenantsId ?? DBNull.Value);
-        await cmd.ExecuteNonQueryAsync(ct);
-        return new Svyne.Protos.Common.AckResponse { Success = true, Message = "Magic link sent" };
-    }
-
-    public override async Task<AuthResponse> VerifyMagicLink(MagicLinkVerifyRequest request, ServerCallContext context)
-    {
-        var ct = context.CancellationToken;
-        var hash = EmailHasher.Hash(request.Token);
-        string email;
-        Guid? linkTenant;
-        await using (var connection = await db.OpenAsync(null, null, ct))
-        await using (var cmd = new NpgsqlCommand("SELECT email, tenants_id FROM sp_consume_magic_link(@h)", connection))
-        {
-            cmd.Parameters.AddWithValue("h", hash);
-            await using var consumeReader = await cmd.ExecuteReaderAsync(ct);
-            if (!await consumeReader.ReadAsync(ct))
-            {
-                throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid or expired link"));
-            }
-            email = consumeReader.GetString(0);
-            linkTenant = consumeReader.IsDBNull(1) ? (Guid?)null : consumeReader.GetGuid(1);
-        }
-        var emailHash = EmailHasher.Hash(email);
-        await using var conn = await db.OpenAsync(null, null, ct);
-        await using var lookup = new NpgsqlCommand(
-            "SELECT users_id, tenants_id, role, email, first_name, last_name, email_verified "
-            + "FROM sp_get_user_by_email_hash(@h) WHERE is_active = true AND tenants_id IS NOT DISTINCT FROM @tenant LIMIT 1", conn);
-        lookup.Parameters.AddWithValue("h", emailHash);
-        lookup.Parameters.AddWithValue("tenant", (object?)linkTenant ?? DBNull.Value);
-
-        Guid usersId;
-        Guid? rowTenant;
-        short role;
-        string firstName;
-        string lastName;
-        bool emailVerified;
-        await using (var reader = await lookup.ExecuteReaderAsync(ct))
-        {
-            if (await reader.ReadAsync(ct))
-            {
-                usersId = reader.GetGuid(0);
-                rowTenant = reader.IsDBNull(1) ? (Guid?)null : reader.GetGuid(1);
-                role = reader.GetInt16(2);
-                firstName = reader.GetString(4);
-                lastName = reader.GetString(5);
-                emailVerified = reader.GetBoolean(6);
-            }
-            else if (linkTenant is { } tenant)
-            {
-                await reader.CloseAsync();
-                (usersId, rowTenant, role, firstName, lastName, emailVerified) =
-                    await CreateAttendeeAsync(conn, tenant, email, emailHash, ct);
-            }
-            else
-            {
-                throw new RpcException(new Status(StatusCode.NotFound, "User not found"));
-            }
-        }
-
-        var profile = new UserProfile
-        {
-            UsersId = usersId.ToString(),
-            TenantsId = rowTenant?.ToString() ?? string.Empty,
-            Email = email,
-            FirstName = firstName,
-            LastName = lastName,
-            Role = role,
-            EmailVerified = emailVerified
-        };
-        return BuildAuth(usersId, email, rowTenant, role, string.Empty, profile);
-    }
-
-    public override async Task<Svyne.Protos.Common.AckResponse> RequestPasswordReset(PasswordResetRequest request, ServerCallContext context)
-    {
-        var ct = context.CancellationToken;
-        var emailHash = EmailHasher.Hash(request.Email);
-        await using var connection = await db.OpenAsync(null, null, ct);
-        Guid usersId;
-        await using (var lookup = new NpgsqlCommand("SELECT users_id FROM sp_get_user_by_email_hash(@h) LIMIT 1", connection))
-        {
-            lookup.Parameters.AddWithValue("h", emailHash);
-            var result = await lookup.ExecuteScalarAsync(ct);
-            if (result is not Guid u)
-            {
-                return new Svyne.Protos.Common.AckResponse { Success = true, Message = "If the account exists, a reset link was sent" };
-            }
-            usersId = u;
-        }
-        var token = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
-        var hash = EmailHasher.Hash(token);
-        var expiryHours = await settings.GetIntAsync("password_reset_expiry_hours", 1, ct);
-        await using var cmd = new NpgsqlCommand("SELECT sp_create_password_reset_token(@u, @h, @exp, @email, NULL)", connection);
-        cmd.Parameters.AddWithValue("u", usersId);
-        cmd.Parameters.AddWithValue("h", hash);
-        cmd.Parameters.AddWithValue("exp", DateTime.UtcNow.AddHours(expiryHours));
-        cmd.Parameters.AddWithValue("email", request.Email);
-        await cmd.ExecuteNonQueryAsync(ct);
-
-        // Local dev writes the email as .html to LOCAL_EMAIL_DIR instead of sending.
-        // Best-effort: never leak delivery state to the caller (avoids account enumeration).
-        try
-        {
-            var fromAddress = await settings.GetStringAsync("password_reset_email", "noreply@svyne.com", ct);
-            var subject = await settings.GetStringAsync("password_reset_subject", "Reset your Svyne password", ct);
-            // Prefer the caller's portal origin so the reset link returns to the same
-            // host the user requested it from (admin/staff portal or tenant subdomain).
-            // Fall back to the configured {slug} template when no origin is supplied.
-            string resetBase;
-            if (!string.IsNullOrEmpty(request.Origin))
-            {
-                resetBase = $"{request.Origin.TrimEnd('/')}/set-password";
-            }
-            else
-            {
-                var template = await settings.GetStringAsync("password_reset_link_base", "http://{slug}.localhost:5173/set-password", ct);
-                resetBase = string.IsNullOrEmpty(request.TenantSlug)
-                    ? template.Replace("{slug}.", string.Empty).Replace("{slug}", string.Empty)
-                    : template.Replace("{slug}", request.TenantSlug);
-            }
-            var separator = resetBase.Contains('?') ? "&" : "?";
-            var resetLink = $"{resetBase}{separator}token={token}";
-            // Shared portals (admin/staff host) need the tenant slug to resolve the
-            // tenant at login. Tenant subdomains carry it in the host already.
-            if (!string.IsNullOrEmpty(request.TenantSlug))
-            {
-                resetLink += $"&tenant={Uri.EscapeDataString(request.TenantSlug)}";
-            }
-            var values = new Dictionary<string, string>
-            {
-                ["Subject"] = subject,
-                ["Email"] = request.Email,
-                ["ResetLink"] = resetLink,
-                ["ExpiryHours"] = expiryHours.ToString()
-            };
-            var htmlBody = await templates.RenderAsync("password_reset.html", values, ct);
-            await email.SendAsync(fromAddress, request.Email, subject, htmlBody, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to send password reset email");
-        }
-
-        return new Svyne.Protos.Common.AckResponse { Success = true, Message = "If the account exists, a reset link was sent" };
-    }
-
-    // Called when the reset page loads: validates the token without consuming it so
-    // the form is only shown for a live, single-use link. Consumption happens in
-    // SetPassword on submit. A used/expired/unknown token returns an error telling
-    // the user to request a new reset link.
-    public override async Task<Svyne.Protos.Common.AckResponse> ValidatePasswordResetToken(ValidateResetTokenRequest request, ServerCallContext context)
-    {
-        var ct = context.CancellationToken;
-        var hash = EmailHasher.Hash(request.Token);
-        await using var connection = await db.OpenAsync(null, null, ct);
-        await using var cmd = new NpgsqlCommand(
-            "SELECT is_used, expires_at FROM sp_get_password_reset_token(@h)", connection);
-        cmd.Parameters.AddWithValue("h", hash);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
-        {
-            throw new RpcException(new Status(StatusCode.Unauthenticated,
-                "Invalid token. Please request a new password reset link."));
-        }
-        var isUsed = reader.GetBoolean(0);
-        var expiresAt = reader.GetDateTime(1);
-        if (isUsed || expiresAt <= DateTime.UtcNow)
-        {
-            throw new RpcException(new Status(StatusCode.Unauthenticated,
-                "This reset link has already been used or has expired. Please request a new one."));
-        }
-        return new Svyne.Protos.Common.AckResponse { Success = true, Message = "Token valid" };
-    }
-
-    public override async Task<Svyne.Protos.Common.AckResponse> SetPassword(SetPasswordRequest request, ServerCallContext context)
-    {
-        var ct = context.CancellationToken;
-        var hash = EmailHasher.Hash(request.Token);
-        await using var connection = await db.OpenAsync(null, null, ct);
-        Guid usersId;
-        await using (var consume = new NpgsqlCommand("SELECT users_id FROM sp_consume_password_reset_token(@h)", connection))
-        {
-            consume.Parameters.AddWithValue("h", hash);
-            var result = await consume.ExecuteScalarAsync(ct);
-            if (result is not Guid u)
-            {
-                throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid or expired token"));
-            }
-            usersId = u;
-        }
-        var newHash = passwordHasher.Hash(request.NewPassword);
-        await using var cmd = new NpgsqlCommand("SELECT sp_set_user_password(@u, @h, @pv, true, NULL)", connection);
-        cmd.Parameters.AddWithValue("u", usersId);
-        cmd.Parameters.AddWithValue("h", newHash);
-        cmd.Parameters.AddWithValue("pv", passwordHasher.CurrentVersion);
-        await cmd.ExecuteNonQueryAsync(ct);
-        return new Svyne.Protos.Common.AckResponse { Success = true, Message = "Password updated" };
-    }
-
     public override Task<AuthResponse> RefreshToken(RefreshTokenRequest request, ServerCallContext context)
     {
         var v = jwt.ValidationParameters;
@@ -666,9 +446,6 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
             reader.GetBoolean(5));
     }
 
-    // Enforce that the account's role is allowed on the portal it's logging into.
-    // Empty portal = no restriction (back-compat for non-portal callers).
-    // Roles: Attendee=0, Admin=1, Staff=2, SubTenant=3, Developer=99.
     private static bool PortalAllowsRole(string portal, int role)
     {
         if (string.IsNullOrEmpty(portal))
@@ -678,9 +455,9 @@ public sealed class AuthServiceImpl : AuthService.AuthServiceBase
         return portal switch
         {
             "public" => true,
-            "admin" => role == 1 || role == 3 || role == 99,
-            "staff" => role == 2 || role == 1 || role == 3 || role == 99,
-            "developer" => role == 99,
+            "admin" => role == Lookups.UserRoles.Admin || role == Lookups.UserRoles.SubTenant || role == Lookups.UserRoles.Developer,
+            "staff" => role == Lookups.UserRoles.Staff || role == Lookups.UserRoles.Admin || role == Lookups.UserRoles.SubTenant || role == Lookups.UserRoles.Developer,
+            "developer" => role == Lookups.UserRoles.Developer,
             _ => true
         };
     }

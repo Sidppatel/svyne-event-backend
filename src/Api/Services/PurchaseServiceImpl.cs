@@ -12,7 +12,7 @@ using Svyne.Api.Email;
 
 namespace Svyne.Api.Services;
 
-public sealed class BookingServiceImpl : BookingService.BookingServiceBase
+public sealed partial class BookingServiceImpl : BookingService.BookingServiceBase
 {
     private readonly Db db;
     private readonly TenantContext tenantContext;
@@ -124,8 +124,6 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Cart is empty"));
         }
 
-        // Build the lines payload the SP consumes. Pricing is resolved server-side,
-        // so only kind/ref/seats are passed through.
         var lines = request.Lines.Select(l => new
         {
             kind = l.Kind,
@@ -167,7 +165,6 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            // Columns: kind, ref_id, label, seats, then the 11 breakdown columns.
             var bd = new PriceBreakdown
             {
                 BasePriceCents = reader.GetInt32(4),
@@ -218,247 +215,6 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         return quote;
     }
 
-    public override async Task<PaymentIntentResponse> CreatePaymentIntent(PaymentIntentRequest request, ServerCallContext context)
-    {
-        var ct = context.CancellationToken;
-        RequireUser();
-        if (!stripe.Configured)
-        {
-            throw new RpcException(new Status(StatusCode.FailedPrecondition, "Payments are not configured"));
-        }
-        if (!Guid.TryParse(request.BookingsId, out var bookingId))
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid booking id"));
-        }
-
-        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-
-        long subtotal, fee, total;
-        string currency, status;
-        string? connectedAccount, existingIntent;
-        DateTime? holdExpiresAt;
-        bool achAllowed;
-        try
-        {
-            await using var cmd = new NpgsqlCommand(
-                "SELECT status, subtotal_cents, fee_cents, total_cents, currency, connected_account_id, "
-                + "charges_enabled, existing_intent_id, hold_expires_at, ach_allowed "
-                + "FROM sp_get_booking_for_payment(@b, @u)", connection);
-            cmd.Parameters.AddWithValue("b", bookingId);
-            cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct))
-            {
-                throw new RpcException(new Status(StatusCode.NotFound, "Booking not found"));
-            }
-            status = reader.GetString(0);
-            subtotal = reader.GetInt32(1);
-            fee = reader.GetInt32(2);
-            total = reader.GetInt32(3);
-            currency = reader.GetString(4);
-            connectedAccount = reader.IsDBNull(5) ? null : reader.GetString(5);
-            var chargesEnabled = !reader.IsDBNull(6) && reader.GetBoolean(6);
-            existingIntent = reader.IsDBNull(7) ? null : reader.GetString(7);
-            holdExpiresAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8);
-            achAllowed = !reader.IsDBNull(9) && reader.GetBoolean(9);
-
-            if (string.IsNullOrEmpty(connectedAccount) || !chargesEnabled)
-            {
-                throw new RpcException(new Status(StatusCode.FailedPrecondition,
-                    "Seller is not yet able to accept payments"));
-            }
-        }
-        catch (PostgresException ex)
-        {
-            throw MapPostgres(ex);
-        }
-
-        // Separate ACH checkout: re-price the booking to the ACH fee up front so the
-        // bank-only intent is created at the discounted total.
-        var preferAch = request.PreferredMethod == "ach" && achAllowed;
-        if (preferAch)
-        {
-            try
-            {
-                await using var rp = new NpgsqlCommand(
-                    "SELECT total_cents, fee_cents FROM sp_reprice_booking_for_method(@b, @u, 'ach')", connection);
-                rp.Parameters.AddWithValue("b", bookingId);
-                rp.Parameters.AddWithValue("u", tenantContext.UsersId!);
-                await using var rr = await rp.ExecuteReaderAsync(ct);
-                if (await rr.ReadAsync(ct))
-                {
-                    total = rr.GetInt32(0);
-                    fee = rr.GetInt32(1);
-                }
-            }
-            catch (PostgresException ex)
-            {
-                throw MapPostgres(ex);
-            }
-        }
-
-        Stripe.PaymentIntent intent;
-        try
-        {
-            // Resume: reuse an already-committed intent (succeeded/processing) so we never
-            // double-charge. A merely-payable existing intent isn't reused on the ACH path,
-            // because it may be a card intent — create a fresh bank-only one instead.
-            if (!string.IsNullOrEmpty(existingIntent))
-            {
-                var existing = await stripe.GetPaymentIntentAsync(existingIntent, ct);
-                if (existing.Status == "succeeded" || existing.Status == "processing")
-                {
-                    intent = existing;
-                }
-                else if (!preferAch && StripeService.IsPayable(existing.Status))
-                {
-                    intent = existing;
-                }
-                else
-                {
-                    intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct);
-                }
-            }
-            else
-            {
-                intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct);
-            }
-        }
-        catch (StripeException ex)
-        {
-            throw new RpcException(new Status(StatusCode.FailedPrecondition, $"Stripe payment setup failed: {ex.StripeError?.Message ?? ex.Message}"));
-        }
-
-        // transfer_amount = what the seller receives = ticket subtotal.
-        await using (var save = new NpgsqlCommand(
-            "SELECT sp_upsert_stripe_intent(@b, @intent, @amount, @transfer, @cur)", connection))
-        {
-            save.Parameters.AddWithValue("b", bookingId);
-            save.Parameters.AddWithValue("intent", intent.Id);
-            save.Parameters.AddWithValue("amount", (int)total);
-            save.Parameters.AddWithValue("transfer", (int)subtotal);
-            save.Parameters.AddWithValue("cur", currency);
-            await save.ExecuteScalarAsync(ct);
-        }
-
-        return new PaymentIntentResponse
-        {
-            ClientSecret = intent.ClientSecret,
-            PublishableKey = stripe.PublishableKey,
-            PaymentIntentId = intent.Id,
-            Status = intent.Status,
-            AmountCents = total,
-            HoldExpiresAt = holdExpiresAt is { } h ? new DateTimeOffset(h, TimeSpan.Zero).ToUnixTimeSeconds() : 0,
-            AchAllowed = achAllowed
-        };
-    }
-
-    public override async Task<UpdatePaymentMethodResponse> UpdatePaymentIntentForMethod(
-        UpdatePaymentMethodRequest request, ServerCallContext context)
-    {
-        var ct = context.CancellationToken;
-        RequireUser();
-        if (!stripe.Configured)
-        {
-            throw new RpcException(new Status(StatusCode.FailedPrecondition, "Payments are not configured"));
-        }
-        if (!Guid.TryParse(request.BookingsId, out var bookingId))
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid booking id"));
-        }
-        var method = request.Method == "ach" ? "ach" : "card";
-
-        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-
-        int total, fee, baseline;
-        string? intentId;
-        try
-        {
-            await using var cmd = new NpgsqlCommand(
-                "SELECT total_cents, fee_cents, baseline_total_cents "
-                + "FROM sp_reprice_booking_for_method(@b, @u, @m)", connection);
-            cmd.Parameters.AddWithValue("b", bookingId);
-            cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
-            cmd.Parameters.AddWithValue("m", method);
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct))
-            {
-                throw new RpcException(new Status(StatusCode.NotFound, "Booking not found"));
-            }
-            total = reader.GetInt32(0);
-            fee = reader.GetInt32(1);
-            baseline = reader.GetInt32(2);
-        }
-        catch (PostgresException ex)
-        {
-            throw MapPostgres(ex);
-        }
-
-        await using (var look = new NpgsqlCommand(
-            "SELECT payment_intent_id FROM stripe_transactions WHERE bookings_id = @b "
-            + "AND status NOT IN ('Succeeded','Refunded')", connection))
-        {
-            look.Parameters.AddWithValue("b", bookingId);
-            intentId = await look.ExecuteScalarAsync(ct) as string;
-        }
-        if (string.IsNullOrEmpty(intentId))
-        {
-            throw new RpcException(new Status(StatusCode.FailedPrecondition, "No active payment to update"));
-        }
-
-        try
-        {
-            await stripe.UpdatePaymentIntentAmountAsync(intentId, total, fee, ct);
-        }
-        catch (StripeException ex)
-        {
-            throw new RpcException(new Status(StatusCode.FailedPrecondition,
-                $"Stripe update failed: {ex.StripeError?.Message ?? ex.Message}"));
-        }
-
-        await using (var save = new NpgsqlCommand(
-            "SELECT sp_upsert_stripe_intent(@b, @intent, @amount, @transfer, @cur)", connection))
-        {
-            save.Parameters.AddWithValue("b", bookingId);
-            save.Parameters.AddWithValue("intent", intentId);
-            save.Parameters.AddWithValue("amount", total);
-            save.Parameters.AddWithValue("transfer", total - fee);
-            save.Parameters.AddWithValue("cur", "usd");
-            await save.ExecuteScalarAsync(ct);
-        }
-
-        return new UpdatePaymentMethodResponse
-        {
-            TotalCents = total,
-            SavingsCents = baseline - total
-        };
-    }
-
-    public override async Task<PaymentStatusResponse> GetPaymentStatus(UuidValue request, ServerCallContext context)
-    {
-        var ct = context.CancellationToken;
-        if (!Guid.TryParse(request.Value, out var bookingId))
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid booking id"));
-        }
-        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-        await using var cmd = new NpgsqlCommand(
-            "SELECT b.status, COALESCE(st.status, '') FROM bookings b "
-            + "LEFT JOIN stripe_transactions st ON st.bookings_id = b.bookings_id "
-            + "WHERE b.bookings_id = @b", connection);
-        cmd.Parameters.AddWithValue("b", bookingId);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
-        {
-            throw new RpcException(new Status(StatusCode.NotFound, "Booking not found"));
-        }
-        return new PaymentStatusResponse
-        {
-            BookingStatus = reader.GetString(0),
-            PaymentStatus = reader.GetString(1)
-        };
-    }
-
     private static RpcException MapPostgres(PostgresException ex) => ex.SqlState switch
     {
         "P0002" => new RpcException(new Status(StatusCode.NotFound, ex.MessageText)),
@@ -481,7 +237,6 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
-        // Send booking confirmation email
         await BookingEmailSender.SendBookingConfirmationEmailAsync(
             connection, bookingId, email, templates, settings, logger, ct);
 
@@ -494,7 +249,6 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
         var bookingId = Guid.Parse(request.Value);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
 
-        // Cancel the in-flight PaymentIntent (if any) so the buyer is not charged.
         string? intentId = null;
         await using (var look = new NpgsqlCommand(
             "SELECT payment_intent_id FROM stripe_transactions WHERE bookings_id = @b AND status NOT IN ('Succeeded','Refunded')", connection))
@@ -516,9 +270,6 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
     }
 
     public override Task<AckResponse> RefundBooking(UuidValue request, ServerCallContext context)
-        // Policy: all ticket sales are final. Refunds are never initiated in-app.
-        // sp_refund_booking stays for the Stripe webhook path (dashboard refunds,
-        // dispute reversals) so the DB mirrors whatever Stripe actually did.
         => throw new RpcException(new Status(StatusCode.FailedPrecondition, "All ticket sales are final; refunds are not available."));
 
     public override async Task<BookingStats> GetBookingStats(UuidValue request, ServerCallContext context)
@@ -572,8 +323,6 @@ public sealed class BookingServiceImpl : BookingService.BookingServiceBase
             booking = MapBooking(reader);
         }
 
-        // Cart lines (empty for legacy single-line bookings). Label resolves from
-        // the linked tier / table.
         await using (var lc = new NpgsqlCommand(
             "SELECT bl.booking_lines_id, bl.kind, "
             + "COALESCE(ett.label, t.label, '') AS label, bl.event_ticket_types_id, bl.tables_id, "

@@ -7,13 +7,6 @@ using Svyne.Protos.Fees;
 
 namespace Svyne.Api.Services;
 
-/// <summary>
-/// Developer-managed service-fee formulas and cross-tenant event overview.
-/// Reads of formulas are open to any authenticated user (tenants pick one,
-/// UIs render the split); writes and the cross-tenant event list are
-/// developer-only. Cross-tenant reads rely on the existing RLS policies that
-/// grant developers (app.is_developer()) access to every tenant's rows.
-/// </summary>
 public sealed class FeeServiceImpl : FeeService.FeeServiceBase
 {
     private readonly Db db;
@@ -102,8 +95,6 @@ public sealed class FeeServiceImpl : FeeService.FeeServiceBase
     public override async Task<AckResponse> AssignFeeFormula(AssignFeeFormulaRequest request, ServerCallContext context)
     {
         var ct = context.CancellationToken;
-        // Developer or the owning tenant may attach a formula. RLS still enforces
-        // that a tenant can only touch its own ticket types / tables.
         RequireUser();
         if (request.Kind is not ("ticket" or "table"))
         {

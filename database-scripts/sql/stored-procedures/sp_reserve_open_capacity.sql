@@ -1,10 +1,6 @@
 DROP FUNCTION IF EXISTS sp_reserve_open_capacity(uuid, uuid, int, uuid, int, int, int, text);
 DROP FUNCTION IF EXISTS sp_reserve_open_capacity(uuid, uuid, int, uuid, int, int, int);
 
--- Reserve open (general-admission) ticket capacity. Pricing is server-authoritative
--- via app.price_breakdown and stored as booking_lines with the immutable snapshot.
--- The bookings row holds only aggregate totals.
--- Client-sent amounts are accepted for signature compatibility but IGNORED.
 CREATE OR REPLACE FUNCTION sp_reserve_open_capacity(
     p_user_id uuid,
     p_event_id uuid,
@@ -36,8 +32,6 @@ BEGIN
     SELECT COALESCE((SELECT value::int FROM app_settings WHERE key = 'booking_hold_seconds'), 600)
       INTO v_hold;
 
-    -- Idempotency / resume: reuse this user's live Pending booking for the same
-    -- event + ticket type (a single Ticket line referencing it).
     SELECT b.bookings_id, b.booking_number INTO v_id, v_number
       FROM bookings b
       JOIN booking_lines bl ON bl.bookings_id = b.bookings_id
@@ -70,7 +64,6 @@ BEGIN
         RAISE EXCEPTION 'Event not found' USING ERRCODE = 'P0002';
     END IF;
 
-    -- Event-level open cap = sum of active ticket-type capacities. 0 = uncapped.
     SELECT COALESCE(SUM(capacity), 0)
       INTO v_max_capacity
       FROM event_ticket_types
@@ -109,11 +102,9 @@ BEGIN
         END IF;
     END IF;
 
-    -- Calculate unit price breakdown for 1 ticket
     SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), 1,
                              app.remaining_for_price(v_prices_id));
 
-    -- Booking number BK-* must be unique per (event, user); retry on collision.
     LOOP
         v_attempt := v_attempt + 1;
         v_number := 'BK-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 10));

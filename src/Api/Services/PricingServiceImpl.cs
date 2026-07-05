@@ -7,13 +7,6 @@ using Svyne.Protos.Pricing;
 
 namespace Svyne.Api.Services;
 
-/// <summary>
-/// The Pricing Module gRPC surface — the single source of truth for all pricing.
-/// Prices and priority-ordered rules (presale / last-minute / dynamic) are managed
-/// here; CalculatePrice exposes the server-authoritative breakdown consumed by the
-/// floor plan and checkout. Fee-formula overrides (per price and the tenant
-/// default) are developer-only; admins may see but not change them.
-/// </summary>
 public sealed class PricingServiceImpl : PricingService.PricingServiceBase
 {
     private readonly Db db;
@@ -38,7 +31,6 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         cmd.Parameters.AddWithValue("base", request.BasePriceCents);
         cmd.Parameters.AddWithValue("per", request.PerAttendeeCents);
         cmd.Parameters.AddWithValue("allinc", request.IsAllInclusive);
-        // Fee override honored only for developers; admins fall back to the tenant default.
         cmd.Parameters.AddWithValue("fee",
             tenantContext.IsDeveloper && !string.IsNullOrEmpty(request.FeeFormulasId)
                 ? Guid.Parse(request.FeeFormulasId) : (object)DBNull.Value);
@@ -188,8 +180,6 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
     public override async Task<PriceBreakdown> CalculatePrice(CalculatePriceRequest request, ServerCallContext context)
     {
         var ct = context.CancellationToken;
-        // Open to anonymous buyers (public floor-plan price preview). RLS still
-        // scopes reads to the request's resolved tenant.
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand("SELECT * FROM sp_calculate_price(@p, @seats, @at, @rem)", connection);
         cmd.Parameters.AddWithValue("p", Guid.Parse(request.PricesId));
@@ -204,8 +194,6 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         return MapBreakdown(reader);
     }
 
-    // sp_calculate_price / app.price_breakdown column order:
-    // base, selling, discount, rule_id, rule_name, platform, gateway, tax, final, net, currency
     internal static PriceBreakdown MapBreakdown(NpgsqlDataReader r)
     {
         var bd = new PriceBreakdown
@@ -222,7 +210,6 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
             OrganizerNetCents = r.GetInt32(9),
             Currency = r.IsDBNull(10) ? "usd" : r.GetString(10)
         };
-        // Convenience aggregates: subtotal = selling, fee = platform+gateway+tax, total = final.
         bd.SubtotalCents = bd.SellingPriceCents;
         bd.FeeCents = bd.PlatformFeeCents + bd.GatewayFeeCents + bd.TaxCents;
         bd.TotalCents = bd.FinalPriceCents;

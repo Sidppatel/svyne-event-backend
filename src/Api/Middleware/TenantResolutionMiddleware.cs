@@ -25,13 +25,13 @@ public sealed class TenantResolutionMiddleware
                 tenantContext.UsersId = usersId;
             }
             var roleClaim = user.FindFirstValue("role") ?? user.FindFirstValue(ClaimTypes.Role);
-            tenantContext.Role = int.TryParse(roleClaim, out var role) ? role : 0;
+            tenantContext.Role = int.TryParse(roleClaim, out var role) ? role : Lookups.UserRoles.PublicViewer;
             tenantContext.TenantSlug = user.FindFirstValue("tenant_slug") ?? string.Empty;
             if (Guid.TryParse(user.FindFirstValue("tenants_id"), out var tenantsId))
             {
                 tenantContext.TenantsId = tenantsId;
             }
-            if (tenantContext.TenantsId is null && tenantContext.Role != 99)
+            if (tenantContext.TenantsId is null && tenantContext.Role != Lookups.UserRoles.Developer)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
                 await httpContext.Response.WriteAsync("Tenant context required");
@@ -48,7 +48,7 @@ public sealed class TenantResolutionMiddleware
                 {
                     tenantContext.TenantsId = id;
                     tenantContext.TenantSlug = slug;
-                    tenantContext.Role = 0;
+                    tenantContext.Role = Lookups.UserRoles.PublicViewer;
                 }
             }
         }

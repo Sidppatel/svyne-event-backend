@@ -60,7 +60,6 @@ builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<StartupSeeder>();
 builder.Services.AddSingleton<AppSettingsProvider>();
 builder.Services.AddSingleton<Svyne.Api.Email.EmailTemplateRenderer>();
-// Resend in deployed envs; local .html files when RESEND_API_KEY is absent (dev).
 if (!string.IsNullOrEmpty(builder.Configuration["RESEND_API_KEY"]))
 {
     builder.Services.AddSingleton<Svyne.Api.Email.IEmailService, Svyne.Api.Email.ResendEmailService>();
@@ -167,8 +166,6 @@ app.MapPost("/webhooks/stripe", async (
     Stripe.Event stripeEvent;
     try
     {
-        // Verifies the signature AND parses in one step. throwOnApiVersionMismatch
-        // off so SDK/account version drift doesn't reject events.
         stripeEvent = string.IsNullOrEmpty(secret)
             ? Stripe.EventUtility.ParseEvent(payload)
             : Stripe.EventUtility.ConstructEvent(payload, signature, secret, throwOnApiVersionMismatch: false);
@@ -275,10 +272,6 @@ app.MapGet("/images/{imagesId}", async (string imagesId, Db db, Svyne.Api.Storag
     return stream is null ? Results.NotFound() : Results.File(stream, contentType);
 }).AllowAnonymous();
 
-// Stripe Connect onboarding bounces the browser back to these URLs (set in
-// FinancialServiceImpl via PUBLIC_BASE_URL = this backend origin). The actual
-// UI lives in the frontend admin portal, so redirect there. FRONTEND_ADMIN_URL
-// defaults to the local admin dev origin.
 static string AdminFrontend(IConfiguration config) =>
     config["FRONTEND_ADMIN_URL"]?.TrimEnd('/') ?? "http://admin.localhost:5173";
 

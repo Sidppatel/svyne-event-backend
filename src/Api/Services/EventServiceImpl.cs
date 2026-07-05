@@ -229,7 +229,7 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
     public override async Task<Event> GetEventBySlug(GetEventBySlugRequest request, ServerCallContext context)
     {
         var ct = context.CancellationToken;
-        var isPublicViewer = tenantContext.UsersId is null || tenantContext.Role == 0;
+        var isPublicViewer = tenantContext.UsersId is null || tenantContext.Role == Lookups.UserRoles.PublicViewer;
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         var tenantFilter = tenantContext.TenantsId is null
             ? string.Empty
@@ -260,7 +260,7 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         {
             return response;
         }
-        var isPublicViewer = tenantContext.UsersId is null || tenantContext.Role == 0;
+        var isPublicViewer = tenantContext.UsersId is null || tenantContext.Role == Lookups.UserRoles.PublicViewer;
         var effectiveStatus = isPublicViewer ? "Published" : (request.Status ?? string.Empty);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
