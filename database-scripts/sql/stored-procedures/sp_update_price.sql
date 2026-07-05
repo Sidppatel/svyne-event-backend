@@ -1,6 +1,6 @@
--- Updates a price. When p_allow_fee_override is false the fee formula override is
--- left untouched (admins cannot change the developer fee assignment). Refreshes the
--- cached price snapshot on any linked ticket type / table.
+
+
+
 CREATE OR REPLACE FUNCTION sp_update_price(
     p_prices_id uuid, p_name text, p_base_price_cents int, p_per_attendee_cents int,
     p_is_all_inclusive bool, p_max_quantity int, p_is_active bool,

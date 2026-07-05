@@ -1,6 +1,6 @@
 DROP FUNCTION IF EXISTS sp_list_price_rules(uuid);
 
--- Per-price rules (scope='Price') for a single tier / table type.
+
 CREATE OR REPLACE FUNCTION sp_list_price_rules(p_prices_id uuid)
 RETURNS TABLE(price_rules_id uuid, prices_id uuid, name text, rule_type text,
     priority int, price_cents int, active_from timestamptz, active_until timestamptz,

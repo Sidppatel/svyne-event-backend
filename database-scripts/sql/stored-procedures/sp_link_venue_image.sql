@@ -1,6 +1,6 @@
 DROP FUNCTION IF EXISTS sp_link_venue_image(uuid, uuid);
--- Links an already-uploaded image (created by the /uploads/images endpoint) to a
--- venue gallery. Mirrors sp_link_event_image. First image linked becomes primary.
+
+
 CREATE OR REPLACE FUNCTION sp_link_venue_image(
     p_venue_id uuid,
     p_image_id uuid

@@ -1,8 +1,8 @@
 DROP FUNCTION IF EXISTS sp_set_tenant_ach(uuid, boolean, uuid);
 
--- Developer gate for ACH: sets whether a tenant may offer ACH and which fee formula
--- replaces the service fee when a buyer pays by ACH. Writes are developer-only via
--- the tenants RLS policy. Returns the previous enabled flag for audit.
+
+
+
 CREATE OR REPLACE FUNCTION sp_set_tenant_ach(
     p_tenants_id uuid, p_enabled boolean, p_fee_formulas_id uuid
 ) RETURNS boolean LANGUAGE plpgsql

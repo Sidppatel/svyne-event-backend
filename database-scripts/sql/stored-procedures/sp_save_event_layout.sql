@@ -1,9 +1,9 @@
--- Drop prior grid-based signatures (5-arg and 6-arg with grid dims).
+
 DROP FUNCTION IF EXISTS sp_save_event_layout(uuid, int, int, jsonb, uuid[]);
 DROP FUNCTION IF EXISTS sp_save_event_layout(uuid, int, int, jsonb, uuid[], jsonb);
 
--- Pixel-canvas layout save: upsert the request set of tables + objects (by Id),
--- delete the rest. No event grid bounds anymore (free canvas).
+
+
 CREATE OR REPLACE FUNCTION sp_save_event_layout(
     p_event_id uuid, p_tables jsonb, p_locked_ids uuid[], p_objects jsonb DEFAULT '[]'::jsonb
 ) RETURNS void LANGUAGE plpgsql
@@ -89,7 +89,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- Layout objects (Entry / Exit / Stage): upsert the request set, delete the rest.
+    
     SELECT COALESCE(array_agg(NULLIF(o->>'Id', '')::uuid) FILTER (WHERE NULLIF(o->>'Id', '') IS NOT NULL), '{}')
     INTO v_object_ids
     FROM jsonb_array_elements(p_objects) AS o;

@@ -10,7 +10,7 @@ public sealed class EmailTemplateRenderer
     {
         if (env.IsDevelopment())
         {
-            // Try to find the templates folder in the source files for hot-reloading templates in dev
+            
             var current = Directory.GetCurrentDirectory();
             var candidates = new[]
             {

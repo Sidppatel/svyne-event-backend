@@ -14,7 +14,7 @@ public class EventTablesSummaryView
     public decimal DefaultHeight { get; set; }
     public bool IsActive { get; set; }
 
-    // Aggregates
+    
     public int TotalTables { get; set; }
     public int AvailableTables { get; set; }
     public int LockedTables { get; set; }

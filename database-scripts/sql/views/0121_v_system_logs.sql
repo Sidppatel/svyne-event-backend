@@ -1,7 +1,7 @@
--- Reads system-actor entries from the unified audit_logs table. Legacy system_logs
--- table dropped in DropLegacyLogTables migration; shape preserved so existing
--- consumers (sp_get_system_logs, SystemLogView entity, DeveloperController) keep
--- compiling.
+
+
+
+
 CREATE OR REPLACE VIEW vw_system_logs AS
 SELECT
     al.audit_logs_id                                                        AS id,

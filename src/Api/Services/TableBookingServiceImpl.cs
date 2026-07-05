@@ -18,9 +18,9 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         this.tenantContext = tenantContext;
     }
 
-    // Columns 0..13: tables_id, event_tables_id, label, pos_x, pos_y,
-    // width, height, status, price_cents, platform_fee_cents, fee_formulas_id,
-    // shape_override, color_override, capacity_override.
+    
+    
+    
     private static Table MapTable(NpgsqlDataReader r) => new()
     {
         TablesId = r.GetGuid(0).ToString(),
@@ -184,8 +184,8 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
         cmd.Parameters.AddWithValue("label", request.Label);
         cmd.Parameters.AddWithValue("cap", request.Capacity);
-        // Shape is defined by the table template, not the event form; pass null when
-        // the client omits it so the SP inherits the template's default_shape.
+        
+        
         cmd.Parameters.AddWithValue("shape", (object?)NullIfEmpty(request.Shape) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("color", (object?)NullIfEmpty(request.Color) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("price", request.PriceCents);

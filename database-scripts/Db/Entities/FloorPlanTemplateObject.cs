@@ -2,9 +2,9 @@ using Db.Enums;
 
 namespace Db.Entities;
 
-/// <summary>
-/// A layout object (Entry/Exit/Stage) captured inside a <see cref="FloorPlanTemplate"/>.
-/// </summary>
+
+
+
 public class FloorPlanTemplateObject : BaseEntity
 {
     public Guid TenantsId { get; set; }

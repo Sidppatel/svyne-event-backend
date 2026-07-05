@@ -1,10 +1,10 @@
--- Upsert one Stripe payout row keyed on the Stripe payout id. Called from
--- both payout.created (status='pending'|'in_transit') and payout.paid
--- (status='paid' + PaidAt) — the SP hides the create vs update split.
---
--- Resolves OrganizationId from the source Stripe account the_id. If the org is
--- unknown the SP raises so the webhook handler can clear the dedupe key and
--- let Stripe retry once the org is wired up.
+
+
+
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_update_stripe_payout(
     p_stripe_payout_id text,
     p_stripe_account_id text,
@@ -44,7 +44,7 @@ BEGIN
     )
     ON CONFLICT (stripe_payout_id) DO UPDATE
     SET status      = EXCLUDED.status,
-        -- Never overwrite PaidAt once set — payout.paid is final.
+        
         paid_at      = COALESCE(stripe_payouts.paid_at, EXCLUDED.paid_at),
         arrival_date = COALESCE(EXCLUDED.arrival_date, stripe_payouts.arrival_date),
         raw_event    = EXCLUDED.raw_event,

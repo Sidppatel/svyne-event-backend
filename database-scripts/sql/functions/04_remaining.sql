@@ -1,9 +1,9 @@
--- Live remaining inventory for a Price, feeding the min_remaining/max_remaining
--- gates on price_rules (presale caps, low-stock surcharges, etc). Returns NULL
--- when the sellable is effectively unlimited, which app.resolve_price treats as
--- "skip the inventory gates".
---   Table prices : count of Available individual tables of the linked table type
---   TicketTier    : configured cap minus seats already sold or actively held
+
+
+
+
+
+
 CREATE OR REPLACE FUNCTION app.remaining_for_price(p_prices_id uuid)
 RETURNS int
 LANGUAGE plpgsql STABLE
@@ -25,16 +25,16 @@ BEGIN
         RETURN v_remaining;
     END IF;
 
-    -- TicketTier: fall back to the linked ticket type's cap when the price itself
-    -- sets none.
+    
+    
     IF v_max IS NULL THEN
         SELECT max_quantity INTO v_max
           FROM event_ticket_types WHERE prices_id = p_prices_id LIMIT 1;
     END IF;
-    IF v_max IS NULL THEN RETURN NULL; END IF;  -- unlimited
+    IF v_max IS NULL THEN RETURN NULL; END IF;  
 
-    -- Live seats across both booking models (single-line + multi-line cart lines),
-    -- summed over every ticket tier linked to this price (normally one).
+    
+    
     SELECT COALESCE(SUM(app.ticket_type_seats_live(ett.event_ticket_types_id)), 0) INTO v_sold
       FROM event_ticket_types ett
      WHERE ett.prices_id = p_prices_id;

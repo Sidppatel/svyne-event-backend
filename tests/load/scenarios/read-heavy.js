@@ -1,13 +1,13 @@
-// k6 scenario: sustained read load on public event catalog.
-// Target: 1000 req/min on /api/v1/events for 5 minutes.
-//
-// Run: k6 run scenarios/read-heavy.js
+
+
+
+
 
 import http from 'k6/http';
 import { check } from 'k6';
 import { Trend } from 'k6/metrics';
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
+const BASE_URL = __ENV.BASE_URL || 'http:
 
 export const options = {
     scenarios: {

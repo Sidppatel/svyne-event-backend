@@ -1,10 +1,10 @@
--- Async payment (ACH Direct Debit) lifecycle. Card confirms in seconds; ACH sits
--- in `processing` for days (T+4). Two hooks keep the seat hold correct across that
--- gap. Both keyed by Stripe PaymentIntent id, both idempotent (webhook retries).
 
--- payment_intent.processing: funds are on the way but not settled. Clear the hard
--- hold so sp_expire_holds (which only sweeps bookings with a non-NULL hold) leaves
--- the booking alone. Seats stay committed until the intent succeeds or fails.
+
+
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_mark_booking_processing(p_intent_id text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog
@@ -20,11 +20,11 @@ BEGIN
      WHERE bookings_id = v_booking AND status = 'Pending';
 END; $$;
 
--- payment_intent.payment_failed: mark the transaction Failed. If the booking was
--- already committed (hold cleared, i.e. an ACH that had entered `processing`), its
--- seats would otherwise be stranded forever (no hold left to sweep) — so cancel it
--- to free them. A booking whose hold is still live (a card decline mid-attempt) is
--- left untouched so the buyer can retry / the sweeper can reclaim it.
+
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_fail_booking_payment(p_intent_id text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog

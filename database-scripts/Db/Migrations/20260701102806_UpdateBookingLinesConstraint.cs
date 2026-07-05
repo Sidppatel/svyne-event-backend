@@ -4,10 +4,10 @@
 
 namespace Db.Migrations
 {
-    /// <inheritdoc />
+    
     public partial class UpdateBookingLinesConstraint : Migration
     {
-        /// <inheritdoc />
+        
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropCheckConstraint(
@@ -20,7 +20,7 @@ namespace Db.Migrations
                 sql: "(kind = 'Ticket' AND event_ticket_types_id IS NOT NULL AND tables_id IS NULL) OR (kind = 'Ticket' AND tables_id IS NOT NULL AND event_ticket_types_id IS NULL) OR (kind = 'Table' AND tables_id IS NOT NULL AND event_ticket_types_id IS NULL)");
         }
 
-        /// <inheritdoc />
+        
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropCheckConstraint(

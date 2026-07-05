@@ -1,5 +1,5 @@
--- Snapshots an event's current floor plan (grid + tables + objects) into a
--- reusable, tenant-scoped template.
+
+
 CREATE OR REPLACE FUNCTION sp_create_floor_plan_template(p_event_id uuid, p_name text)
 RETURNS uuid LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog

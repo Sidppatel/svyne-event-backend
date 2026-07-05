@@ -7,12 +7,12 @@ using Svyne.Api.Email;
 
 namespace Svyne.Api.Payments;
 
-/// <summary>
-/// Routes verified Stripe webhook events to the matching stored procedures.
-/// Every handler is idempotent so Stripe's at-least-once retries are safe.
-/// Runs without a tenant context (system role); the procs resolve tenant/booking
-/// from the Stripe ids on the event.
-/// </summary>
+
+
+
+
+
+
 public sealed class StripeWebhookHandler
 {
     private readonly Db db;
@@ -46,7 +46,7 @@ public sealed class StripeWebhookHandler
                 break;
 
             case "payment_intent.payment_failed":
-                // ACH may fail days after submission; frees seats if already committed.
+                
                 await RunByIntent(connection, "sp_fail_booking_payment",
                     ((PaymentIntent)stripeEvent.Data.Object).Id, ct);
                 break;
@@ -56,15 +56,15 @@ public sealed class StripeWebhookHandler
                 break;
 
             case "payment_intent.processing":
-                // ACH submitted (settles T+4). Exempt the booking from hold-expiry so
-                // its seats aren't reclaimed before the funds clear.
+                
+                
                 await RunByIntent(connection, "sp_mark_booking_processing",
                     ((PaymentIntent)stripeEvent.Data.Object).Id, ct);
                 break;
 
             case "payment_intent.created":
             case "payment_intent.requires_action":
-                // Informational — nothing to persist beyond the initial row.
+                
                 break;
 
             case "charge.refunded":
@@ -113,7 +113,7 @@ public sealed class StripeWebhookHandler
     {
         await SetTxStatus(conn, pi.Id, "Succeeded", ct);
 
-        // Look up the booking and issue tickets exactly once.
+        
         var bookingId = await BookingIdForIntent(conn, pi, ct);
         if (bookingId is null)
         {
@@ -129,7 +129,7 @@ public sealed class StripeWebhookHandler
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
-        // Best-effort enrichment of what was actually charged.
+        
         await using (var enrich = new NpgsqlCommand(
             "SELECT sp_enrich_stripe_transaction(@id, @total, @fees)", conn))
         {
@@ -139,7 +139,7 @@ public sealed class StripeWebhookHandler
             await enrich.ExecuteNonQueryAsync(ct);
         }
 
-        // Send booking confirmation email
+        
         await BookingEmailSender.SendBookingConfirmationEmailAsync(
             conn, bookingId.Value, emailService, templates, settings, logger, ct);
     }
@@ -212,7 +212,7 @@ public sealed class StripeWebhookHandler
         }
         catch (PostgresException ex) when (ex.SqlState == "no_data_found" || ex.SqlState == "P0002")
         {
-            // Event for an account we don't track yet — ignore.
+            
             logger.LogInformation("account.updated for untracked account {Acct}", account.Id);
         }
     }
@@ -227,7 +227,7 @@ public sealed class StripeWebhookHandler
             "SELECT sp_insert_stripe_transfer(@tid, @acct, @pi, @amt, @cur, @raw)", conn);
         cmd.Parameters.AddWithValue("tid", transfer.Id);
         cmd.Parameters.AddWithValue("acct", transfer.DestinationId);
-        cmd.Parameters.AddWithValue("pi", DBNull.Value); // destination-charge transfers carry only the source charge
+        cmd.Parameters.AddWithValue("pi", DBNull.Value); 
         cmd.Parameters.AddWithValue("amt", (int)transfer.Amount);
         cmd.Parameters.AddWithValue("cur", transfer.Currency ?? "usd");
         cmd.Parameters.Add(new NpgsqlParameter("raw", NpgsqlDbType.Jsonb) { Value = transfer.ToJson() });
@@ -243,7 +243,7 @@ public sealed class StripeWebhookHandler
 
     private async Task OnPayout(NpgsqlConnection conn, Event evt, Payout payout, CancellationToken ct)
     {
-        // Connect payout events carry the connected account id on the event.
+        
         var accountId = evt.Account;
         if (string.IsNullOrEmpty(accountId))
         {
@@ -288,7 +288,7 @@ public sealed class StripeWebhookHandler
 
     private static async Task<Guid?> BookingIdForIntent(NpgsqlConnection conn, PaymentIntent pi, CancellationToken ct)
     {
-        // Prefer our own record; fall back to the metadata we stamped on create.
+        
         await using (var look = new NpgsqlCommand(
             "SELECT bookings_id FROM stripe_transactions WHERE payment_intent_id = @id", conn))
         {

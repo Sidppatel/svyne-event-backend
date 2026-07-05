@@ -3,11 +3,11 @@ DROP FUNCTION IF EXISTS sp_create_event_table(uuid, text, int, text, text, int, 
 DROP FUNCTION IF EXISTS sp_create_event_table(uuid, text, int, text, text, int, uuid, uuid, bool, int, int, int);
 DROP FUNCTION IF EXISTS sp_create_event_table(uuid, text, int, text, text, int, uuid, uuid, bool, int, numeric, numeric);
 
--- Creates an event table TYPE and links it to a real Pricing Module price
--- (pricing_type='Table') so presale/last-minute/dynamic rules and the resolved
--- fee formula drive checkout. Admins layer rules onto the returned price via the
--- PricingService. Defaults to all-inclusive table pricing; pass
--- p_is_all_inclusive=false + p_per_attendee_cents for per-seat tables.
+
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_create_event_table(
     p_event_id uuid, p_label text, p_capacity int, p_shape text, p_color text,
     p_price_cents int, p_fee_formulas_id uuid, p_template_id uuid,
@@ -19,7 +19,7 @@ AS $$
 DECLARE v_id uuid; v_prices_id uuid; v_width numeric; v_height numeric; v_event_type text; v_shape text;
         v_tenant uuid; v_formula uuid;
 BEGIN
-    -- Tables belong only to Table / Both events.
+    
     SELECT event_type, tenants_id INTO v_event_type, v_tenant
       FROM events WHERE events_id = p_event_id;
     IF v_event_type IS NULL THEN
@@ -29,10 +29,10 @@ BEGIN
         RAISE EXCEPTION 'Cannot add tables to an Open-only event' USING ERRCODE = '22023';
     END IF;
 
-    -- Pixel footprint + shape: explicit override wins, else inherit the catalog
-    -- template default. Shape is owned by the template (the event form only edits
-    -- size, capacity, price, color), so it falls back to template default,
-    -- then 'Round'. Footprint falls back to 80x80 px.
+    
+    
+    
+    
     SELECT COALESCE(p_width, default_width, 80),
            COALESCE(p_height, default_height, 80),
            COALESCE(NULLIF(p_shape, ''), default_shape::text)
@@ -45,8 +45,8 @@ BEGIN
     v_prices_id := app.create_price(p_event_id, p_label, 'Table', p_price_cents,
         p_per_attendee_cents, p_is_all_inclusive, p_fee_formulas_id, NULL);
 
-    -- Auto-apply the tenant's default fee when the admin sets no explicit override,
-    -- so every new table carries the tenant fee (the developer override wins when set).
+    
+    
     v_formula := app.resolve_fee_formula(p_fee_formulas_id, p_event_id, v_tenant);
 
     INSERT INTO event_tables (tenants_id, events_id, label, capacity, shape, color,
@@ -59,8 +59,8 @@ BEGIN
         v_prices_id, v_width, v_height, now(), now())
     RETURNING event_tables_id INTO v_id;
 
-    -- Snapshot catalog template price rules onto the new event price. Admins may
-    -- then override per event via the PricingService rule CRUD.
+    
+    
     IF p_template_id IS NOT NULL THEN
         INSERT INTO price_rules (tenants_id, prices_id, name, rule_type, priority,
             price_cents, active_from, active_until, min_remaining, max_remaining,

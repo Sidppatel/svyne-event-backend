@@ -1,5 +1,5 @@
--- Developer-managed fee formula CRUD + assignment. Writes are gated to
--- developers by the fee_formulas RLS policy (WITH CHECK app.is_developer()).
+
+
 
 CREATE OR REPLACE FUNCTION sp_create_fee_formula(
     p_name text, p_percent_bps int, p_flat_cents int,
@@ -34,7 +34,7 @@ BEGIN
         updated_at = now()
     WHERE fee_formulas_id = p_id;
 
-    -- Re-resolve cached platform_fee_cents on everything using this formula.
+    
     UPDATE event_ticket_types
        SET platform_fee_cents = app.compute_fee(price_cents, p_id), updated_at = now()
      WHERE fee_formulas_id = p_id;
@@ -48,7 +48,7 @@ RETURNS void LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
 BEGIN
-    -- Detaching first (FK is ON DELETE SET NULL, but clear the cached fee too).
+    
     UPDATE event_ticket_types
        SET fee_formulas_id = NULL, platform_fee_cents = 0, updated_at = now()
      WHERE fee_formulas_id = p_id;
@@ -58,9 +58,9 @@ BEGIN
     DELETE FROM fee_formulas WHERE fee_formulas_id = p_id;
 END; $$;
 
--- Attach a formula to a ticket type ('ticket') or table ('table') and resolve
--- its cached platform_fee_cents. p_formula NULL clears the formula (fee 0).
--- Returns the previously assigned formula for audit logging.
+
+
+
 DROP FUNCTION IF EXISTS sp_set_fee_formula(text, uuid, uuid);
 
 CREATE OR REPLACE FUNCTION sp_set_fee_formula(
@@ -88,9 +88,9 @@ BEGIN
                platform_fee_cents = app.compute_fee(price_cents, p_formula),
                updated_at = now()
          WHERE event_ticket_types_id = p_target;
-        -- Keep the authoritative prices row in sync: app.price_breakdown (the
-        -- checkout/cart engine) resolves the fee from prices.fee_formulas_id, not
-        -- the cached copy above. Without this the cart quotes the old formula.
+        
+        
+        
         UPDATE prices
            SET fee_formulas_id = p_formula, updated_at = now()
          WHERE prices_id = (SELECT prices_id FROM event_ticket_types WHERE event_ticket_types_id = p_target);
@@ -119,9 +119,9 @@ BEGIN
     RETURN v_old;
 END; $$;
 
--- Self-heal: prior to the prices-sync above, sp_set_fee_formula only updated the
--- cached copy, so existing rows can have a stale prices.fee_formulas_id. Realign
--- prices to the assignment held on its owning ticket type / table. No-op once synced.
+
+
+
 UPDATE prices p
    SET fee_formulas_id = ett.fee_formulas_id, updated_at = now()
   FROM event_ticket_types ett

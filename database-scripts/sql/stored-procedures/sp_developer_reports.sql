@@ -1,8 +1,8 @@
--- Developer-only platform reports. Service-fee revenue comes from bookings
--- (fee_cents on Paid/CheckedIn bookings); everything else from the
--- billing_charges ledger. Callers are developer-gated in the gRPC service.
 
--- Platform revenue by source within a range.
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_developer_revenue_by_source(p_from timestamptz, p_to timestamptz)
 RETURNS TABLE(source text, revenue_cents bigint, item_count int)
 LANGUAGE sql STABLE
@@ -18,7 +18,7 @@ AS $$
      GROUP BY c.kind;
 $$;
 
--- Revenue by tenant tier (current tier) within a range: service fees + charges.
+
 CREATE OR REPLACE FUNCTION sp_developer_revenue_by_tier(p_from timestamptz, p_to timestamptz)
 RETURNS TABLE(tier text, service_fee_cents bigint, billing_cents bigint, tenant_count int)
 LANGUAGE sql STABLE
@@ -42,7 +42,7 @@ AS $$
      GROUP BY t.tier;
 $$;
 
--- Monthly revenue trend (12 buckets ending at p_to) for the dashboard chart.
+
 CREATE OR REPLACE FUNCTION sp_developer_revenue_timeseries(p_from timestamptz, p_to timestamptz)
 RETURNS TABLE(bucket_start timestamptz, service_fee_cents bigint, billing_cents bigint)
 LANGUAGE sql STABLE
@@ -57,7 +57,7 @@ AS $$
       FROM generate_series(date_trunc('month', p_from), date_trunc('month', p_to), interval '1 month') AS g(bucket);
 $$;
 
--- Tenant activity report: key metrics per tenant, paged + searchable.
+
 CREATE OR REPLACE FUNCTION sp_developer_tenant_activity(
     p_from timestamptz, p_to timestamptz, p_search text, p_tier text, p_offset int, p_limit int
 ) RETURNS TABLE(

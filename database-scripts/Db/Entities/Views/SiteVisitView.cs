@@ -2,10 +2,10 @@ using System;
 
 namespace Db.Entities.Views;
 
-/// <summary>
-/// Keyless projection over v_site_visits — exposes page view / visit logs
-/// from the audit_logs table joined with user details.
-/// </summary>
+
+
+
+
 public class SiteVisitView
 {
     public Guid Id { get; set; }

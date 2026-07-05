@@ -28,8 +28,8 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         {
             throw new RpcException(new Status(StatusCode.Unauthenticated, "Authenticated tenant user required"));
         }
-        // Guard the events_DateRange check constraint with a clean error instead of a
-        // raw Postgres 23514 (the form may submit empty/equal/reversed dates).
+        
+        
         if (request.EndDate <= request.StartDate)
         {
             throw new RpcException(new Status(StatusCode.InvalidArgument, "End date must be after start date"));
@@ -135,8 +135,8 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
     {
         var ct = context.CancellationToken;
         RequireTenant();
-        // Same date-range guard as CreateEvent, but only when both dates are supplied
-        // (0 = leave unchanged).
+        
+        
         if (request.StartDate != 0 && request.EndDate != 0 && request.EndDate <= request.StartDate)
         {
             throw new RpcException(new Status(StatusCode.InvalidArgument, "End date must be after start date"));

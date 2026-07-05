@@ -1,6 +1,6 @@
--- Attach (or refresh) the PaymentIntent for a booking. Keeps exactly one live
--- stripe_transactions row per booking so resume/retry maps back to the same
--- intent. Returns the stripe_transactions_id.
+
+
+
 CREATE OR REPLACE FUNCTION sp_upsert_stripe_intent(
     p_booking_id uuid,
     p_intent_id text,
@@ -23,7 +23,7 @@ BEGIN
                amount_cents = p_amount_cents,
                transfer_amount_cents = p_transfer_amount_cents,
                currency = COALESCE(p_currency, 'usd'),
-               -- Reset a previously-Failed/expired attempt back to in-flight.
+               
                status = CASE WHEN status IN ('Succeeded', 'Refunded') THEN status
                              ELSE 'RequiresConfirmation' END,
                updated_at = now()

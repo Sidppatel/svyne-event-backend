@@ -2,11 +2,11 @@ using Db.Enums;
 
 namespace Db.Entities;
 
-/// <summary>
-/// A table placement captured inside a <see cref="FloorPlanTemplate"/>. Stores
-/// position, span and table-type attributes (snapshot, by label) so the template
-/// can recreate event_tables/tables when applied.
-/// </summary>
+
+
+
+
+
 public class FloorPlanTemplateTable : BaseEntity
 {
     public Guid TenantsId { get; set; }

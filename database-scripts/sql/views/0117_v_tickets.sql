@@ -21,8 +21,8 @@ SELECT
     bl.invite_token_hash,
     bu.first_name AS booking_user_first_name,
     bu.last_name AS booking_user_last_name,
-    -- A ticket has no direct table link; surface one table from the booking (if any)
-    -- for display continuity. Multi-table bookings just show the first.
+    
+    
     (SELECT bl2.tables_id FROM booking_lines bl2
      WHERE bl2.bookings_id = b.bookings_id AND bl2.kind = 'Table' LIMIT 1) AS booking_table_id,
     COALESCE(ett.label, 'Ticket') AS ticket_type_label

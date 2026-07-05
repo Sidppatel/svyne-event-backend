@@ -5,13 +5,13 @@ using Svyne.Api.ErrorHandling;
 
 namespace Svyne.Api.Payments;
 
-/// <summary>
-/// Hourly billing sweep: expires overdue 14-day trials back to the free tier,
-/// renews subscriptions/add-ons past their period end (charges land in the
-/// billing_charges ledger), and emails day-10 / day-13 trial reminders to the
-/// tenant's admin. Runs on the bootstrap connection: state transitions span
-/// tenants and RLS on billing tables is developer-only.
-/// </summary>
+
+
+
+
+
+
+
 public sealed class BillingWorker : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
@@ -58,7 +58,7 @@ public sealed class BillingWorker : BackgroundService
         }
         catch (OperationCanceledException)
         {
-            // Host shutting down — expected.
+            
         }
     }
 

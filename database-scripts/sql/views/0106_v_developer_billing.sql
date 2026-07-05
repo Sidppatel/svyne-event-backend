@@ -1,6 +1,6 @@
--- Developer billing views. Read via developer-gated RPCs; RLS on the
--- underlying tables (developer-only for billing_charges) still applies because
--- the security folder flips every view to security_invoker.
+
+
+
 
 CREATE OR REPLACE VIEW vw_tenant_billing AS
 SELECT
@@ -69,9 +69,9 @@ SELECT
 FROM tenant_addons a
 JOIN tenants t ON t.tenants_id = a.tenants_id;
 
--- Every live fee override, tenant-level (custom default formula) and
--- event-level (events.fee_formulas_id), with the standard tier fee alongside
--- so reports can show the discount given. Developer eyes only.
+
+
+
 CREATE OR REPLACE VIEW vw_fee_overrides AS
 SELECT
     'tenant'::text                                  AS scope,

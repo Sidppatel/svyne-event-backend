@@ -2,10 +2,10 @@ DROP FUNCTION IF EXISTS sp_create_event_ticket_type(uuid, text, int, int, int, i
 DROP FUNCTION IF EXISTS sp_create_event_ticket_type(uuid, text, int, uuid, int, int, text);
 DROP FUNCTION IF EXISTS sp_create_event_ticket_type(uuid, text, int, uuid, int, int, int, text);
 
--- Creates an open-seating ticket tier and links it to a real Pricing Module price
--- (pricing_type='TicketTier') so each tier (VIP / GA / Early Bird) carries its own
--- presale/last-minute/dynamic rules and resolves server-side at checkout. The fee
--- itself is resolved via app.compute_fee and cached in platform_fee_cents.
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_create_event_ticket_type(
     p_event_id uuid, p_label text, p_price_cents int,
     p_fee_formulas_id uuid, p_max_quantity int, p_sort_order int,
@@ -15,7 +15,7 @@ CREATE OR REPLACE FUNCTION sp_create_event_ticket_type(
 AS $$
 DECLARE v_id uuid; v_prices_id uuid; v_event_type text; v_tenant uuid; v_formula uuid;
 BEGIN
-    -- Open ticket tiers belong only to Open / Both events.
+    
     SELECT event_type, tenants_id INTO v_event_type, v_tenant
       FROM events WHERE events_id = p_event_id;
     IF v_event_type IS NULL THEN
@@ -28,8 +28,8 @@ BEGIN
     v_prices_id := app.create_price(p_event_id, p_label, 'TicketTier', p_price_cents,
         0, false, p_fee_formulas_id, p_max_quantity);
 
-    -- Auto-apply the tenant's default fee when the admin sets no explicit override,
-    -- so every new tier carries the tenant fee (the developer override wins when set).
+    
+    
     v_formula := app.resolve_fee_formula(p_fee_formulas_id, p_event_id, v_tenant);
 
     INSERT INTO event_ticket_types (tenants_id, events_id, label, price_cents,

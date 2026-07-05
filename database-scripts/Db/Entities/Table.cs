@@ -14,8 +14,8 @@ public class Table : BaseEntity
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
 
-    // Per-individual-table overrides of the parent event_table type attributes.
-    // NULL = inherit from EventTable.
+    
+    
     public TableShape? ShapeOverride { get; set; }
     public string? ColorOverride { get; set; }
     public int? CapacityOverride { get; set; }

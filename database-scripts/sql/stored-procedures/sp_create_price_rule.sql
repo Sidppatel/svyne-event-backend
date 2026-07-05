@@ -2,11 +2,11 @@ DROP FUNCTION IF EXISTS sp_create_price_rule(uuid, text, text, int, int, timesta
 DROP FUNCTION IF EXISTS sp_create_price_rule(uuid, text, text, int, int, timestamptz, timestamptz, int, int, text);
 DROP FUNCTION IF EXISTS sp_create_price_rule(uuid, text, text, int, int, timestamptz, timestamptz, int, int, int, text);
 
--- Creates a price rule at one of two scopes:
---   scope='Price' : targets a single price (tier / table type) via p_owner_id.
---   scope='Event' : targets every price of an event via p_owner_id (events_id).
--- The polymorphic p_owner_id keeps one entry point for both; tenants_id is derived
--- from whichever owner is referenced.
+
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_create_price_rule(
     p_owner_id uuid, p_name text, p_rule_type text, p_priority int, p_price_cents int,
     p_active_from timestamptz, p_active_until timestamptz,

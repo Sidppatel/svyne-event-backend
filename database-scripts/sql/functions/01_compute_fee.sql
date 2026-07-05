@@ -1,9 +1,9 @@
--- Resolves the service fee svyne charges on a single unit of price, given a
--- developer-defined fee formula. fee = round(price * percent_bps / 10000) +
--- flat_cents, clamped to [min_fee_cents, max_fee_cents] when those are set.
--- Returns 0 when no formula is attached. Single source of truth: used by the
--- ticket-type/table create/update SPs (to resolve platform_fee_cents) and by
--- the booking SPs (to recompute the fee server-side, ignoring client input).
+
+
+
+
+
+
 CREATE OR REPLACE FUNCTION app.compute_fee(p_price_cents int, p_formula uuid)
 RETURNS int
 LANGUAGE plpgsql STABLE

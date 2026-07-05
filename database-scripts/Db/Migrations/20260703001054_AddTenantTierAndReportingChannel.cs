@@ -4,10 +4,10 @@
 
 namespace Db.Migrations
 {
-    /// <inheritdoc />
+    
     public partial class AddTenantTierAndReportingChannel : Migration
     {
-        /// <inheritdoc />
+        
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<bool>(
@@ -34,7 +34,7 @@ namespace Db.Migrations
                 defaultValue: "direct");
         }
 
-        /// <inheritdoc />
+        
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(

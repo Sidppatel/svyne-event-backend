@@ -22,7 +22,7 @@ public static class BookingEmailSender
     {
         try
         {
-            // Query booking, event details
+            
             await using var cmd = new NpgsqlCommand(
                 "SELECT b.booking_number, b.subtotal_cents, b.fee_cents, b.total_cents, b.user_email, " +
                 "b.event_title, b.event_start_date, b.venue_name, e.fees_included " +
@@ -63,7 +63,7 @@ public static class BookingEmailSender
                 return;
             }
 
-            // Now query tickets issued for this booking
+            
             var ticketsList = new List<(string code, int seat)>();
             await using (var ticketCmd = new NpgsqlCommand(
                 "SELECT ticket_code, seat_number FROM booking_lines WHERE bookings_id = @id AND kind = 'Ticket' ORDER BY seat_number", conn))
@@ -76,25 +76,25 @@ public static class BookingEmailSender
                 }
             }
 
-            // Generate receipt HTML based on FeesIncluded
+            
             var receiptBuilder = new StringBuilder();
             receiptBuilder.Append("<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin-top:16px;border-top:1px solid #e5e7eb;padding-top:16px;\">");
             
             if (feesIncluded)
             {
-                // All-in total pricing
+                
                 receiptBuilder.Append($"<tr><td style=\"font-size:15px;color:#374151;padding:4px 0;\"><strong>Total:</strong></td><td align=\"right\" style=\"font-size:15px;color:#374151;padding:4px 0;\"><strong>${totalCents / 100.0:F2}</strong></td></tr>");
             }
             else
             {
-                // Itemized breakdown
+                
                 receiptBuilder.Append($"<tr><td style=\"font-size:15px;color:#374151;padding:4px 0;\">Subtotal:</td><td align=\"right\" style=\"font-size:15px;color:#374151;padding:4px 0;\">${subtotalCents / 100.0:F2}</td></tr>");
                 receiptBuilder.Append($"<tr><td style=\"font-size:15px;color:#374151;padding:4px 0;\">Fees:</td><td align=\"right\" style=\"font-size:15px;color:#374151;padding:4px 0;\">${feeCents / 100.0:F2}</td></tr>");
                 receiptBuilder.Append($"<tr><td style=\"font-size:15px;color:#374151;padding:4px 0;\"><strong>Total:</strong></td><td align=\"right\" style=\"font-size:15px;color:#374151;padding:4px 0;\"><strong>${totalCents / 100.0:F2}</strong></td></tr>");
             }
             receiptBuilder.Append("</table>");
 
-            // Generate Ticket Details HTML
+            
             var ticketBuilder = new StringBuilder();
             if (ticketsList.Count > 0)
             {

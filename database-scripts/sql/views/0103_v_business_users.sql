@@ -1,7 +1,7 @@
--- Read projection for the users table. StripeConnectedAccountId
--- is no longer included — Connect data was migrated to tenants as
--- part of the Stripe Connect Express rollout. Callers needing acct ids
--- join tenants directly via users.tenants_id.
+
+
+
+
 CREATE OR REPLACE VIEW vw_users AS
 SELECT
     au.users_id AS users_id, au.email, au.email_hash, au.first_name, au.last_name,

@@ -1,9 +1,9 @@
--- Pricing constants for subscription tiers, Pay Per Event tiers, and add-ons.
--- Single source of truth: sp_set_tenant_tier, subscription/PPE/add-on SPs and
--- the developer panel all read these. Amounts in cents, percentages in bps.
 
--- Subscription tier pricing: monthly cost + per-ticket fee.
--- 'free' and 'trial' rows keep every consumer total (trial = professional fees).
+
+
+
+
+
 CREATE OR REPLACE FUNCTION app.tier_pricing(p_tier text)
 RETURNS TABLE(monthly_cents int, percent_bps int, flat_cents int, min_fee_cents int)
 LANGUAGE sql IMMUTABLE
@@ -21,7 +21,7 @@ AS $$
     WHERE t.tier = p_tier;
 $$;
 
--- Pay Per Event tier pricing: one-time cost, per-ticket fee, feature limits.
+
 CREATE OR REPLACE FUNCTION app.event_tier_pricing(p_tier text)
 RETURNS TABLE(price_cents int, percent_bps int, flat_cents int, min_fee_cents int,
               sms_credits int, custom_domain_limit int)
@@ -37,7 +37,7 @@ AS $$
     WHERE t.tier = p_tier;
 $$;
 
--- Add-on pricing: monthly/annual price per unit + one-time setup fee.
+
 CREATE OR REPLACE FUNCTION app.addon_pricing(p_type text)
 RETURNS TABLE(monthly_cents int, annual_cents int, setup_fee_cents int)
 LANGUAGE sql IMMUTABLE
@@ -52,8 +52,8 @@ AS $$
     WHERE t.type = p_type;
 $$;
 
--- Blocks selling/publishing for suspended tenants. Called by the booking and
--- event-status SPs so the guard covers every entry point.
+
+
 CREATE OR REPLACE FUNCTION app.assert_tenant_sellable(p_tenant uuid)
 RETURNS void
 LANGUAGE plpgsql STABLE
@@ -65,9 +65,9 @@ BEGIN
     END IF;
 END; $$;
 
--- Find-or-create the canonical fee formula for a tier ('tier:starter',
--- 'ppe:pro_event', ...). Keeps tier fee changes centralized: updating
--- app.tier_pricing and re-running this refreshes the shared formula.
+
+
+
 CREATE OR REPLACE FUNCTION app.ensure_tier_formula(p_name text, p_percent_bps int, p_flat_cents int, p_min_fee_cents int)
 RETURNS uuid
 LANGUAGE plpgsql

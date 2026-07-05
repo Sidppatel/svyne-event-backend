@@ -7,12 +7,12 @@ using Svyne.Protos.FloorPlan;
 
 namespace Svyne.Api.Services;
 
-/// <summary>
-/// Reusable whole-floor-plan templates (grid + tables + objects). Per-table
-/// overrides and layout objects are persisted through
-/// TableBookingService.SaveEventLayout; this service snapshots and re-applies a
-/// complete plan across events.
-/// </summary>
+
+
+
+
+
+
 public sealed class FloorPlanServiceImpl : FloorPlanService.FloorPlanServiceBase
 {
     private readonly Db db;

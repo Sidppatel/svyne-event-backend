@@ -9,12 +9,12 @@ using Svyne.Protos.Common;
 
 namespace Svyne.Api.Services;
 
-/// <summary>
-/// Developer-only pricing controls: trials, subscriptions, Pay Per Event,
-/// add-ons, fee overrides, and platform revenue reports. State transitions live
-/// in sp_billing.sql; this layer gates access, audits every mutation, and
-/// invalidates the reporting-access cache on tier changes.
-/// </summary>
+
+
+
+
+
+
 public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.DeveloperBillingServiceBase
 {
     private readonly Db db;

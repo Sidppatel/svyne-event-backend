@@ -1,11 +1,11 @@
--- Idempotent insert of a Stripe Connect transfer event into the
--- stripe_transfers audit table. Resolves OrganizationId from the destination
--- account the_id; resolves BookingId by joining stripe_transactions on the
--- payment intent extracted from the source transaction (when present).
---
--- Returns the row the_id (existing or new) so callers can log it. ON CONFLICT
--- DO NOTHING + COALESCE(returning, lookup) keeps the call safe under Stripe
--- webhook retries.
+
+
+
+
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_insert_stripe_transfer(
     p_stripe_transfer_id text,
     p_stripe_account_id text,
@@ -30,9 +30,9 @@ BEGIN
             USING ERRCODE = 'no_data_found';
     END IF;
 
-    -- Best-effort booking resolution. Stripe Connect transfers carry the
-    -- source charge / payment intent on the event; we hop through
-    -- stripe_transactions to land on the platform booking.
+    
+    
+    
     IF p_payment_intent_id IS NOT NULL THEN
         SELECT bookings_id INTO v_booking_id
         FROM stripe_transactions
@@ -52,8 +52,8 @@ BEGIN
     ON CONFLICT (stripe_transfer_id) DO NOTHING
     RETURNING stripe_transfers_id INTO v_id;
 
-    -- ON CONFLICT skipped insert; pull existing row stripe_transfers_id so the caller still
-    -- has a stable reference to log.
+    
+    
     IF v_id IS NULL THEN
         SELECT stripe_transfers_id INTO v_id
         FROM stripe_transfers

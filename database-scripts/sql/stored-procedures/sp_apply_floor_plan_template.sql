@@ -1,6 +1,6 @@
--- Instantiates a floor-plan template into an event: sets the grid, recreates the
--- table types (event_tables, matched by label), the placed tables, and the layout
--- objects. Skips tables that collide with an existing label/position.
+
+
+
 CREATE OR REPLACE FUNCTION sp_apply_floor_plan_template(p_template_id uuid, p_event_id uuid)
 RETURNS void LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
@@ -28,7 +28,7 @@ BEGIN
             VALUES (v_tenant, p_event_id, v_et, r.label, r.pos_x, r.pos_y,
                 r.width, r.height, true, r.sort_order, 'Available', now(), now());
         EXCEPTION WHEN unique_violation THEN
-            -- Label already used in the target event; skip.
+            
             CONTINUE;
         END;
     END LOOP;

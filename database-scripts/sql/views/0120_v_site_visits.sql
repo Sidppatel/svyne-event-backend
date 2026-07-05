@@ -1,4 +1,4 @@
--- Creates a read-only view of site page views / visits, joining audit_logs with user details.
+
 CREATE OR REPLACE VIEW vw_site_visits AS
 SELECT
     al.audit_logs_id                                                        AS id,

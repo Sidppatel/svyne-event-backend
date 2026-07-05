@@ -16,42 +16,42 @@ public class Event : BaseEntity
     public bool IsFeatured { get; set; }
     public LayoutMode LayoutMode { get; set; }
 
-    /// <summary>
-    /// How the event sells: <see cref="EventType.Open"/> (ticket tiers only),
-    /// <see cref="EventType.Table"/> (floor plan only), or <see cref="EventType.Both"/>
-    /// (optional open capacity + floor plan). Gates which sellables can be created
-    /// and which capacity rules apply at checkout.
-    /// </summary>
+    
+    
+    
+    
+    
+    
     public EventType EventType { get; set; } = EventType.Open;
 
     public DateTime? PublishedAt { get; set; }
     public DateTime? ScheduledPublishAt { get; set; }
 
-    /// <summary>
-    /// When true, buyers see a single all-in total (developer fee folded into the
-    /// shown price). When false, the fee is itemized: price + fee = total. Display
-    /// only — the math is identical; admins cannot change the fee amount itself.
-    /// </summary>
+    
+    
+    
+    
+    
     public bool FeesIncluded { get; set; }
 
     public string Meta { get; set; } = "[]";
 
-    /// <summary>
-    /// Event-level fee-formula override (developer-only). Beats the tenant
-    /// default; a price-level formula still beats this. Set by Pay Per Event
-    /// activation or a manual event fee override. Silent to tenants.
-    /// </summary>
+    
+    
+    
+    
+    
     public Guid? FeeFormulasId { get; set; }
     public FeeFormula? FeeFormula { get; set; }
 
-    /// <summary>Optional expiry for the event fee override; ignored after this instant.</summary>
+    
     public DateTime? FeeOverrideExpiresAt { get; set; }
 
-    /// <summary>
-    /// Per-event opt-in to offering ACH at checkout. Only effective when the owning
-    /// tenant is ACH-enabled. When both are true, buyers may pay by US bank debit and
-    /// the service fee is replaced by the tenant's ACH fee formula.
-    /// </summary>
+    
+    
+    
+    
+    
     public bool AchEnabled { get; set; }
 
     public NpgsqlTsVector? SearchVector { get; set; }

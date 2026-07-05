@@ -2,8 +2,8 @@ DROP FUNCTION IF EXISTS sp_update_table_template(uuid, text, int, text, text, in
 DROP FUNCTION IF EXISTS sp_update_table_template(uuid, text, int, text, text, int, bool, int, int);
 DROP FUNCTION IF EXISTS sp_update_table_template(uuid, text, int, text, text, int, bool, numeric, numeric);
 
--- Name is intentionally not updatable: it is locked after creation. p_name kept
--- in the signature for call-site compatibility but ignored.
+
+
 CREATE OR REPLACE FUNCTION sp_update_table_template(
     p_id uuid, p_name text, p_capacity int, p_shape text,
     p_color text, p_price_cents int, p_is_active bool,

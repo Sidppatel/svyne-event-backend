@@ -163,7 +163,7 @@ public class EventPlatformDbContext(
                 t.HasCheckConstraint("CK_users_DeveloperHasNoTenant",
                     "(role = 99) = (tenants_id IS NULL)");
                 t.HasCheckConstraint("CK_users_Role",
-                    "role IN (0, 1, 2, 3, 99)");
+                    "role IN (0, 1, 2, 3, 4, 99)");
             });
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => new { e.TenantsId, e.Email, e.Role }).IsUnique();
@@ -443,7 +443,7 @@ public class EventPlatformDbContext(
             });
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.TenantsId);
-            // At most one live subscription/trial per tenant.
+            
             entity.HasIndex(e => e.TenantsId).IsUnique()
                 .HasDatabaseName("IX_tenant_subscriptions_live")
                 .HasFilter("status IN ('trial','active','past_due')");
@@ -513,7 +513,7 @@ public class EventPlatformDbContext(
             entity.Property(e => e.Reference).HasMaxLength(64);
             entity.Property(e => e.Description).HasMaxLength(512);
             entity.Property(e => e.StripePaymentIntentId).HasMaxLength(128);
-            // Financial ledger: rows survive tenant deletion for 7-year retention.
+            
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantsId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
@@ -592,8 +592,8 @@ public class EventPlatformDbContext(
                     "capacity IS NULL OR capacity > 0");
                 t.HasCheckConstraint("CK_price_rules_Window",
                     "active_from IS NULL OR active_until IS NULL OR active_until > active_from");
-                // Exactly one owner: a per-price rule targets a price; an event-wide
-                // rule targets an event. Scope and the populated FK must agree.
+                
+                
                 t.HasCheckConstraint("CK_price_rules_Scope",
                     "(scope = 'Price' AND prices_id IS NOT NULL AND events_id IS NULL) "
                     + "OR (scope = 'Event' AND events_id IS NOT NULL AND prices_id IS NULL)");
@@ -822,7 +822,7 @@ public class EventPlatformDbContext(
             entity.HasIndex(e => e.TenantsId);
             entity.HasIndex(e => e.EventsId);
             entity.HasIndex(e => new { e.EventsId, e.Label }).IsUnique();
-            // No position uniqueness: pixel coords may overlap on a free canvas.
+            
             entity.HasIndex(e => new { e.EventsId, e.Status });
             entity.Property(e => e.Label).HasMaxLength(20);
             entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20)
@@ -860,7 +860,7 @@ public class EventPlatformDbContext(
             });
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.TenantsId);
-            // Booking number (BK-*) is unique within an event for a given user.
+            
             entity.HasIndex(e => new { e.EventsId, e.UsersId, e.BookingNumber }).IsUnique();
             entity.HasIndex(e => e.QrToken).IsUnique().HasFilter("qr_token IS NOT NULL");
             entity.HasIndex(e => e.Status);

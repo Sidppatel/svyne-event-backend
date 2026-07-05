@@ -38,9 +38,9 @@ BEGIN
     )
     RETURNING users_id INTO v_user;
 
-    -- Tenant admin setup is a first-time password set: store a password-reset
-    -- token so the existing /set-password flow (sp_consume_password_reset_token)
-    -- consumes it. The emailed link points to the admin portal /set-password page.
+    
+    
+    
     INSERT INTO password_reset_tokens (
         users_id, token_hash, email, expires_at, is_used,
         created_at, updated_at

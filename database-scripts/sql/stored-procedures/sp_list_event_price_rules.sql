@@ -1,7 +1,7 @@
 DROP FUNCTION IF EXISTS sp_list_event_price_rules(uuid);
 
--- Event-wide rules (scope='Event') for the pricing-rules admin screen. These apply
--- to every price of the event unless a per-price rule overrides them at checkout.
+
+
 CREATE OR REPLACE FUNCTION sp_list_event_price_rules(p_event_id uuid)
 RETURNS TABLE(price_rules_id uuid, prices_id uuid, name text, rule_type text,
     priority int, price_cents int, active_from timestamptz, active_until timestamptz,

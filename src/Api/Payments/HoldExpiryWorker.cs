@@ -3,11 +3,11 @@ using Svyne.Api.ErrorHandling;
 
 namespace Svyne.Api.Payments;
 
-/// <summary>
-/// Sweeps expired seat/table holds back to availability on a fixed interval by
-/// calling sp_expire_holds(). Keeps the 10-minute (configurable) hard hold
-/// honest even when buyers abandon the payment screen.
-/// </summary>
+
+
+
+
+
 public sealed class HoldExpiryWorker : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
@@ -58,7 +58,7 @@ public sealed class HoldExpiryWorker : BackgroundService
         }
         catch (OperationCanceledException)
         {
-            // Host shutting down — expected.
+            
         }
     }
 }

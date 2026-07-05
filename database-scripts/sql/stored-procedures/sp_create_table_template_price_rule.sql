@@ -1,6 +1,6 @@
--- Adds a catalog-level price rule to a table template. Snapshotted into per-event
--- price_rules when an event table is created from the template (see
--- sp_create_event_table). Tenant is derived from the template.
+
+
+
 CREATE OR REPLACE FUNCTION sp_create_table_template_price_rule(
     p_template_id uuid, p_name text, p_rule_type text, p_priority int,
     p_price_cents int, p_active_from timestamptz, p_active_until timestamptz,

@@ -4,10 +4,10 @@
 
 namespace Db.Migrations
 {
-    /// <inheritdoc />
+    
     public partial class AddCheckInLogMethodStatusFailureReason : Migration
     {
-        /// <inheritdoc />
+        
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
@@ -34,7 +34,7 @@ namespace Db.Migrations
                 defaultValue: "success");
         }
 
-        /// <inheritdoc />
+        
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(

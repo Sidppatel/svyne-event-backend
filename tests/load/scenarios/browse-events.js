@@ -1,13 +1,13 @@
-// k6 scenario: public event catalog browse.
-// 100 VUs for 5 min hitting GET /events, /events/{id}, /events/{id}/ticket-types.
-// Run:  k6 run scenarios/browse-events.js
-// Env:  BASE_URL (default http://localhost:8000)
+
+
+
+
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
+const BASE_URL = __ENV.BASE_URL || 'http:
 
 export const options = {
     scenarios: {
@@ -42,13 +42,13 @@ export default function () {
         },
     });
 
-    // Pick an event id from the list to hit detail + ticket-types.
+    
     let eventId = null;
     try {
         const body = listRes.json();
         const arr = Array.isArray(body) ? body : (body.items || body.data || []);
         if (arr.length > 0) eventId = arr[0].id;
-    } catch { /* swallow */ }
+    } catch {  }
 
     if (eventId) {
         const detailRes = http.get(`${BASE_URL}/api/v1/events/${eventId}`, {

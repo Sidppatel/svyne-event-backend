@@ -1,6 +1,6 @@
--- Admin opt-in: offer ACH at checkout for this event. Only takes effect when the
--- owning tenant is ACH-enabled (developer gate); otherwise forced off. Raises if
--- the tenant is not ACH-enabled and the admin tries to turn it on.
+
+
+
 CREATE OR REPLACE FUNCTION sp_set_event_ach(p_event_id uuid, p_enabled bool)
 RETURNS void LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog

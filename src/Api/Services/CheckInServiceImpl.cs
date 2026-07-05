@@ -123,7 +123,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
 
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         
-        // Fetch bookings
+        
         await using (var cmd = new NpgsqlCommand(
             @"SELECT b.bookings_id, b.booking_number, u.first_name, u.last_name, b.status 
               FROM bookings b 
@@ -145,7 +145,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
             }
         }
 
-        // Fetch tickets
+        
         await using (var cmd = new NpgsqlCommand(
             @"SELECT t.booking_lines_id, t.bookings_id, t.ticket_code, 
                      gu.first_name, gu.last_name, bu.first_name, bu.last_name, 
@@ -232,7 +232,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
 
         if (request.Type == "Booking")
         {
-            // Try by booking number
+            
             await using (var cmd = new NpgsqlCommand(
                 "SELECT success, message, guest_name, status_str FROM sp_check_in_booking_by_number(@code, @ev, @staff, 'manual_entry')", connection))
             {
@@ -249,7 +249,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
                 }
             }
 
-            // If not success, try by token
+            
             if (!success)
             {
                 await using (var cmd = new NpgsqlCommand(
@@ -269,7 +269,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
                 }
             }
 
-            // If still not success and is valid Guid, try by UUID
+            
             if (!success && Guid.TryParse(request.CodeOrId, out var bookingGuid))
             {
                 await using (var cmd = new NpgsqlCommand(
@@ -289,9 +289,9 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
                 }
             }
         }
-        else // Ticket
+        else 
         {
-            // Try by ticket code
+            
             await using (var cmd = new NpgsqlCommand(
                 "SELECT success, message, guest_name, status_str FROM sp_check_in_ticket_by_code(@code, @ev, @staff, 'manual_entry')", connection))
             {
@@ -308,7 +308,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
                 }
             }
 
-            // If not success, try by token
+            
             if (!success)
             {
                 await using (var cmd = new NpgsqlCommand(
@@ -328,7 +328,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
                 }
             }
 
-            // If still not success and is valid Guid, try by UUID
+            
             if (!success && Guid.TryParse(request.CodeOrId, out var ticketGuid))
             {
                 await using (var cmd = new NpgsqlCommand(
@@ -422,7 +422,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
         }
         if (tenantContext.Role == 2)
         {
-            // Check-in staff: gated to the 24h-before/after scanning window.
+            
             await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
             await using var cmd = new NpgsqlCommand(
                 "SELECT sp_staff_can_access_event(@u, @ev)", connection);
@@ -433,7 +433,7 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
         }
         if (tenantContext.Role == 4)
         {
-            // Event managers manage their assigned events at any time, no scan window.
+            
             await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
             await using var cmd = new NpgsqlCommand("SELECT app.can_access_event(@ev)", connection);
             cmd.Parameters.AddWithValue("ev", eventId);

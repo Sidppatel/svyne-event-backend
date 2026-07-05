@@ -1,7 +1,7 @@
--- Reads admin-actor entries from the unified audit_logs table, joining users
--- for the email/role display columns. Legacy business_logs table dropped in
--- 20260424_DropLegacyLogTables migration; shape preserved so existing SP consumers
--- and C# BusinessLogView entity keep compiling.
+
+
+
+
 CREATE OR REPLACE VIEW vw_business_logs AS
 SELECT
     al.audit_logs_id                                   AS id,

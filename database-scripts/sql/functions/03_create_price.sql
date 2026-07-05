@@ -1,9 +1,9 @@
 DROP FUNCTION IF EXISTS app.create_price(uuid, text, text, int, int, bool, uuid, uuid, int);
 
--- Reusable Pricing Module insert. Single place that builds a `prices` row so the
--- public sp_create_price and the sellable-creation SPs (event tables, ticket
--- types) all link to a real Price the same way. Returns the new prices_id.
--- Pricing types: 'TicketTier' | 'Table' (add-ons removed).
+
+
+
+
 CREATE OR REPLACE FUNCTION app.create_price(
     p_event_id uuid, p_name text, p_pricing_type text, p_base_price_cents int,
     p_per_attendee_cents int, p_is_all_inclusive bool, p_fee_formulas_id uuid,

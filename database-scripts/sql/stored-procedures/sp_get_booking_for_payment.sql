@@ -1,7 +1,7 @@
--- Returns everything the payment layer needs to create/resume a PaymentIntent
--- for a booking, after validating ownership and that the hold is still live.
--- Raises if the booking is missing, not owned by the caller, in a non-payable
--- state, or its hold has lapsed.
+
+
+
+
 DROP FUNCTION IF EXISTS sp_get_booking_for_payment(uuid, uuid);
 CREATE OR REPLACE FUNCTION sp_get_booking_for_payment(
     p_booking_id uuid, p_user_id uuid

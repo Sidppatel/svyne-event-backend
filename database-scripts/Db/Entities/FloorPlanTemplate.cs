@@ -1,10 +1,10 @@
 namespace Db.Entities;
 
-/// <summary>
-/// A reusable, tenant-scoped snapshot of a whole floor plan (grid + tables +
-/// objects). Distinct from <see cref="TableTemplate"/>, which is a single table
-/// type. Applied to a new event via sp_apply_floor_plan_template.
-/// </summary>
+
+
+
+
+
 public class FloorPlanTemplate : BaseEntity
 {
     public Guid TenantsId { get; set; }

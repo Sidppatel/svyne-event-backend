@@ -18,9 +18,9 @@ DECLARE
     v_event_type text;
 BEGIN
     PERFORM app.assert_tenant_sellable(p_tenants_id);
-    -- Until the admin UI exposes a dedicated type selector it only sends
-    -- layout_mode (Grid = "Table based", Open = "Open seating"). Derive event_type
-    -- from it when the caller doesn't pass one explicitly.
+    
+    
+    
     v_event_type := NULLIF(p_event_type, '');
     IF v_event_type IS NULL THEN
         v_event_type := CASE WHEN p_layout_mode = 'Grid' THEN 'Table' ELSE 'Open' END;

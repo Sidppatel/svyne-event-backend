@@ -1,10 +1,10 @@
 DROP FUNCTION IF EXISTS sp_quote_cart(uuid, jsonb);
 
--- Non-reserving cart preview. Resolves each requested line to its full pricing
--- breakdown via app.price_breakdown (the same engine the checkout write uses), with
--- NO locking and NO writes. Powers the customer checkout summary and the admin
--- multi-item preview so both render exactly what checkout will charge.
---   p_lines: jsonb array of {"kind":"Ticket"|"Table","ref_id":uuid,"seats":int}
+
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_quote_cart(p_event_id uuid, p_lines jsonb)
 RETURNS TABLE(
     kind text, ref_id uuid, label text, seats int,
@@ -26,7 +26,7 @@ BEGIN
         RETURN;
     END IF;
 
-    -- ACH offered only when the tenant enabled it AND this event opted in.
+    
     SELECT COALESCE(t.ach_enabled AND e.ach_enabled, false) INTO v_ach_ok
       FROM events e JOIN tenants t ON t.tenants_id = e.tenants_id
      WHERE e.events_id = p_event_id;

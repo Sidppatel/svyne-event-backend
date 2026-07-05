@@ -1,9 +1,9 @@
 DROP FUNCTION IF EXISTS sp_calculate_price(uuid, int, timestamptz, int);
 
--- Preview wrapper around app.price_breakdown for admin previews, the customer
--- checkout quote and the public floor-plan. p_at defaults to now() when null;
--- remaining defaults to the live inventory for the price. Returns the full
--- server-authoritative breakdown so every surface renders identical numbers.
+
+
+
+
 CREATE OR REPLACE FUNCTION sp_calculate_price(
     p_prices_id uuid, p_seats int, p_at timestamptz, p_remaining int
 )
