@@ -12,13 +12,14 @@ AS $$
 DECLARE
     v_price int; v_formula uuid; v_label text; v_prices_id uuid;
     v_old_label text; v_old_price int; v_old_formula uuid; v_sold int; v_old_capacity int;
+    v_old_max int;
 BEGIN
     SELECT COALESCE(p_price_cents, price_cents),
            app.resolve_fee_formula(p_fee_formulas_id, events_id, tenants_id),
            COALESCE(p_label, label), prices_id,
-           label, price_cents, fee_formulas_id, capacity
+           label, price_cents, fee_formulas_id, capacity, max_quantity
       INTO v_price, v_formula, v_label, v_prices_id,
-           v_old_label, v_old_price, v_old_formula, v_old_capacity
+           v_old_label, v_old_price, v_old_formula, v_old_capacity, v_old_max
       FROM event_ticket_types WHERE event_ticket_types_id = p_id;
 
     SELECT COALESCE(SUM(bl.seats), 0)::int INTO v_sold
@@ -37,10 +38,12 @@ BEGIN
         IF p_capacity IS NULL AND v_old_capacity IS NOT NULL THEN
             RAISE EXCEPTION 'Capacity cannot be removed because % tickets are already sold.', v_sold;
         END IF;
-        IF p_capacity IS NOT NULL AND p_capacity < v_sold THEN
+        IF p_capacity IS NOT NULL AND p_capacity IS DISTINCT FROM v_old_capacity
+           AND p_capacity < v_sold THEN
             RAISE EXCEPTION 'Capacity cannot be reduced below the % tickets already sold for this ticket type.', v_sold;
         END IF;
-        IF p_max_quantity IS NOT NULL AND p_max_quantity < v_sold THEN
+        IF p_max_quantity IS NOT NULL AND p_max_quantity IS DISTINCT FROM v_old_max
+           AND p_max_quantity < v_sold THEN
             RAISE EXCEPTION 'Quantity limit cannot be reduced below the % tickets already sold for this ticket type.', v_sold;
         END IF;
     END IF;

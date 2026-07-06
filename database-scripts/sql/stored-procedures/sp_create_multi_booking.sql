@@ -8,6 +8,10 @@ AS $$
 DECLARE
     v_tenant uuid; v_event_type text; v_hold int; v_number text; v_id uuid; v_attempt int := 0;
     v_sub int := 0; v_fee int := 0; v_total int := 0; v_seats_total int := 0;
+    v_tax int := 0; v_taxable int := 0; v_tax_rate numeric;
+    v_tzip text; v_tstate text; v_tcounty text; v_tcity text;
+    v_tstate_rate numeric; v_tcounty_rate numeric; v_tcity_rate numeric; v_tlocal_rate numeric;
+    v_tapi text;
     v_line jsonb; v_kind text; v_ref uuid; v_seats int;
     v_prices_id uuid;
     v_cap int; v_tbl_status text; v_locked_by uuid; v_lock_exp timestamptz;
@@ -71,12 +75,14 @@ BEGIN
                 'base', v_bd.base_price_cents, 'selling', v_bd.selling_price_cents,
                 'discount', v_bd.discount_cents, 'rule_id', v_bd.applied_price_rules_id,
                 'rule_name', v_bd.applied_rule_name, 'platform', v_bd.platform_fee_cents,
-                'gateway', v_bd.gateway_fee_cents,
+                'gateway', v_bd.gateway_fee_cents, 'tax', v_bd.tax_cents,
                 'final', v_bd.final_price_cents, 'currency', v_bd.currency);
 
             v_sub := v_sub + v_bd.selling_price_cents * v_seats;
-            v_fee := v_fee + (v_bd.platform_fee_cents + v_bd.gateway_fee_cents) * v_seats;
+            v_fee := v_fee + (v_bd.platform_fee_cents + v_bd.gateway_fee_cents + v_bd.tax_cents) * v_seats;
             v_total := v_total + v_bd.final_price_cents * v_seats;
+            v_tax := v_tax + v_bd.tax_cents * v_seats;
+            v_taxable := v_taxable + (v_bd.selling_price_cents + v_bd.platform_fee_cents + v_bd.gateway_fee_cents) * v_seats;
             v_seats_total := v_seats_total + v_seats;
 
         ELSIF v_kind = 'Table' THEN
@@ -114,26 +120,48 @@ BEGIN
                 'base', v_bd.base_price_cents, 'selling', v_bd.selling_price_cents,
                 'discount', v_bd.discount_cents, 'rule_id', v_bd.applied_price_rules_id,
                 'rule_name', v_bd.applied_rule_name, 'platform', v_bd.platform_fee_cents,
-                'gateway', v_bd.gateway_fee_cents,
+                'gateway', v_bd.gateway_fee_cents, 'tax', v_bd.tax_cents,
                 'final', v_bd.final_price_cents, 'currency', v_bd.currency);
 
             v_sub := v_sub + v_bd.selling_price_cents;
-            v_fee := v_fee + v_bd.platform_fee_cents + v_bd.gateway_fee_cents;
+            v_fee := v_fee + v_bd.platform_fee_cents + v_bd.gateway_fee_cents + v_bd.tax_cents;
             v_total := v_total + v_bd.final_price_cents;
+            v_tax := v_tax + v_bd.tax_cents;
+            v_taxable := v_taxable + v_bd.selling_price_cents + v_bd.platform_fee_cents + v_bd.gateway_fee_cents;
             v_seats_total := v_seats_total + v_seats;
         ELSE
             RAISE EXCEPTION 'Unknown line kind: %', v_kind USING ERRCODE = '22023';
         END IF;
     END LOOP;
 
+    v_tax_rate := app.event_tax_rate(p_event_id);
+    IF v_taxable > 0 AND COALESCE(v_tax_rate, 0) > 0 THEN
+        v_fee := v_fee - v_tax + round(v_taxable * v_tax_rate)::int;
+        v_total := v_total - v_tax + round(v_taxable * v_tax_rate)::int;
+        v_tax := round(v_taxable * v_tax_rate)::int;
+    END IF;
+    SELECT COALESCE(a.zip_code, ''), trc.state, trc.county, trc.city,
+           COALESCE(trc.state_rate, 0), COALESCE(trc.county_rate, 0),
+           COALESCE(trc.city_rate, 0), COALESCE(trc.local_rate, 0), trc.api_response_id
+      INTO v_tzip, v_tstate, v_tcounty, v_tcity,
+           v_tstate_rate, v_tcounty_rate, v_tcity_rate, v_tlocal_rate, v_tapi
+      FROM events e
+      JOIN venues ve ON ve.venues_id = e.venues_id
+      LEFT JOIN addresses a ON a.addresses_id = ve.addresses_id
+      LEFT JOIN tax_rate_cache trc ON trc.zip_code = a.zip_code
+     WHERE e.events_id = p_event_id;
+
     LOOP
         v_attempt := v_attempt + 1;
         v_number := 'BK-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 10));
         BEGIN
             INSERT INTO bookings (tenants_id, booking_number, status, users_id, events_id,
-                subtotal_cents, fee_cents, total_cents, seats_reserved, hold_expires_at, created_at, updated_at)
+                subtotal_cents, fee_cents, total_cents, seats_reserved,
+                tax_cents, tax_rate, tax_state, tax_county, tax_city, tax_calculated_at,
+                hold_expires_at, created_at, updated_at)
             VALUES (v_tenant, v_number, 'Pending', p_user_id, p_event_id,
                 v_sub, v_fee, v_total, v_seats_total,
+                v_tax, v_tax_rate, v_tstate, v_tcounty, v_tcity, now(),
                 now() + make_interval(secs => v_hold), now(), now())
             RETURNING bookings.bookings_id INTO v_id;
             EXIT;
@@ -141,6 +169,13 @@ BEGIN
             IF v_attempt >= 5 THEN RAISE; END IF;
         END;
     END LOOP;
+
+    INSERT INTO booking_taxes (tenants_id, bookings_id, zip_code, state, county, city,
+        combined_rate, state_rate, county_rate, city_rate, local_rate,
+        taxable_amount_cents, tax_amount_cents, api_response_id, calculated_at, created_at, updated_at)
+    VALUES (v_tenant, v_id, COALESCE(v_tzip, ''), v_tstate, v_tcounty, v_tcity,
+        COALESCE(v_tax_rate, 0), v_tstate_rate, v_tcounty_rate, v_tcity_rate, v_tlocal_rate,
+        v_taxable, v_tax, v_tapi, now(), now(), now());
 
     FOR v_line IN SELECT * FROM jsonb_array_elements(v_resolved) LOOP
         v_kind := v_line->>'kind';
@@ -164,7 +199,7 @@ BEGIN
                     NULLIF(v_line->>'rule_id','')::uuid, NULLIF(v_line->>'rule_name',''),
                     (v_line->>'platform')::int, (v_line->>'gateway')::int,
                     (v_line->>'selling')::int,
-                    (v_line->>'platform')::int + (v_line->>'gateway')::int,
+                    (v_line->>'platform')::int + (v_line->>'gateway')::int + COALESCE((v_line->>'tax')::int, 0),
                     (v_line->>'final')::int, (v_line->>'final')::int, v_line->>'currency',
                     now(), now());
             END LOOP;
@@ -185,7 +220,7 @@ BEGIN
                 NULLIF(v_line->>'rule_id','')::uuid, NULLIF(v_line->>'rule_name',''),
                 (v_line->>'platform')::int, (v_line->>'gateway')::int,
                 (v_line->>'selling')::int,
-                (v_line->>'platform')::int + (v_line->>'gateway')::int,
+                (v_line->>'platform')::int + (v_line->>'gateway')::int + COALESCE((v_line->>'tax')::int, 0),
                 (v_line->>'final')::int, (v_line->>'final')::int, v_line->>'currency',
                 now(), now());
 

@@ -44,6 +44,8 @@ public class EventPlatformDbContext(
     public DbSet<Table> Tables => Set<Table>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<BookingLine> BookingLines => Set<BookingLine>();
+    public DbSet<BookingTax> BookingTaxes => Set<BookingTax>();
+    public DbSet<TaxRateCache> TaxRateCaches => Set<TaxRateCache>();
     public DbSet<StripeTransaction> StripeTransactions => Set<StripeTransaction>();
     public DbSet<StripeTransfer> StripeTransfers => Set<StripeTransfer>();
     public DbSet<StripePayout> StripePayouts => Set<StripePayout>();
@@ -877,6 +879,60 @@ public class EventPlatformDbContext(
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Event).WithMany().HasForeignKey(e => e.EventsId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Booking>(entity =>
+        {
+            entity.Property(e => e.TaxRate).HasPrecision(6, 5);
+        });
+
+        modelBuilder.Entity<BookingTax>(entity =>
+        {
+            entity.ToTable("booking_taxes", t =>
+            {
+                t.HasCheckConstraint("CK_booking_taxes_TaxableAmountCents", "taxable_amount_cents >= 0");
+                t.HasCheckConstraint("CK_booking_taxes_TaxAmountCents", "tax_amount_cents >= 0");
+            });
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.TenantsId);
+            entity.HasIndex(e => e.BookingsId).IsUnique();
+            entity.HasIndex(e => e.State);
+            entity.Property(e => e.ZipCode).HasMaxLength(16);
+            entity.Property(e => e.State).HasMaxLength(64);
+            entity.Property(e => e.County).HasMaxLength(128);
+            entity.Property(e => e.City).HasMaxLength(128);
+            entity.Property(e => e.ApiResponseId).HasMaxLength(128);
+            entity.Property(e => e.CombinedRate).HasPrecision(6, 5);
+            entity.Property(e => e.StateRate).HasPrecision(6, 5);
+            entity.Property(e => e.CountyRate).HasPrecision(6, 5);
+            entity.Property(e => e.CityRate).HasPrecision(6, 5);
+            entity.Property(e => e.LocalRate).HasPrecision(6, 5);
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantsId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Booking).WithMany().HasForeignKey(e => e.BookingsId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TaxRateCache>(entity =>
+        {
+            entity.ToTable("tax_rate_cache");
+            entity.HasKey(e => e.ZipCode);
+            entity.HasIndex(e => e.State);
+            entity.Property(e => e.ZipCode).HasMaxLength(16);
+            entity.Property(e => e.State).HasMaxLength(64);
+            entity.Property(e => e.County).HasMaxLength(128);
+            entity.Property(e => e.City).HasMaxLength(128);
+            entity.Property(e => e.ApiResponseId).HasMaxLength(128);
+            entity.Property(e => e.StateRate).HasPrecision(6, 5);
+            entity.Property(e => e.CountyRate).HasPrecision(6, 5);
+            entity.Property(e => e.CityRate).HasPrecision(6, 5);
+            entity.Property(e => e.LocalRate).HasPrecision(6, 5);
+            entity.Property(e => e.CombinedRate).HasPrecision(6, 5);
+        });
+
+        modelBuilder.Entity<Event>(entity =>
+        {
+            entity.Property(e => e.TaxRateOverride).HasPrecision(6, 5);
         });
 
         modelBuilder.Entity<BookingLine>(entity =>

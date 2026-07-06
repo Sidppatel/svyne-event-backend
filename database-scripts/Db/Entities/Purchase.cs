@@ -19,6 +19,13 @@ public class Booking : BaseEntity
     public int FeeCents { get; set; }
     public int TotalCents { get; set; }
 
+    public int TaxCents { get; set; }
+    public decimal? TaxRate { get; set; }
+    public string? TaxState { get; set; }
+    public string? TaxCounty { get; set; }
+    public string? TaxCity { get; set; }
+    public DateTime? TaxCalculatedAt { get; set; }
+
     public string? QrToken { get; set; }
 
     

@@ -136,12 +136,21 @@ public sealed class StripeService
 
     public async Task<PaymentIntent> CreateDestinationPaymentIntentAsync(
         long amountCents, long applicationFeeCents, string currency,
-        string destinationAccountId, Guid bookingId, bool achAllowed, bool bankOnly, CancellationToken ct)
+        string destinationAccountId, Guid bookingId, bool achAllowed, bool bankOnly, CancellationToken ct,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         var service = new PaymentIntentService(client);
         var methods = bankOnly
             ? new List<string> { "us_bank_account" }
             : new List<string> { "card", "cashapp" };
+        var meta = new Dictionary<string, string> { ["bookings_id"] = bookingId.ToString() };
+        if (metadata is not null)
+        {
+            foreach (var (key, value) in metadata)
+            {
+                meta[key] = value;
+            }
+        }
         var options = new PaymentIntentCreateOptions
         {
             Amount = amountCents,
@@ -149,7 +158,7 @@ public sealed class StripeService
             PaymentMethodTypes = methods,
             ApplicationFeeAmount = applicationFeeCents,
             TransferData = new PaymentIntentTransferDataOptions { Destination = destinationAccountId },
-            Metadata = new Dictionary<string, string> { ["bookings_id"] = bookingId.ToString() }
+            Metadata = meta
         };
         var requestOptions = new RequestOptions
         {

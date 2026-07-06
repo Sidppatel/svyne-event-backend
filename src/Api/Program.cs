@@ -76,6 +76,8 @@ builder.Services.AddScoped<TenantContext>();
 builder.Services.AddSingleton<Svyne.Api.Storage.ObjectStorage>();
 builder.Services.AddSingleton<Svyne.Api.Payments.StripeService>();
 builder.Services.AddSingleton<Svyne.Api.Payments.StripeWebhookHandler>();
+builder.Services.AddHttpClient("salestaxzip");
+builder.Services.AddSingleton<Svyne.Api.Payments.SalesTaxService>();
 builder.Services.AddHostedService<Svyne.Api.Payments.HoldExpiryWorker>();
 builder.Services.AddHostedService<Svyne.Api.Payments.BillingWorker>();
 

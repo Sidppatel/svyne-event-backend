@@ -34,11 +34,13 @@ public sealed partial class BookingServiceImpl
         string? connectedAccount, existingIntent;
         DateTime? holdExpiresAt;
         bool achAllowed;
+        var metadata = new Dictionary<string, string>();
         try
         {
             await using var cmd = new NpgsqlCommand(
                 "SELECT status, subtotal_cents, fee_cents, total_cents, currency, connected_account_id, "
-                + "charges_enabled, existing_intent_id, hold_expires_at, ach_allowed "
+                + "charges_enabled, existing_intent_id, hold_expires_at, ach_allowed, "
+                + "tax_cents, tax_rate, venue_zip, venue_city, venue_state, event_name, ticket_count "
                 + "FROM sp_get_booking_for_payment(@b, @u)", connection);
             cmd.Parameters.AddWithValue("b", bookingId);
             cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
@@ -57,6 +59,19 @@ public sealed partial class BookingServiceImpl
             existingIntent = reader.IsDBNull(7) ? null : reader.GetString(7);
             holdExpiresAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8);
             achAllowed = !reader.IsDBNull(9) && reader.GetBoolean(9);
+
+            metadata["tenant_id"] = tenantContext.TenantsId?.ToString() ?? string.Empty;
+            metadata["subtotal_cents"] = subtotal.ToString();
+            metadata["service_fee_cents"] = (fee - (reader.IsDBNull(10) ? 0 : reader.GetInt32(10))).ToString();
+            metadata["tax_cents"] = (reader.IsDBNull(10) ? 0 : reader.GetInt32(10)).ToString();
+            metadata["tax_rate"] = reader.IsDBNull(11) ? "0" : reader.GetDecimal(11).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            metadata["total_cents"] = total.ToString();
+            metadata["venue_zip"] = reader.IsDBNull(12) ? string.Empty : reader.GetString(12);
+            metadata["venue_city"] = reader.IsDBNull(13) ? string.Empty : reader.GetString(13);
+            metadata["venue_state"] = reader.IsDBNull(14) ? string.Empty : reader.GetString(14);
+            metadata["event_name"] = reader.IsDBNull(15) ? string.Empty : reader.GetString(15);
+            metadata["ticket_count"] = (reader.IsDBNull(16) ? 1 : reader.GetInt32(16)).ToString();
+            metadata["payment_purpose"] = "ticket_purchase";
 
             if (string.IsNullOrEmpty(connectedAccount) || !chargesEnabled)
             {
@@ -107,12 +122,12 @@ public sealed partial class BookingServiceImpl
                 }
                 else
                 {
-                    intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct);
+                    intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct, metadata);
                 }
             }
             else
             {
-                intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct);
+                intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct, metadata);
             }
         }
         catch (StripeException ex)

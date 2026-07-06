@@ -4,6 +4,8 @@ CREATE VIEW vw_bookings AS
 SELECT
     b.bookings_id AS bookings_id, b.booking_number, b.status::text,
     b.subtotal_cents, b.fee_cents, b.total_cents,
+    b.tax_cents, (b.fee_cents - b.tax_cents) AS service_fee_cents,
+    b.tax_rate, b.tax_state, b.tax_county, b.tax_city,
     b.qr_token, b.seats_reserved, b.created_at,
     b.users_id,
     u.email AS user_email,

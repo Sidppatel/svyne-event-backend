@@ -17,6 +17,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
     private readonly Db db;
     private readonly TenantContext tenantContext;
     private readonly StripeService stripe;
+    private readonly SalesTaxService taxRates;
     private readonly IEmailService email;
     private readonly EmailTemplateRenderer templates;
     private readonly AppSettingsProvider settings;
@@ -26,6 +27,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         Db db,
         TenantContext tenantContext,
         StripeService stripe,
+        SalesTaxService taxRates,
         IEmailService email,
         EmailTemplateRenderer templates,
         AppSettingsProvider settings,
@@ -34,6 +36,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         this.db = db;
         this.tenantContext = tenantContext;
         this.stripe = stripe;
+        this.taxRates = taxRates;
         this.email = email;
         this.templates = templates;
         this.settings = settings;
@@ -48,7 +51,9 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         await using var cmd = new NpgsqlCommand(
             "SELECT tt.event_ticket_types_id, tt.label, tt.price_cents, COALESCE(tt.platform_fee_cents, 0), "
             + "COALESCE(tt.max_quantity, 0), COALESCE(tt.description, ''), tt.fee_formulas_id, COALESCE(tt.capacity, 0), "
-            + "COALESCE(bp.selling_price_cents, tt.price_cents), COALESCE(vs.sold_count, 0) "
+            + "COALESCE(bp.selling_price_cents, tt.price_cents), COALESCE(vs.sold_count, 0), "
+            + "COALESCE(bp.platform_fee_cents + bp.gateway_fee_cents, 0), COALESCE(bp.tax_cents, 0), "
+            + "COALESCE(bp.final_price_cents, tt.price_cents) "
             + "FROM event_ticket_types tt "
             + "LEFT JOIN vw_event_ticket_types_summary vs ON vs.event_ticket_types_id = tt.event_ticket_types_id "
             + "LEFT JOIN prices p ON p.events_id = tt.events_id AND p.pricing_type = 'TicketTier' "
@@ -70,7 +75,10 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
                 FeeFormulasId = reader.IsDBNull(6) ? string.Empty : reader.GetGuid(6).ToString(),
                 Capacity = reader.GetInt32(7),
                 SellingPriceCents = reader.GetInt32(8),
-                SoldCount = reader.GetInt32(9)
+                SoldCount = reader.GetInt32(9),
+                ServiceFeeCents = reader.GetInt32(10),
+                TaxCents = reader.GetInt32(11),
+                TotalCents = reader.GetInt32(12)
             });
         }
         return response;
@@ -81,6 +89,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         var ct = context.CancellationToken;
         RequireUser();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await taxRates.EnsureRateForEventAsync(connection, Guid.Parse(request.EventsId), ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT bookings_id, booking_number FROM sp_create_booking(@u, @ev, @tbl, @seats, @tt, @sub, @fee, @total, 'Pending')", connection);
         cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
@@ -101,6 +110,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         var ct = context.CancellationToken;
         RequireUser();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await taxRates.EnsureRateForEventAsync(connection, Guid.Parse(request.EventsId), ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT bookings_id, booking_number FROM sp_reserve_open_capacity(@u, @ev, @seats, @tt, @sub, @fee, @total)", connection);
         cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
@@ -133,6 +143,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         var linesJson = System.Text.Json.JsonSerializer.Serialize(lines);
 
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await taxRates.EnsureRateForEventAsync(connection, Guid.Parse(request.EventsId), ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT bookings_id, booking_number FROM sp_create_multi_booking(@u, @ev, @lines::jsonb)", connection);
         cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
@@ -157,6 +168,13 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
             request.Lines.Select(l => new { kind = l.Kind, ref_id = l.RefId, seats = l.Seats }));
 
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        await taxRates.EnsureRateForEventAsync(connection, Guid.Parse(request.EventsId), ct);
+        decimal taxRate;
+        await using (var rateCmd = new NpgsqlCommand("SELECT COALESCE(app.event_tax_rate(@ev), 0)", connection))
+        {
+            rateCmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
+            taxRate = await rateCmd.ExecuteScalarAsync(ct) is decimal r ? r : 0m;
+        }
         await using var cmd = new NpgsqlCommand("SELECT * FROM sp_quote_cart(@ev, @lines::jsonb)", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
         cmd.Parameters.AddWithValue("lines", linesJson);
@@ -205,6 +223,11 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
             quote.AchTotalCents += reader.GetInt32(16);
         }
         quote.DiscountCents = quote.BaseTotalCents - quote.SubtotalCents;
+        var taxableCents = quote.SubtotalCents + quote.PlatformFeeCents + quote.GatewayFeeCents;
+        quote.TaxCents = taxableCents > 0 && taxRate > 0
+            ? (int)Math.Round(taxableCents * taxRate, MidpointRounding.AwayFromZero)
+            : 0;
+        quote.TotalCents = taxableCents + quote.TaxCents;
         quote.FeeCents = quote.PlatformFeeCents + quote.GatewayFeeCents + quote.TaxCents;
         quote.AchSavingsCents = quote.AchAvailable ? Math.Max(quote.TotalCents - quote.AchTotalCents, 0) : 0;
         if (!quote.AchAvailable)
@@ -399,7 +422,8 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         + "(SELECT COUNT(*) FROM booking_lines bl WHERE bl.bookings_id = b.bookings_id AND bl.kind = 'Ticket')::int, "
         + "(SELECT COUNT(*) FROM booking_lines bl WHERE bl.bookings_id = b.bookings_id AND bl.kind = 'Ticket' AND bl.status IN ('Claimed', 'CheckedIn'))::int, "
         + "(SELECT payment_intent_id FROM stripe_transactions st WHERE st.bookings_id = b.bookings_id LIMIT 1), "
-        + "b.fees_included, COALESCE(b.venue_name, ''), b.venue_address, b.venue_city, b.venue_state, b.venue_zip_code, b.paid_at "
+        + "b.fees_included, COALESCE(b.venue_name, ''), b.venue_address, b.venue_city, b.venue_state, b.venue_zip_code, b.paid_at, "
+        + "b.tax_cents, b.service_fee_cents "
         + "FROM vw_bookings b";
 
     private static Booking MapBooking(NpgsqlDataReader r) => new()
@@ -421,7 +445,12 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         FeesIncluded = !r.IsDBNull(15) && r.GetBoolean(15),
         VenueName = r.GetString(16),
         VenueAddress = ComposeAddress(r.GetString(17), r.GetString(18), r.GetString(19), r.GetString(20)),
-        PaidAt = r.IsDBNull(21) ? 0 : new DateTimeOffset(r.GetDateTime(21), TimeSpan.Zero).ToUnixTimeSeconds()
+        VenueCity = r.GetString(18),
+        VenueState = r.GetString(19),
+        VenueZip = r.GetString(20),
+        PaidAt = r.IsDBNull(21) ? 0 : new DateTimeOffset(r.GetDateTime(21), TimeSpan.Zero).ToUnixTimeSeconds(),
+        TaxCents = r.GetInt32(22),
+        ServiceFeeCents = r.GetInt32(23)
     };
 
     private static string ComposeAddress(string line1, string city, string state, string zip)

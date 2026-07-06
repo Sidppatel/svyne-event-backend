@@ -69,6 +69,7 @@ DECLARE
     v_base_unit int; v_sell_unit int;
     v_base_sub int; v_sell_sub int;
     v_platform int; v_gateway int;
+    v_tax_rate numeric; v_tax int;
 BEGIN
     SELECT pp.tenants_id, pp.events_id, pp.pricing_type, pp.base_price_cents, pp.per_attendee_cents,
            pp.is_all_inclusive, pp.fee_formulas_id
@@ -135,6 +136,13 @@ BEGIN
 
     v_gateway := app.compute_fee(v_sell_sub + v_platform, v_gw_formula);
 
+    v_tax_rate := app.event_tax_rate(v_event);
+    IF v_sell_sub > 0 AND v_tax_rate > 0 THEN
+        v_tax := round((v_sell_sub + v_platform + v_gateway) * v_tax_rate)::int;
+    ELSE
+        v_tax := 0;
+    END IF;
+
     base_price_cents := v_base_sub;
     selling_price_cents := v_sell_sub;
     discount_cents := GREATEST(v_base_sub - v_sell_sub, 0);
@@ -142,8 +150,8 @@ BEGIN
     applied_rule_name := v_rule_name;
     platform_fee_cents := v_platform;
     gateway_fee_cents := v_gateway;
-    tax_cents := 0;
-    final_price_cents := v_sell_sub + v_platform + v_gateway;
+    tax_cents := v_tax;
+    final_price_cents := v_sell_sub + v_platform + v_gateway + v_tax;
     organizer_net_cents := v_sell_sub;
     currency := 'usd';
     RETURN NEXT;

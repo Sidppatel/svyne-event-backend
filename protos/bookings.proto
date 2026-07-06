@@ -73,6 +73,11 @@ message Booking {
   string venue_name = 19;
   string venue_address = 20;
   int64 paid_at = 21;
+  int32 tax_cents = 22;
+  int32 service_fee_cents = 23;
+  string venue_zip = 24;
+  string venue_city = 25;
+  string venue_state = 26;
 }
 
 // One line of a booking, for display on checkout / booking detail. Carries the
@@ -178,6 +183,9 @@ message EventTicketType {
   // discount applies). Display hint; QuoteCart is authoritative at booking time.
   int32 selling_price_cents = 9;
   int32 sold_count = 10;
+  int32 service_fee_cents = 11;
+  int32 tax_cents = 12;
+  int32 total_cents = 13;
 }
 
 message ListEventTicketTypesResponse {

@@ -446,6 +446,251 @@ public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.Develo
         return response;
     }
 
+    public override async Task<TaxReport> GetTaxReport(RevenueReportRequest request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        var ct = context.CancellationToken;
+        var (from, to) = Range(request.FromEpochSeconds, request.ToEpochSeconds);
+        await using var connection = await OpenAsync(ct);
+        var response = new TaxReport
+        {
+            GeneratedAtEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+        };
+
+        await using (var cmd = RangeCmd(connection, "SELECT events_id, event_title, tax_collected_cents, orders FROM sp_developer_tax_by_event(@f, @t)", from, to))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                response.ByEvent.Add(new TaxByEventRow
+                {
+                    EventsId = reader.GetGuid(0).ToString(),
+                    EventTitle = reader.GetString(1),
+                    TaxCollectedCents = reader.GetInt64(2),
+                    Orders = reader.GetInt32(3)
+                });
+            }
+        }
+
+        await using (var cmd = RangeCmd(connection, "SELECT tenants_id, name, tax_collected_cents, orders FROM sp_developer_tax_by_tenant(@f, @t)", from, to))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                response.TotalTaxCents += reader.GetInt64(2);
+                response.ByTenant.Add(new TaxByTenantRow
+                {
+                    TenantsId = reader.GetGuid(0).ToString(),
+                    Name = reader.GetString(1),
+                    TaxCollectedCents = reader.GetInt64(2),
+                    Orders = reader.GetInt32(3)
+                });
+            }
+        }
+
+        await using (var cmd = RangeCmd(connection, "SELECT bucket_start, tax_collected_cents, orders FROM sp_developer_tax_by_month(@f, @t)", from, to))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                response.ByMonth.Add(new TaxByMonthRow
+                {
+                    BucketStartEpochSeconds = EpochOrZero(reader, 0),
+                    TaxCollectedCents = reader.GetInt64(1),
+                    Orders = reader.GetInt32(2)
+                });
+            }
+        }
+
+        await using (var cmd = RangeCmd(connection, "SELECT state, county, city, combined_rate, state_rate, county_rate, city_rate, local_rate, "
+            + "tax_collected_cents, state_tax_cents, county_tax_cents, city_tax_cents, orders "
+            + "FROM sp_developer_tax_by_jurisdiction(@f, @t)", from, to))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                response.ByJurisdiction.Add(new TaxByJurisdictionRow
+                {
+                    State = reader.GetString(0),
+                    County = reader.GetString(1),
+                    City = reader.GetString(2),
+                    CombinedRate = reader.IsDBNull(3) ? 0 : (double)reader.GetDecimal(3),
+                    StateRate = reader.IsDBNull(4) ? 0 : (double)reader.GetDecimal(4),
+                    CountyRate = reader.IsDBNull(5) ? 0 : (double)reader.GetDecimal(5),
+                    CityRate = reader.IsDBNull(6) ? 0 : (double)reader.GetDecimal(6),
+                    LocalRate = reader.IsDBNull(7) ? 0 : (double)reader.GetDecimal(7),
+                    TaxCollectedCents = reader.GetInt64(8),
+                    StateTaxCents = reader.GetInt64(9),
+                    CountyTaxCents = reader.GetInt64(10),
+                    CityTaxCents = reader.GetInt64(11),
+                    Orders = reader.GetInt32(12)
+                });
+            }
+        }
+
+        await using (var cmd = RangeCmd(connection, "SELECT combined_rate, state, tax_collected_cents, orders FROM sp_developer_tax_rate_summary(@f, @t)", from, to))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                response.RateSummary.Add(new TaxRateSummaryRow
+                {
+                    CombinedRate = reader.IsDBNull(0) ? 0 : (double)reader.GetDecimal(0),
+                    State = reader.GetString(1),
+                    TaxCollectedCents = reader.GetInt64(2),
+                    Orders = reader.GetInt32(3)
+                });
+            }
+        }
+
+        return response;
+    }
+
+    public override async Task<TenantDashboard> GetTenantDashboard(TenantRequest request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        var ct = context.CancellationToken;
+        var tenantsId = Guid.Parse(request.TenantsId);
+        await using var connection = await OpenAsync(ct);
+        var response = new TenantDashboard();
+
+        await using (var cmd = TenantCmd(connection,
+            "SELECT tier, total_revenue_cents, total_tax_cents, total_tickets_sold, event_count, "
+            + "revenue_this_month_cents, revenue_last_month_cents, tax_this_month_cents, avg_ticket_cents "
+            + "FROM sp_developer_tenant_stats(@tid)", tenantsId))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            if (await reader.ReadAsync(ct))
+            {
+                response.Tier = reader.GetString(0);
+                response.TotalRevenueCents = reader.GetInt64(1);
+                response.TotalTaxCents = reader.GetInt64(2);
+                response.TotalTicketsSold = reader.GetInt32(3);
+                response.EventCount = reader.GetInt32(4);
+                response.RevenueThisMonthCents = reader.GetInt64(5);
+                response.RevenueLastMonthCents = reader.GetInt64(6);
+                response.TaxThisMonthCents = reader.GetInt64(7);
+                response.AvgTicketCents = reader.GetInt64(8);
+            }
+        }
+
+        await using (var cmd = TenantCmd(connection,
+            "SELECT events_id, event_title, start_date, venue_name, status, revenue_cents, "
+            + "tickets_sold, capacity, tax_collected_cents FROM sp_developer_tenant_events(@tid)", tenantsId))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                response.Events.Add(new TenantDashboardEventRow
+                {
+                    EventsId = reader.GetGuid(0).ToString(),
+                    EventTitle = reader.GetString(1),
+                    StartDateEpochSeconds = EpochOrZero(reader, 2),
+                    VenueName = reader.GetString(3),
+                    Status = reader.GetString(4),
+                    RevenueCents = reader.GetInt64(5),
+                    TicketsSold = reader.GetInt32(6),
+                    Capacity = reader.GetInt32(7),
+                    TaxCollectedCents = reader.GetInt64(8)
+                });
+            }
+        }
+
+        await using (var cmd = TenantCmd(connection,
+            "SELECT bucket_start, revenue_cents, tickets_sold FROM sp_developer_tenant_revenue_by_month(@tid)", tenantsId))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                response.RevenueByMonth.Add(new TenantRevenueMonthRow
+                {
+                    BucketStartEpochSeconds = EpochOrZero(reader, 0),
+                    RevenueCents = reader.GetInt64(1),
+                    TicketsSold = reader.GetInt32(2)
+                });
+            }
+        }
+
+        await using (var cmd = TenantCmd(connection,
+            "SELECT venue_name, state, tax_collected_cents, orders FROM sp_developer_tenant_tax_by_venue(@tid)", tenantsId))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                response.TaxByVenue.Add(new TenantTaxByVenueRow
+                {
+                    VenueName = reader.GetString(0),
+                    State = reader.GetString(1),
+                    TaxCollectedCents = reader.GetInt64(2),
+                    Orders = reader.GetInt32(3)
+                });
+            }
+        }
+
+        return response;
+    }
+
+    public override async Task<TaxOverrideList> ListTaxOverrides(Empty request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        var ct = context.CancellationToken;
+        await using var connection = await OpenAsync(ct);
+        var response = new TaxOverrideList();
+        await using var cmd = new NpgsqlCommand(
+            "SELECT events_id, event_title, tenant_name, tax_exempt, tax_rate_override, updated_at "
+            + "FROM sp_list_event_tax_overrides()", connection);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            response.Overrides.Add(new TaxOverrideRow
+            {
+                EventsId = reader.GetGuid(0).ToString(),
+                EventTitle = reader.GetString(1),
+                TenantName = reader.GetString(2),
+                TaxExempt = reader.GetBoolean(3),
+                RateBps = reader.IsDBNull(4) ? 0 : (int)Math.Round(reader.GetDecimal(4) * 10000m),
+                UpdatedAtEpochSeconds = EpochOrZero(reader, 5)
+            });
+        }
+        return response;
+    }
+
+    public override async Task<AckResponse> SetEventTaxOverride(SetEventTaxOverrideRequest request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        RequireReason(request.Reason);
+        if (!request.TaxExempt && (request.RateBps < 0 || request.RateBps > 5000))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Tax rate must be between 0% and 50%"));
+        }
+        var ct = context.CancellationToken;
+        var eventsId = Guid.Parse(request.EventsId);
+        await using var connection = await OpenAsync(ct);
+        await ExecSpAsync(connection, "SELECT sp_set_event_tax_override(@e, @ex, @rate)", cmd =>
+        {
+            cmd.Parameters.AddWithValue("e", eventsId);
+            cmd.Parameters.AddWithValue("ex", request.TaxExempt);
+            cmd.Parameters.AddWithValue("rate", request.RateBps / 10000m);
+        }, ct);
+        await AuditAsync(connection, "TaxOverride", "Event", eventsId, "event_tax_override_set",
+            new { tax_exempt = request.TaxExempt, rate_bps = request.RateBps, reason = request.Reason }, ct);
+        return Ack(request.TaxExempt ? "Event marked tax exempt" : "Event tax rate overridden");
+    }
+
+    public override async Task<AckResponse> ClearEventTaxOverride(ClearEventFeeOverrideRequest request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        RequireReason(request.Reason);
+        var ct = context.CancellationToken;
+        var eventsId = Guid.Parse(request.EventsId);
+        await using var connection = await OpenAsync(ct);
+        await ExecSpAsync(connection, "SELECT sp_clear_event_tax_override(@e)",
+            cmd => cmd.Parameters.AddWithValue("e", eventsId), ct);
+        await AuditAsync(connection, "TaxOverride", "Event", eventsId, "event_tax_override_cleared",
+            new { reason = request.Reason }, ct);
+        return Ack("Event tax override cleared");
+    }
+
     public override async Task<TenantActivityList> GetTenantActivity(TenantActivityRequest request, ServerCallContext context)
     {
         RequireDeveloper();
@@ -536,6 +781,13 @@ public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.Develo
 
     private static NpgsqlParameter TextParam(string name, string? value)
         => new(name, NpgsqlDbType.Text) { Value = (object?)value ?? DBNull.Value };
+
+    private static NpgsqlCommand TenantCmd(NpgsqlConnection connection, string sql, Guid tenantsId)
+    {
+        var cmd = new NpgsqlCommand(sql, connection);
+        cmd.Parameters.AddWithValue("tid", tenantsId);
+        return cmd;
+    }
 
     private static NpgsqlCommand RangeCmd(NpgsqlConnection connection, string sql, DateTime from, DateTime to)
     {

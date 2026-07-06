@@ -54,6 +54,9 @@ public class Event : BaseEntity
     
     public bool AchEnabled { get; set; }
 
+    public bool TaxExempt { get; set; }
+    public decimal? TaxRateOverride { get; set; }
+
     public NpgsqlTsVector? SearchVector { get; set; }
 
     public Guid TenantsId { get; set; }

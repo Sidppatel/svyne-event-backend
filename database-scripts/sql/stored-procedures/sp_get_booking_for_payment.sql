@@ -18,7 +18,14 @@ CREATE OR REPLACE FUNCTION sp_get_booking_for_payment(
     existing_intent_id text,
     existing_status text,
     hold_expires_at timestamptz,
-    ach_allowed boolean
+    ach_allowed boolean,
+    tax_cents int,
+    tax_rate numeric,
+    venue_zip text,
+    venue_city text,
+    venue_state text,
+    event_name text,
+    ticket_count int
 ) LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -56,10 +63,19 @@ BEGIN
            st.payment_intent_id::text,
            st.status::text,
            b.hold_expires_at,
-           (t.ach_enabled AND e.ach_enabled)
+           (t.ach_enabled AND e.ach_enabled),
+           b.tax_cents,
+           b.tax_rate,
+           COALESCE(a.zip_code, '')::text,
+           COALESCE(a.city, '')::text,
+           COALESCE(a.state, '')::text,
+           e.title::text,
+           COALESCE(b.seats_reserved, 1)
       FROM bookings b
       JOIN tenants t ON t.tenants_id = b.tenants_id
       JOIN events e ON e.events_id = b.events_id
+      LEFT JOIN venues ve ON ve.venues_id = e.venues_id
+      LEFT JOIN addresses a ON a.addresses_id = ve.addresses_id
       LEFT JOIN stripe_transactions st ON st.bookings_id = b.bookings_id
      WHERE b.bookings_id = p_booking_id;
 END; $$;
