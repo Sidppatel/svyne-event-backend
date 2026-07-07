@@ -122,11 +122,12 @@ public sealed class StripeWebhookHandler
         }
 
         var qrToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        bool confirmed;
         await using (var cmd = new NpgsqlCommand("SELECT sp_confirm_booking(@b, @qr)", conn))
         {
             cmd.Parameters.AddWithValue("b", bookingId.Value);
             cmd.Parameters.AddWithValue("qr", qrToken);
-            await cmd.ExecuteNonQueryAsync(ct);
+            confirmed = await cmd.ExecuteScalarAsync(ct) is true;
         }
 
         
@@ -139,9 +140,11 @@ public sealed class StripeWebhookHandler
             await enrich.ExecuteNonQueryAsync(ct);
         }
 
-        
-        await BookingEmailSender.SendBookingConfirmationEmailAsync(
-            conn, bookingId.Value, emailService, templates, settings, logger, ct);
+        if (confirmed)
+        {
+            await BookingEmailSender.SendBookingConfirmationEmailAsync(
+                conn, bookingId.Value, emailService, templates, settings, logger, ct);
+        }
     }
 
     private async Task OnPaymentCanceled(NpgsqlConnection conn, PaymentIntent pi, CancellationToken ct)

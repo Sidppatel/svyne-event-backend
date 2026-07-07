@@ -25,7 +25,14 @@ CREATE OR REPLACE FUNCTION sp_get_booking_for_payment(
     venue_city text,
     venue_state text,
     event_name text,
-    ticket_count int
+    ticket_count int,
+    tenant_name text,
+    event_date timestamptz,
+    tax_state_cents int,
+    tax_county_cents int,
+    tax_city_cents int,
+    tax_local_cents int,
+    tax_jurisdiction text
 ) LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -70,12 +77,20 @@ BEGIN
            COALESCE(a.city, '')::text,
            COALESCE(a.state, '')::text,
            e.title::text,
-           COALESCE(b.seats_reserved, 1)
+           COALESCE(b.seats_reserved, 1),
+           t.name::text,
+           e.start_date,
+           round(bt.taxable_amount_cents * bt.state_rate)::int,
+           round(bt.taxable_amount_cents * bt.county_rate)::int,
+           round(bt.taxable_amount_cents * bt.city_rate)::int,
+           round(bt.taxable_amount_cents * bt.local_rate)::int,
+           NULLIF(concat_ws('-', bt.state, bt.county, bt.city), '')::text
       FROM bookings b
       JOIN tenants t ON t.tenants_id = b.tenants_id
       JOIN events e ON e.events_id = b.events_id
       LEFT JOIN venues ve ON ve.venues_id = e.venues_id
       LEFT JOIN addresses a ON a.addresses_id = ve.addresses_id
       LEFT JOIN stripe_transactions st ON st.bookings_id = b.bookings_id
+      LEFT JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id
      WHERE b.bookings_id = p_booking_id;
 END; $$;

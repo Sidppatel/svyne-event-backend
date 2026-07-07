@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION sp_revoke_device_session(p_session_hash text) RETURNS void LANGUAGE plpgsql
+CREATE OR REPLACE FUNCTION sp_revoke_device_session(p_session_hash text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog
 AS $$
 BEGIN

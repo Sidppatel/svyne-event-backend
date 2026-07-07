@@ -253,15 +253,19 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         var bookingId = Guid.Parse(request.BookingsId);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         
+        bool confirmed;
         await using (var cmd = new NpgsqlCommand("SELECT sp_confirm_booking(@id, @qr)", connection))
         {
             cmd.Parameters.AddWithValue("id", bookingId);
             cmd.Parameters.AddWithValue("qr", request.QrToken);
-            await cmd.ExecuteNonQueryAsync(ct);
+            confirmed = await cmd.ExecuteScalarAsync(ct) is true;
         }
 
-        await BookingEmailSender.SendBookingConfirmationEmailAsync(
-            connection, bookingId, email, templates, settings, logger, ct);
+        if (confirmed)
+        {
+            await BookingEmailSender.SendBookingConfirmationEmailAsync(
+                connection, bookingId, email, templates, settings, logger, ct);
+        }
 
         return new AckResponse { Success = true, Message = "Booking confirmed" };
     }

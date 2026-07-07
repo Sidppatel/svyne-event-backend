@@ -40,7 +40,8 @@ public sealed partial class BookingServiceImpl
             await using var cmd = new NpgsqlCommand(
                 "SELECT status, subtotal_cents, fee_cents, total_cents, currency, connected_account_id, "
                 + "charges_enabled, existing_intent_id, hold_expires_at, ach_allowed, "
-                + "tax_cents, tax_rate, venue_zip, venue_city, venue_state, event_name, ticket_count "
+                + "tax_cents, tax_rate, venue_zip, venue_city, venue_state, event_name, ticket_count, "
+                + "tenant_name, event_date, tax_state_cents, tax_county_cents, tax_city_cents, tax_local_cents, tax_jurisdiction "
                 + "FROM sp_get_booking_for_payment(@b, @u)", connection);
             cmd.Parameters.AddWithValue("b", bookingId);
             cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
@@ -71,6 +72,13 @@ public sealed partial class BookingServiceImpl
             metadata["venue_state"] = reader.IsDBNull(14) ? string.Empty : reader.GetString(14);
             metadata["event_name"] = reader.IsDBNull(15) ? string.Empty : reader.GetString(15);
             metadata["ticket_count"] = (reader.IsDBNull(16) ? 1 : reader.GetInt32(16)).ToString();
+            metadata["tenant_name"] = reader.IsDBNull(17) ? string.Empty : reader.GetString(17);
+            metadata["event_date"] = reader.IsDBNull(18) ? string.Empty : reader.GetDateTime(18).ToString("yyyy-MM-dd");
+            metadata["tax_state_cents"] = (reader.IsDBNull(19) ? 0 : reader.GetInt32(19)).ToString();
+            metadata["tax_county_cents"] = (reader.IsDBNull(20) ? 0 : reader.GetInt32(20)).ToString();
+            metadata["tax_city_cents"] = (reader.IsDBNull(21) ? 0 : reader.GetInt32(21)).ToString();
+            metadata["tax_local_cents"] = (reader.IsDBNull(22) ? 0 : reader.GetInt32(22)).ToString();
+            metadata["tax_jurisdiction"] = reader.IsDBNull(23) ? string.Empty : reader.GetString(23);
             metadata["payment_purpose"] = "ticket_purchase";
 
             if (string.IsNullOrEmpty(connectedAccount) || !chargesEnabled)
