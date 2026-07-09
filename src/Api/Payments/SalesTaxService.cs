@@ -66,6 +66,28 @@ public sealed class SalesTaxService
 
         if (!Configured)
         {
+            decimal mockRate = 0.05m;
+            if (zip == "36611") mockRate = 0.10m;
+            else if (zip == "90210") mockRate = 0.0825m;
+            else if (zip == "11111") mockRate = 0.07m;
+
+            var mockData = new SalesTaxZipData
+            {
+                ZipCode = zip,
+                City = "Mock City",
+                State = "AL",
+                County = "Mock County",
+                Rates = new SalesTaxZipRates
+                {
+                    Combined = mockRate,
+                    State = mockRate * 0.4m,
+                    County = mockRate * 0.6m,
+                    City = 0m,
+                    Local = 0m
+                },
+                LastUpdated = DateTime.UtcNow.ToString("o")
+            };
+            await UpsertAsync(connection, zip, mockData, ct);
             return;
         }
 
