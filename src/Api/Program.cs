@@ -448,6 +448,40 @@ app.MapGet("/developer/tax/summary", async (Db db, CancellationToken ct) =>
     return Results.Ok(new { venues, rates });
 }).AllowAnonymous();
 
+app.MapGet("/developer/tax/lookup", async (string zip, Db db, Svyne.Api.Payments.SalesTaxService taxService, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(zip))
+    {
+        return Results.BadRequest(new { error = "ZIP code is required" });
+    }
+
+    await using var connection = await db.OpenBootstrapAsync(ct);
+    await taxService.EnsureRateForZipAsync(connection, zip, ct);
+
+    await using var cmd = new Npgsql.NpgsqlCommand(
+        "SELECT zip_code, state, county, city, combined_rate, state_rate, county_rate, city_rate, fetched_at FROM tax_rate_cache WHERE zip_code = @zip", connection);
+    cmd.Parameters.AddWithValue("zip", zip);
+
+    await using var reader = await cmd.ExecuteReaderAsync(ct);
+    if (await reader.ReadAsync(ct))
+    {
+        return Results.Ok(new
+        {
+            zipCode = reader.GetString(0),
+            state = reader.IsDBNull(1) ? "" : reader.GetString(1),
+            county = reader.IsDBNull(2) ? "" : reader.GetString(2),
+            city = reader.IsDBNull(3) ? "" : reader.GetString(3),
+            combinedRate = reader.GetDecimal(4),
+            stateRate = reader.GetDecimal(5),
+            countyRate = reader.GetDecimal(6),
+            cityRate = reader.GetDecimal(7),
+            fetchedAt = reader.GetDateTime(8)
+        });
+    }
+
+    return Results.NotFound(new { error = $"No tax rate found or could be resolved for ZIP code {zip}" });
+}).AllowAnonymous();
+
 var lifecycleLogger = app.Services.GetRequiredService<Svyne.Api.ErrorHandling.ErrorLogger>();
 app.Lifetime.ApplicationStarted.Register(() =>
     _ = lifecycleLogger.LogInfoAsync("SystemLifecycle", "Application started"));
