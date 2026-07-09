@@ -210,18 +210,40 @@ app.MapPost("/webhooks/stripe", async (
     using var reader = new StreamReader(request.Body);
     var payload = await reader.ReadToEndAsync(ct);
     var signature = request.Headers["Stripe-Signature"].ToString();
-    var secret = config["STRIPE_WEBHOOK_SECRET"];
+    
+    var secrets = (config["STRIPE_WEBHOOK_SECRET"] ?? string.Empty)
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    Stripe.Event stripeEvent;
-    try
+    Stripe.Event? stripeEvent = null;
+    if (secrets.Length == 0)
     {
-        stripeEvent = string.IsNullOrEmpty(secret)
-            ? Stripe.EventUtility.ParseEvent(payload)
-            : Stripe.EventUtility.ConstructEvent(payload, signature, secret, throwOnApiVersionMismatch: false);
+        try
+        {
+            stripeEvent = Stripe.EventUtility.ParseEvent(payload);
+        }
+        catch (Stripe.StripeException)
+        {
+            return Results.BadRequest("Invalid signature");
+        }
     }
-    catch (Stripe.StripeException)
+    else
     {
-        return Results.BadRequest("Invalid signature");
+        foreach (var sec in secrets)
+        {
+            try
+            {
+                stripeEvent = Stripe.EventUtility.ConstructEvent(payload, signature, sec, throwOnApiVersionMismatch: false);
+                break;
+            }
+            catch (Stripe.StripeException)
+            {
+                // Continue trying other secrets
+            }
+        }
+        if (stripeEvent == null)
+        {
+            return Results.BadRequest("Invalid signature");
+        }
     }
 
     try
