@@ -37,6 +37,11 @@ service DeveloperBillingService {
   rpc ListTaxOverrides (svyne.common.Empty) returns (TaxOverrideList);
   rpc SetEventTaxOverride (SetEventTaxOverrideRequest) returns (svyne.common.AckResponse);
   rpc ClearEventTaxOverride (ClearEventFeeOverrideRequest) returns (svyne.common.AckResponse);
+
+  rpc ListTaxRates (svyne.common.Empty) returns (TaxRateList);
+  rpc LookupTaxRate (TaxRateLookupRequest) returns (TaxRateRow);
+  rpc RefreshAllTaxRates (svyne.common.Empty) returns (svyne.common.AckResponse);
+  rpc ListVenueTaxSummaries (svyne.common.Empty) returns (VenueTaxSummaryList);
 }
 
 message TenantRequest {
@@ -200,6 +205,47 @@ message SetEventTaxOverrideRequest {
   bool tax_exempt = 2;                 // true wins over rate_bps
   int32 rate_bps = 3;                  // e.g. 1000 = 10%
   string reason = 4;                   // required
+}
+
+message TaxRateRow {
+  string zip_code = 1;
+  string city = 2;
+  string state = 3;
+  string county = 4;
+  double combined_rate = 5;
+  double state_rate = 6;
+  double county_rate = 7;
+  double city_rate = 8;
+  double local_rate = 9;
+  string source_ref = 10;              // API last_updated echo
+  int64 fetched_at_epoch_seconds = 11;
+}
+
+message TaxRateList {
+  repeated TaxRateRow rates = 1;
+}
+
+message TaxRateLookupRequest {
+  string zip = 1;                      // 5-digit US zip; forces API refresh
+}
+
+message VenueTaxSummaryRow {
+  string venues_id = 1;
+  string venue_name = 2;
+  string tenant_name = 3;
+  string city = 4;
+  string state = 5;
+  string zip_code = 6;
+  double combined_rate = 7;
+  double state_rate = 8;
+  double county_rate = 9;
+  double city_rate = 10;
+  double local_rate = 11;
+  int64 fetched_at_epoch_seconds = 12; // 0 = never fetched
+}
+
+message VenueTaxSummaryList {
+  repeated VenueTaxSummaryRow venues = 1;
 }
 
 message RevenueReportRequest {

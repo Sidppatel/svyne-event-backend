@@ -15,12 +15,14 @@ public sealed class SalesTaxService
     private readonly TimeSpan ttl;
 
     public bool Configured => !string.IsNullOrWhiteSpace(baseUrl);
+    public bool MockMode { get; }
 
     public SalesTaxService(IConfiguration configuration, IHttpClientFactory httpClientFactory,
-        ErrorLogger errors, ILogger<SalesTaxService> logger)
+        ErrorLogger errors, ILogger<SalesTaxService> logger, IHostEnvironment environment)
     {
         this.errors = errors;
         this.logger = logger;
+        MockMode = string.IsNullOrWhiteSpace(configuration["SALESTAXZIP_BASE_URL"]) && environment.IsDevelopment();
         baseUrl = configuration["SALESTAXZIP_BASE_URL"]?.TrimEnd('/');
         apiKey = configuration["SALESTAXZIP_API_KEY"];
         var hours = int.TryParse(configuration["SALESTAXZIP_CACHE_TTL_HOURS"], out var h) ? h : 24;
@@ -40,32 +42,39 @@ public sealed class SalesTaxService
         await EnsureRateForZipAsync(connection, zip, ct);
     }
 
-    public async Task EnsureRateForZipAsync(NpgsqlConnection connection, string? zip, CancellationToken ct)
+    public async Task EnsureRateForZipAsync(NpgsqlConnection connection, string? zip, CancellationToken ct, bool force = false)
     {
         if (string.IsNullOrWhiteSpace(zip))
         {
             return;
         }
 
-        DateTime? fetchedAt = null;
-        await using (var cmd = new NpgsqlCommand(
-            "SELECT fetched_at FROM vw_tax_rate_cache WHERE zip_code = @z", connection))
+        if (!force)
         {
-            cmd.Parameters.AddWithValue("z", zip);
-            var result = await cmd.ExecuteScalarAsync(ct);
-            if (result is DateTime dt)
+            DateTime? fetchedAt = null;
+            await using (var cmd = new NpgsqlCommand(
+                "SELECT fetched_at FROM vw_tax_rate_cache WHERE zip_code = @z", connection))
             {
-                fetchedAt = dt;
+                cmd.Parameters.AddWithValue("z", zip);
+                var result = await cmd.ExecuteScalarAsync(ct);
+                if (result is DateTime dt)
+                {
+                    fetchedAt = dt;
+                }
             }
-        }
 
-        if (fetchedAt is { } f && DateTime.UtcNow - f < ttl)
-        {
-            return;
+            if (fetchedAt is { } f && DateTime.UtcNow - f < ttl)
+            {
+                return;
+            }
         }
 
         if (!Configured)
         {
+            if (!MockMode)
+            {
+                return;
+            }
             decimal mockRate = 0.05m;
             if (zip == "36611") mockRate = 0.10m;
             else if (zip == "90210") mockRate = 0.0825m;
@@ -136,6 +145,17 @@ public sealed class SalesTaxService
         await UpsertAsync(connection, zip, envelope.Data, ct);
         await errors.LogInfoAsync("tax_rate_refreshed",
             $"Refreshed tax rate for zip {zip}: {envelope.Data.Rates.Combined:P2}", ct: ct);
+
+        if (envelope.Data.Rates.Combined == 0m)
+        {
+            await errors.LogWarningAsync("tax_rate_zero",
+                $"SalesTaxZip returned 0% combined rate for zip {zip}", ct: ct);
+        }
+        else if (envelope.Data.Rates.Combined > 0.20m)
+        {
+            await errors.LogWarningAsync("tax_rate_suspicious",
+                $"SalesTaxZip returned unusually high combined rate {envelope.Data.Rates.Combined:P2} for zip {zip}; review", ct: ct);
+        }
     }
 
     private static async Task UpsertAsync(NpgsqlConnection connection, string zip, SalesTaxZipData? data, CancellationToken ct)

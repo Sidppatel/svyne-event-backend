@@ -3,6 +3,7 @@ using Grpc.Core;
 using Npgsql;
 using NpgsqlTypes;
 using Svyne.Api.Data;
+using Svyne.Api.Payments;
 using Svyne.Api.Security;
 using Svyne.Protos.Billing;
 using Svyne.Protos.Common;
@@ -20,12 +21,15 @@ public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.Develo
     private readonly Db db;
     private readonly TenantContext tenantContext;
     private readonly ReportingAccessProvider accessProvider;
+    private readonly SalesTaxService salesTax;
 
-    public DeveloperBillingServiceImpl(Db db, TenantContext tenantContext, ReportingAccessProvider accessProvider)
+    public DeveloperBillingServiceImpl(Db db, TenantContext tenantContext, ReportingAccessProvider accessProvider,
+        SalesTaxService salesTax)
     {
         this.db = db;
         this.tenantContext = tenantContext;
         this.accessProvider = accessProvider;
+        this.salesTax = salesTax;
     }
 
     public override async Task<TenantBillingList> ListTenantBilling(PageRequest request, ServerCallContext context)
@@ -675,6 +679,134 @@ public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.Develo
         await AuditAsync(connection, "TaxOverride", "Event", eventsId, "event_tax_override_set",
             new { tax_exempt = request.TaxExempt, rate_bps = request.RateBps, reason = request.Reason }, ct);
         return Ack(request.TaxExempt ? "Event marked tax exempt" : "Event tax rate overridden");
+    }
+
+    public override async Task<TaxRateList> ListTaxRates(Empty request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        var ct = context.CancellationToken;
+        await using var connection = await OpenAsync(ct);
+        var response = new TaxRateList();
+        await using var cmd = new NpgsqlCommand(
+            "SELECT zip_code, city, state, county, combined_rate, state_rate, county_rate, city_rate, "
+            + "local_rate, api_response_id, fetched_at FROM vw_tax_rate_cache ORDER BY zip_code", connection);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            response.Rates.Add(new TaxRateRow
+            {
+                ZipCode = reader.GetString(0),
+                City = reader.IsDBNull(1) ? "" : reader.GetString(1),
+                State = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                County = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                CombinedRate = (double)reader.GetDecimal(4),
+                StateRate = (double)reader.GetDecimal(5),
+                CountyRate = (double)reader.GetDecimal(6),
+                CityRate = (double)reader.GetDecimal(7),
+                LocalRate = (double)reader.GetDecimal(8),
+                SourceRef = reader.IsDBNull(9) ? "" : reader.GetString(9),
+                FetchedAtEpochSeconds = EpochOrZero(reader, 10)
+            });
+        }
+        return response;
+    }
+
+    public override async Task<TaxRateRow> LookupTaxRate(TaxRateLookupRequest request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        var zip = request.Zip?.Trim() ?? "";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(zip, @"^\d{5}$"))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Enter a valid 5-digit US zip code"));
+        }
+        if (!salesTax.Configured && !salesTax.MockMode)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, "SalesTaxZip API is not configured"));
+        }
+        var ct = context.CancellationToken;
+        await using var connection = await OpenAsync(ct);
+        await salesTax.EnsureRateForZipAsync(connection, zip, ct, force: true);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT zip_code, city, state, county, combined_rate, state_rate, county_rate, city_rate, "
+            + "local_rate, api_response_id, fetched_at FROM vw_tax_rate_cache WHERE zip_code = @z", connection);
+        cmd.Parameters.AddWithValue("z", zip);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, $"SalesTaxZip has no rate for zip {zip}"));
+        }
+        return new TaxRateRow
+        {
+            ZipCode = reader.GetString(0),
+            City = reader.IsDBNull(1) ? "" : reader.GetString(1),
+            State = reader.IsDBNull(2) ? "" : reader.GetString(2),
+            County = reader.IsDBNull(3) ? "" : reader.GetString(3),
+            CombinedRate = (double)reader.GetDecimal(4),
+            StateRate = (double)reader.GetDecimal(5),
+            CountyRate = (double)reader.GetDecimal(6),
+            CityRate = (double)reader.GetDecimal(7),
+            LocalRate = (double)reader.GetDecimal(8),
+            SourceRef = reader.IsDBNull(9) ? "" : reader.GetString(9),
+            FetchedAtEpochSeconds = EpochOrZero(reader, 10)
+        };
+    }
+
+    public override async Task<AckResponse> RefreshAllTaxRates(Empty request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        if (!salesTax.Configured && !salesTax.MockMode)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, "SalesTaxZip API is not configured"));
+        }
+        var ct = context.CancellationToken;
+        await using var connection = await OpenAsync(ct);
+        var zips = new List<string>();
+        await using (var cmd = new NpgsqlCommand(
+            "SELECT zip_code FROM vw_tax_rate_cache "
+            + "UNION SELECT zip_code FROM sp_list_venue_tax_summaries() WHERE zip_code <> ''", connection))
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                zips.Add(reader.GetString(0));
+            }
+        }
+        foreach (var zip in zips)
+        {
+            await salesTax.EnsureRateForZipAsync(connection, zip, ct, force: true);
+        }
+        return Ack($"Refreshed {zips.Count} tax rates");
+    }
+
+    public override async Task<VenueTaxSummaryList> ListVenueTaxSummaries(Empty request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        var ct = context.CancellationToken;
+        await using var connection = await OpenAsync(ct);
+        var response = new VenueTaxSummaryList();
+        await using var cmd = new NpgsqlCommand(
+            "SELECT venues_id, venue_name, tenant_name, city, state, zip_code, combined_rate, "
+            + "state_rate, county_rate, city_rate, local_rate, fetched_at FROM sp_list_venue_tax_summaries()", connection);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            response.Venues.Add(new VenueTaxSummaryRow
+            {
+                VenuesId = reader.GetGuid(0).ToString(),
+                VenueName = reader.GetString(1),
+                TenantName = reader.GetString(2),
+                City = reader.GetString(3),
+                State = reader.GetString(4),
+                ZipCode = reader.GetString(5),
+                CombinedRate = (double)reader.GetDecimal(6),
+                StateRate = (double)reader.GetDecimal(7),
+                CountyRate = (double)reader.GetDecimal(8),
+                CityRate = (double)reader.GetDecimal(9),
+                LocalRate = (double)reader.GetDecimal(10),
+                FetchedAtEpochSeconds = EpochOrZero(reader, 11)
+            });
+        }
+        return response;
     }
 
     public override async Task<AckResponse> ClearEventTaxOverride(ClearEventFeeOverrideRequest request, ServerCallContext context)
