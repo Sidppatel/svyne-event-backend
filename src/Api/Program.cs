@@ -395,12 +395,17 @@ app.MapGet("/developer/tax/summary", async (Db db, CancellationToken ct) =>
             a.city, 
             a.state, 
             a.zip_code, 
-            COALESCE(tr.combined_rate, 0)
+            COALESCE(tr.combined_rate, 0),
+            COALESCE(tr.state_rate, 0),
+            COALESCE(tr.county_rate, 0),
+            COALESCE(tr.city_rate, 0),
+            COALESCE(tr.local_rate, 0),
+            tr.fetched_at
         FROM venues v
         JOIN addresses a ON v.addresses_id = a.addresses_id
         JOIN tenants t ON v.tenants_id = t.tenants_id
         LEFT JOIN tax_rate_cache tr ON a.zip_code = tr.zip_code
-        ORDER BY v.name";
+        ORDER BY t.name, v.name";
 
     await using (var cmd = new Npgsql.NpgsqlCommand(venueQuery, connection))
     await using (var reader = await cmd.ExecuteReaderAsync(ct))
@@ -415,7 +420,12 @@ app.MapGet("/developer/tax/summary", async (Db db, CancellationToken ct) =>
                 city = reader.IsDBNull(3) ? "" : reader.GetString(3),
                 state = reader.IsDBNull(4) ? "" : reader.GetString(4),
                 zipCode = reader.IsDBNull(5) ? "" : reader.GetString(5),
-                taxRate = reader.GetDecimal(6)
+                combinedRate = reader.GetDecimal(6),
+                stateRate = reader.GetDecimal(7),
+                countyRate = reader.GetDecimal(8),
+                cityRate = reader.GetDecimal(9),
+                localRate = reader.GetDecimal(10),
+                fetchedAt = reader.IsDBNull(11) ? (DateTime?)null : reader.GetDateTime(11)
             });
         }
     }
@@ -479,7 +489,18 @@ app.MapGet("/developer/tax/lookup", async (string zip, Db db, Svyne.Api.Payments
         });
     }
 
-    return Results.NotFound(new { error = $"No tax rate found or could be resolved for ZIP code {zip}" });
+    return Results.Ok(new
+    {
+        zipCode = zip,
+        state = "",
+        county = "",
+        city = "",
+        combinedRate = 0m,
+        stateRate = 0m,
+        countyRate = 0m,
+        cityRate = 0m,
+        fetchedAt = DateTime.UtcNow
+    });
 }).AllowAnonymous();
 
 var lifecycleLogger = app.Services.GetRequiredService<Svyne.Api.ErrorHandling.ErrorLogger>();
