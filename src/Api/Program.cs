@@ -73,13 +73,26 @@ builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<StartupSeeder>();
 builder.Services.AddSingleton<AppSettingsProvider>();
 builder.Services.AddSingleton<Svyne.Api.Email.EmailTemplateRenderer>();
+builder.Services.AddHttpContextAccessor();
 if (!string.IsNullOrEmpty(builder.Configuration["RESEND_API_KEY"]))
 {
-    builder.Services.AddSingleton<Svyne.Api.Email.IEmailService, Svyne.Api.Email.ResendEmailService>();
+    builder.Services.AddSingleton<Svyne.Api.Email.ResendEmailService>();
+    builder.Services.AddSingleton<Svyne.Api.Email.IEmailService>(sp =>
+        new Svyne.Api.Email.LoggingEmailService(
+            sp.GetRequiredService<Svyne.Api.Email.ResendEmailService>(),
+            sp.GetRequiredService<Db>(),
+            sp
+        ));
 }
 else
 {
-    builder.Services.AddSingleton<Svyne.Api.Email.IEmailService, Svyne.Api.Email.LocalFileEmailService>();
+    builder.Services.AddSingleton<Svyne.Api.Email.LocalFileEmailService>();
+    builder.Services.AddSingleton<Svyne.Api.Email.IEmailService>(sp =>
+        new Svyne.Api.Email.LoggingEmailService(
+            sp.GetRequiredService<Svyne.Api.Email.LocalFileEmailService>(),
+            sp.GetRequiredService<Db>(),
+            sp
+        ));
 }
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ReportingAccessProvider>();
