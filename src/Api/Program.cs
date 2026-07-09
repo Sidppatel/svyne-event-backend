@@ -330,4 +330,10 @@ app.MapGet("/stripe/onboard/return", (string? tenant, IConfiguration config) =>
 app.MapGet("/stripe/onboard/refresh", (string? tenant, IConfiguration config) =>
     Results.Redirect($"{AdminFrontend(config)}/financial?stripe=refresh")).AllowAnonymous();
 
+var lifecycleLogger = app.Services.GetRequiredService<Svyne.Api.ErrorHandling.ErrorLogger>();
+app.Lifetime.ApplicationStarted.Register(() =>
+    _ = lifecycleLogger.LogInfoAsync("SystemLifecycle", "Application started"));
+app.Lifetime.ApplicationStopping.Register(() =>
+    lifecycleLogger.LogInfoAsync("SystemLifecycle", "Application stopping").GetAwaiter().GetResult());
+
 app.Run();

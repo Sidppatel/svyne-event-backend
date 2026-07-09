@@ -13,11 +13,11 @@ DECLARE
 BEGIN
     IF TG_OP = 'DELETE' THEN
         v_action := 'Delete';
-        v_before := to_jsonb(OLD);
+        v_before := to_jsonb(OLD) - 'password_hash';
         v_after  := NULL;
     ELSIF TG_OP = 'UPDATE' THEN
-        v_before := to_jsonb(OLD);
-        v_after  := to_jsonb(NEW);
+        v_before := to_jsonb(OLD) - 'password_hash';
+        v_after  := to_jsonb(NEW) - 'password_hash';
         IF (v_before ->> 'is_active') = 'true' AND (v_after ->> 'is_active') = 'false' THEN
             v_action := 'Delete';
         ELSE
@@ -26,7 +26,7 @@ BEGIN
     ELSIF TG_OP = 'INSERT' THEN
         v_action := 'Insert';
         v_before := NULL;
-        v_after  := to_jsonb(NEW);
+        v_after  := to_jsonb(NEW) - 'password_hash';
     ELSE
         RETURN NULL;
     END IF;
@@ -54,10 +54,21 @@ BEGIN
     IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
 END; $$;
 
-DROP TRIGGER IF EXISTS tr_audit_prices ON prices;
-CREATE TRIGGER tr_audit_prices AFTER INSERT OR UPDATE OR DELETE ON prices
-    FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
-
-DROP TRIGGER IF EXISTS tr_audit_price_rules ON price_rules;
-CREATE TRIGGER tr_audit_price_rules AFTER INSERT OR UPDATE OR DELETE ON price_rules
-    FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOREACH t IN ARRAY ARRAY[
+        'prices', 'price_rules',
+        'users', 'tenants', 'events',
+        'bookings', 'booking_lines', 'invitations',
+        'event_ticket_types', 'event_tables', 'staff_event_access',
+        'stripe_transactions', 'tenant_subscriptions', 'tenant_addons', 'billing_charges'
+    ]
+    LOOP
+        EXECUTE format('DROP TRIGGER IF EXISTS tr_audit_%I ON %I', t, t);
+        EXECUTE format(
+            'CREATE TRIGGER tr_audit_%I AFTER INSERT OR UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger()',
+            t, t);
+    END LOOP;
+END $$;
