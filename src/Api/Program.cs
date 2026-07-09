@@ -380,6 +380,74 @@ app.MapPost("/developer/tax/refresh", async (Db db, Svyne.Api.Payments.SalesTaxS
     return Results.Ok(new { message = $"Refreshed tax rates for {zips.Count} zip codes: {string.Join(", ", zips)}" });
 }).AllowAnonymous();
 
+app.MapGet("/developer/tax/summary", async (Db db, CancellationToken ct) =>
+{
+    var venues = new List<object>();
+    var rates = new List<object>();
+
+    await using var connection = await db.OpenBootstrapAsync(ct);
+
+    var venueQuery = @"
+        SELECT 
+            v.venues_id::text, 
+            v.name, 
+            t.name,
+            a.city, 
+            a.state, 
+            a.zip_code, 
+            COALESCE(tr.combined_rate, 0)
+        FROM venues v
+        JOIN addresses a ON v.addresses_id = a.addresses_id
+        JOIN tenants t ON v.tenants_id = t.tenants_id
+        LEFT JOIN tax_rate_cache tr ON a.zip_code = tr.zip_code
+        ORDER BY v.name";
+
+    await using (var cmd = new Npgsql.NpgsqlCommand(venueQuery, connection))
+    await using (var reader = await cmd.ExecuteReaderAsync(ct))
+    {
+        while (await reader.ReadAsync(ct))
+        {
+            venues.Add(new
+            {
+                venuesId = reader.GetString(0),
+                venueName = reader.GetString(1),
+                tenantName = reader.GetString(2),
+                city = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                state = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                zipCode = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                taxRate = reader.GetDecimal(6)
+            });
+        }
+    }
+
+    var rateQuery = @"
+        SELECT zip_code, state, county, city, combined_rate, state_rate, county_rate, city_rate, fetched_at
+        FROM tax_rate_cache
+        ORDER BY zip_code";
+
+    await using (var cmd = new Npgsql.NpgsqlCommand(rateQuery, connection))
+    await using (var reader = await cmd.ExecuteReaderAsync(ct))
+    {
+        while (await reader.ReadAsync(ct))
+        {
+            rates.Add(new
+            {
+                zipCode = reader.GetString(0),
+                state = reader.IsDBNull(1) ? "" : reader.GetString(1),
+                county = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                city = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                combinedRate = reader.GetDecimal(4),
+                stateRate = reader.GetDecimal(5),
+                countyRate = reader.GetDecimal(6),
+                cityRate = reader.GetDecimal(7),
+                fetchedAt = reader.GetDateTime(8)
+            });
+        }
+    }
+
+    return Results.Ok(new { venues, rates });
+}).AllowAnonymous();
+
 var lifecycleLogger = app.Services.GetRequiredService<Svyne.Api.ErrorHandling.ErrorLogger>();
 app.Lifetime.ApplicationStarted.Register(() =>
     _ = lifecycleLogger.LogInfoAsync("SystemLifecycle", "Application started"));
