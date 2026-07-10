@@ -273,7 +273,8 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
             + "COALESCE(phone, ''), COALESCE(address_line1, ''), COALESCE(address_line2, ''), "
             + "COALESCE(city, ''), COALESCE(state, ''), COALESCE(zip, ''), "
             + "logo_images_id, COALESCE(brand_primary, ''), COALESCE(brand_secondary, ''), COALESCE(brand_accent, ''), "
-            + "COALESCE(brand_background, ''), COALESCE(brand_text, ''), COALESCE(brand_button, ''), COALESCE(brand_highlight, '') "
+            + "COALESCE(brand_background, ''), COALESCE(brand_text, ''), COALESCE(brand_button, ''), COALESCE(brand_highlight, ''), "
+            + "COALESCE(brand_tokens::text, '') "
             + "FROM sp_get_my_tenant(@u)", connection);
         cmd.Parameters.AddWithValue("u", usersId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -303,7 +304,8 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
             BrandBackground = reader.GetString(15),
             BrandText = reader.GetString(16),
             BrandButton = reader.GetString(17),
-            BrandHighlight = reader.GetString(18)
+            BrandHighlight = reader.GetString(18),
+            BrandTokensJson = reader.GetString(19)
         };
     }
 
@@ -318,7 +320,8 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         await using var cmd = new NpgsqlCommand(
             "SELECT slug, name, logo_images_id, "
             + "COALESCE(brand_primary, ''), COALESCE(brand_secondary, ''), COALESCE(brand_accent, ''), "
-            + "COALESCE(brand_background, ''), COALESCE(brand_text, ''), COALESCE(brand_button, ''), COALESCE(brand_highlight, '') "
+            + "COALESCE(brand_background, ''), COALESCE(brand_text, ''), COALESCE(brand_button, ''), COALESCE(brand_highlight, ''), "
+            + "COALESCE(brand_tokens, '') "
             + "FROM sp_get_public_tenant_branding(@slug)", connection);
         cmd.Parameters.AddWithValue("slug", request.Slug);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -339,7 +342,8 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
             BrandBackground = reader.GetString(6),
             BrandText = reader.GetString(7),
             BrandButton = reader.GetString(8),
-            BrandHighlight = reader.GetString(9)
+            BrandHighlight = reader.GetString(9),
+            BrandTokensJson = reader.GetString(10)
         };
     }
 
@@ -357,7 +361,7 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         }
         await using var connection = await db.OpenAsync(usersId, tenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_update_tenant_branding(@t, @logo, @primary, @secondary, @accent, @background, @text, @button, @highlight)", connection);
+            "SELECT sp_update_tenant_branding(@t, @logo, @primary, @secondary, @accent, @background, @text, @button, @highlight, @tokens)", connection);
         cmd.Parameters.AddWithValue("t", tenantsId);
         cmd.Parameters.AddWithValue("logo", logo);
         cmd.Parameters.AddWithValue("primary", (object?)NullIfEmpty(request.BrandPrimary) ?? DBNull.Value);
@@ -367,6 +371,10 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         cmd.Parameters.AddWithValue("text", (object?)NullIfEmpty(request.BrandText) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("button", (object?)NullIfEmpty(request.BrandButton) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("highlight", (object?)NullIfEmpty(request.BrandHighlight) ?? DBNull.Value);
+        cmd.Parameters.Add(new NpgsqlParameter("tokens", NpgsqlTypes.NpgsqlDbType.Jsonb)
+        {
+            Value = (object?)NullIfEmpty(request.BrandTokensJson) ?? DBNull.Value
+        });
         await cmd.ExecuteNonQueryAsync(ct);
         return new AckResponse { Success = true, Message = "Tenant branding updated" };
     }

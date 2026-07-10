@@ -28,6 +28,7 @@ public class Tenant : BaseEntity
     public string? BrandText { get; set; }
     public string? BrandButton { get; set; }
     public string? BrandHighlight { get; set; }
+    public string? BrandTokens { get; set; }
 
     public DateTime? ArchivedAt { get; set; }
 

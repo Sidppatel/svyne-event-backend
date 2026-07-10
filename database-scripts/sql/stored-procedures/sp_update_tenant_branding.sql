@@ -1,4 +1,5 @@
 DROP FUNCTION IF EXISTS sp_update_tenant_branding(uuid, uuid, text, text, text);
+DROP FUNCTION IF EXISTS sp_update_tenant_branding(uuid, uuid, text, text, text, text, text, text, text);
 
 CREATE OR REPLACE FUNCTION sp_update_tenant_branding(
     p_tenants_id uuid,
@@ -9,7 +10,8 @@ CREATE OR REPLACE FUNCTION sp_update_tenant_branding(
     p_brand_background text DEFAULT NULL,
     p_brand_text text DEFAULT NULL,
     p_brand_button text DEFAULT NULL,
-    p_brand_highlight text DEFAULT NULL
+    p_brand_highlight text DEFAULT NULL,
+    p_brand_tokens jsonb DEFAULT NULL
 ) RETURNS void LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -23,6 +25,7 @@ BEGIN
         brand_text     = p_brand_text,
         brand_button   = p_brand_button,
         brand_highlight = p_brand_highlight,
+        brand_tokens   = p_brand_tokens,
         updated_at     = now()
     WHERE tenants_id = p_tenants_id
       AND archived_at IS NULL;

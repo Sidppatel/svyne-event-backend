@@ -130,6 +130,7 @@ public class EventPlatformDbContext(
             entity.Property(e => e.StripePayoutsEnabled).HasDefaultValue(false);
             entity.Property(e => e.StripeDetailsSubmitted).HasDefaultValue(false);
             entity.Property(e => e.StripeRequirementsDue).HasColumnType("jsonb");
+            entity.Property(e => e.BrandTokens).HasColumnType("jsonb");
             entity.Property(e => e.Tier).HasMaxLength(32).HasDefaultValue("free");
             entity.Property(e => e.AdvancedReportingEnabled).HasDefaultValue(false);
             entity.HasOne(e => e.DefaultFeeFormula).WithMany()

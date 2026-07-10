@@ -1,3 +1,5 @@
+DROP FUNCTION IF EXISTS sp_get_public_tenant_branding(text);
+
 CREATE OR REPLACE FUNCTION sp_get_public_tenant_branding(
     p_slug text
 ) RETURNS TABLE (
@@ -10,7 +12,8 @@ CREATE OR REPLACE FUNCTION sp_get_public_tenant_branding(
     brand_background text,
     brand_text text,
     brand_button text,
-    brand_highlight text
+    brand_highlight text,
+    brand_tokens text
 ) LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -18,7 +21,8 @@ BEGIN
     RETURN QUERY
     SELECT t.slug::text, t.name::text, t.logo_images_id,
            t.brand_primary, t.brand_secondary, t.brand_accent,
-           t.brand_background, t.brand_text, t.brand_button, t.brand_highlight
+           t.brand_background, t.brand_text, t.brand_button, t.brand_highlight,
+           t.brand_tokens::text
     FROM tenants t
     WHERE t.slug = p_slug
       AND t.archived_at IS NULL;

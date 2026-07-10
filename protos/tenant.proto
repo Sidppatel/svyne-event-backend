@@ -72,6 +72,8 @@ message Tenant {
   string brand_highlight = 24;
   // Whether this tenant may offer ACH bank-transfer payments (developer-managed).
   bool ach_enabled = 25;
+  // JSON object of advanced theme-token overrides, e.g. {"stage":"#101010"}.
+  string brand_tokens_json = 26;
 }
 
 message UpdateMyTenantBrandingRequest {
@@ -83,6 +85,7 @@ message UpdateMyTenantBrandingRequest {
   string brand_text = 6;
   string brand_button = 7;
   string brand_highlight = 8;
+  string brand_tokens_json = 9;
 }
 
 message PublicTenantBrandingRequest {
@@ -100,6 +103,7 @@ message PublicTenantBranding {
   string brand_text = 8;
   string brand_button = 9;
   string brand_highlight = 10;
+  string brand_tokens_json = 11;
 }
 
 message UpdateMyTenantContactRequest {
