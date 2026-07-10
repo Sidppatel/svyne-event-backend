@@ -21,6 +21,13 @@ RUN dotnet publish database-scripts/MigrationRunner -c Release -o /app/migrate \
     --no-restore -p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine AS runtime
+RUN apk add --no-cache \
+        krb5-libs \
+        ca-certificates \
+        openssl \
+ && update-ca-certificates
+
 WORKDIR /app
 COPY --from=build /app/migrate /app/migrate
 ENTRYPOINT ["dotnet", "/app/migrate/MigrationRunner.dll"]
+
