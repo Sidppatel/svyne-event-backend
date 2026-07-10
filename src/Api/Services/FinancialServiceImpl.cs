@@ -55,7 +55,7 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
 
         string? accountId = null;
         await using (var look = new NpgsqlCommand(
-            "SELECT stripe_connected_account_id FROM tenants WHERE tenants_id = @t", connection))
+            "SELECT stripe_connected_account_id FROM vw_tenant_stripe_profile WHERE tenants_id = @t", connection))
         {
             look.Parameters.AddWithValue("t", Guid.Parse(request.Value));
             accountId = await look.ExecuteScalarAsync(ct) as string;
@@ -130,10 +130,9 @@ public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
         string? accountId;
         var prefill = new StripeAccountPrefill();
         await using (var cmd = new NpgsqlCommand(
-            "SELECT t.stripe_connected_account_id, t.country_code, COALESCE(t.legal_name, t.name), "
-            + "p.business_type, p.business_url, p.product_description, p.mcc, p.support_email "
-            + "FROM tenants t LEFT JOIN tenant_stripe_profiles p ON p.tenants_id = t.tenants_id "
-            + "WHERE t.tenants_id = @t", connection))
+            "SELECT stripe_connected_account_id, country_code, business_name, "
+            + "business_type, business_url, product_description, mcc, support_email "
+            + "FROM vw_tenant_stripe_profile WHERE tenants_id = @t", connection))
         {
             cmd.Parameters.AddWithValue("t", tenantId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);

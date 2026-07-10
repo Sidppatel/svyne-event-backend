@@ -67,9 +67,7 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         await reader.CloseAsync();
 
         await using (var prefillCmd = new NpgsqlCommand(
-            "INSERT INTO tenant_stripe_profiles "
-            + "(tenants_id, business_type, business_url, product_description, mcc, support_email, created_at, updated_at) "
-            + "VALUES (@t, @bt, @url, @desc, @mcc, @email, now(), now())", connection))
+            "SELECT sp_upsert_tenant_stripe_profile(@t, @bt, @url, @desc, @mcc, @email)", connection))
         {
             prefillCmd.Parameters.AddWithValue("bt", (object?)NullIfEmpty(request.BusinessType) ?? DBNull.Value);
             prefillCmd.Parameters.AddWithValue("url", (object?)NullIfEmpty(request.BusinessUrl) ?? DBNull.Value);
@@ -159,8 +157,8 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT v.tenants_id, v.slug, v.name, v.legal_name, v.country_code, v.member_count, v.event_count, v.total_revenue_cents, v.archived_at IS NOT NULL, "
-            + "t.ach_enabled, t.default_fee_formulas_id "
-            + "FROM vw_tenants v JOIN tenants t ON t.tenants_id = v.tenants_id "
+            + "v.ach_enabled, v.default_fee_formulas_id "
+            + "FROM vw_tenants v "
             + "WHERE v.archived_at IS NULL "
             + "AND (@search::text IS NULL OR v.name ILIKE '%' || @search || '%' OR v.legal_name ILIKE '%' || @search || '%' OR v.slug ILIKE '%' || @search || '%') "
             + "ORDER BY v.created_at DESC OFFSET @offset LIMIT @limit", connection);
@@ -196,7 +194,7 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         var response = new ListPublicTenantsResponse();
         await using var connection = await db.OpenAsync(null, null, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT slug, name FROM tenants WHERE archived_at IS NULL ORDER BY name", connection);
+            "SELECT slug, name FROM vw_tenant_identity WHERE archived_at IS NULL ORDER BY name", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
@@ -239,7 +237,7 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT v.tenants_id, v.slug, v.name, v.legal_name, v.country_code, v.member_count, v.event_count, v.total_revenue_cents, v.archived_at IS NOT NULL, "
-            + "(SELECT default_fee_formulas_id FROM tenants t WHERE t.tenants_id = v.tenants_id) "
+            + "v.default_fee_formulas_id "
             + "FROM vw_tenants v WHERE v.tenants_id = @id", connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -448,11 +446,10 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         var ct = context.CancellationToken;
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT t.stripe_connected_account_id, COALESCE(t.legal_name, t.name), "
-            + "COALESCE(p.business_type, ''), COALESCE(p.business_url, ''), "
-            + "COALESCE(p.product_description, ''), COALESCE(p.mcc, ''), COALESCE(p.support_email, '') "
-            + "FROM tenants t LEFT JOIN tenant_stripe_profiles p ON p.tenants_id = t.tenants_id "
-            + "WHERE t.tenants_id = @t", connection);
+            "SELECT stripe_connected_account_id, business_name, "
+            + "COALESCE(business_type, ''), COALESCE(business_url, ''), "
+            + "COALESCE(product_description, ''), COALESCE(mcc, ''), COALESCE(support_email, '') "
+            + "FROM vw_tenant_stripe_profile WHERE tenants_id = @t", connection);
         cmd.Parameters.AddWithValue("t", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -480,8 +477,7 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
 
         string? accountId;
         await using (var cmd = new NpgsqlCommand(
-            "UPDATE tenants SET legal_name = COALESCE(@bizname, legal_name), updated_at = now() "
-            + "WHERE tenants_id = @t RETURNING stripe_connected_account_id", connection))
+            "SELECT sp_update_tenant_legal_name(@t, @bizname)", connection))
         {
             cmd.Parameters.AddWithValue("bizname", (object?)NullIfEmpty(request.BusinessName) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("t", tenantsId);
@@ -489,13 +485,7 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         }
 
         await using (var cmd = new NpgsqlCommand(
-            "INSERT INTO tenant_stripe_profiles "
-            + "(tenants_id, business_type, business_url, product_description, mcc, support_email, created_at, updated_at) "
-            + "VALUES (@t, @bt, @url, @desc, @mcc, @email, now(), now()) "
-            + "ON CONFLICT (tenants_id) DO UPDATE SET "
-            + "business_type = EXCLUDED.business_type, business_url = EXCLUDED.business_url, "
-            + "product_description = EXCLUDED.product_description, mcc = EXCLUDED.mcc, "
-            + "support_email = EXCLUDED.support_email, updated_at = now()", connection))
+            "SELECT sp_upsert_tenant_stripe_profile(@t, @bt, @url, @desc, @mcc, @email)", connection))
         {
             cmd.Parameters.AddWithValue("bt", (object?)NullIfEmpty(request.BusinessType) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("url", (object?)NullIfEmpty(request.BusinessUrl) ?? DBNull.Value);

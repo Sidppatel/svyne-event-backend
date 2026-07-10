@@ -103,8 +103,7 @@ public sealed class BillingWorker : BackgroundService
             string? email = null;
             string? tenantName = null;
             await using (var cmd = new NpgsqlCommand(
-                "SELECT u.email, t.name FROM users u JOIN tenants t ON t.tenants_id = u.tenants_id "
-                + "WHERE u.tenants_id = @t AND u.role = @adminRole ORDER BY u.created_at LIMIT 1", connection))
+                "SELECT email, tenant_name FROM sp_tenant_admin_contact(@t, @adminRole)", connection))
             {
                 cmd.Parameters.AddWithValue("t", reminder.TenantId);
                 cmd.Parameters.AddWithValue("adminRole", Lookups.UserRoles.Admin);

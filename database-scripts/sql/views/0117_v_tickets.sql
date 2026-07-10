@@ -25,7 +25,8 @@ SELECT
     
     (SELECT bl2.tables_id FROM booking_lines bl2
      WHERE bl2.bookings_id = b.bookings_id AND bl2.kind = 'Table' LIMIT 1) AS booking_table_id,
-    COALESCE(ett.label, 'Ticket') AS ticket_type_label
+    COALESCE(ett.label, 'Ticket') AS ticket_type_label,
+    e.slug AS event_slug
 FROM booking_lines bl
 JOIN bookings b ON bl.bookings_id = b.bookings_id
 JOIN events e ON b.events_id = e.events_id

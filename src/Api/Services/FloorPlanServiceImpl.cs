@@ -43,7 +43,7 @@ public sealed class FloorPlanServiceImpl : FloorPlanService.FloorPlanServiceBase
         RequireTenant();
         var response = new ListFloorPlanTemplatesResponse();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-        await using var cmd = new NpgsqlCommand("SELECT * FROM sp_list_floor_plan_templates()", connection);
+        await using var cmd = new NpgsqlCommand("SELECT floor_plan_templates_id, name, table_count, object_count, is_active FROM sp_list_floor_plan_templates()", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {

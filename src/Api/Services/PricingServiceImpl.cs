@@ -64,7 +64,7 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         var ct = context.CancellationToken;
         RequireUser();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-        await using var cmd = new NpgsqlCommand("SELECT * FROM sp_get_price(@id)", connection);
+        await using var cmd = new NpgsqlCommand("SELECT prices_id, events_id, name, pricing_type, base_price_cents, per_attendee_cents, is_all_inclusive, fee_formulas_id, max_quantity, is_active FROM sp_get_price(@id)", connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -80,7 +80,7 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         var response = new ListPricesResponse();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await EventAccess.RequireAsync(connection, tenantContext, Guid.Parse(request.Value), ct);
-        await using var cmd = new NpgsqlCommand("SELECT * FROM sp_list_prices_for_event(@ev)", connection);
+        await using var cmd = new NpgsqlCommand("SELECT prices_id, events_id, name, pricing_type, base_price_cents, per_attendee_cents, is_all_inclusive, fee_formulas_id, max_quantity, is_active FROM sp_list_prices_for_event(@ev)", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -141,10 +141,10 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         => await RunVoid("SELECT sp_delete_price_rule(@id)", "id", Guid.Parse(request.Value), context, "Price rule deleted");
 
     public override Task<ListPriceRulesResponse> ListPriceRules(UuidValue request, ServerCallContext context)
-        => ListRules("SELECT * FROM sp_list_price_rules(@id)", request, context);
+        => ListRules("SELECT price_rules_id, prices_id, name, rule_type, priority, price_cents, active_from, active_until, min_remaining, max_remaining, is_active, scope, events_id, capacity FROM sp_list_price_rules(@id)", request, context);
 
     public override Task<ListPriceRulesResponse> ListEventPriceRules(UuidValue request, ServerCallContext context)
-        => ListRules("SELECT * FROM sp_list_event_price_rules(@id)", request, context);
+        => ListRules("SELECT price_rules_id, prices_id, name, rule_type, priority, price_cents, active_from, active_until, min_remaining, max_remaining, is_active, scope, events_id, capacity FROM sp_list_event_price_rules(@id)", request, context);
 
     private async Task<ListPriceRulesResponse> ListRules(string sql, UuidValue request, ServerCallContext context)
     {
@@ -181,7 +181,7 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
     {
         var ct = context.CancellationToken;
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-        await using var cmd = new NpgsqlCommand("SELECT * FROM sp_calculate_price(@p, @seats, @at, @rem)", connection);
+        await using var cmd = new NpgsqlCommand("SELECT base_price_cents, selling_price_cents, discount_cents, applied_price_rules_id, applied_rule_name, platform_fee_cents, gateway_fee_cents, tax_cents, final_price_cents, organizer_net_cents, currency FROM sp_calculate_price(@p, @seats, @at, @rem)", connection);
         cmd.Parameters.AddWithValue("p", Guid.Parse(request.PricesId));
         cmd.Parameters.AddWithValue("seats", request.Seats <= 0 ? 1 : request.Seats);
         cmd.Parameters.AddWithValue("at", ToTimestamp(request.At));

@@ -130,7 +130,10 @@ public sealed class LogServiceImpl : LogService.LogServiceBase
         }
 
         await using var cmd = new NpgsqlCommand(
-            "SELECT * FROM sp_get_error_logs(@sev, @src, @res, @q, @from, @to, @skip, @take)", connection);
+            "SELECT id, timestamp, severity, message, exception_type, stack_trace, request_path, request_method, "
+            + "status_code, users_id, ip_address, correlation_id, metadata_json, tenants_id, source, resolved, "
+            + "resolved_notes, resolved_by, resolved_at "
+            + "FROM sp_get_error_logs(@sev, @src, @res, @q, @from, @to, @skip, @take)", connection);
         AddFilterParameters(cmd, request);
         cmd.Parameters.AddWithValue("skip", page.Offset);
         cmd.Parameters.AddWithValue("take", take);

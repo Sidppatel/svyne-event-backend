@@ -33,7 +33,10 @@ SELECT
     st.stripe_fees_cents,
     st.transfer_amount_cents,
     e.created_by_users_id,
-    COALESCE(pt_labels.labels, ARRAY[]::text[]) AS table_labels
+    COALESCE(pt_labels.labels, ARRAY[]::text[]) AS table_labels,
+    COALESCE(tk.tickets_total, 0) AS tickets_total,
+    COALESCE(tk.tickets_claimed, 0) AS tickets_claimed,
+    COALESCE(tk.guest_search, '') AS guest_search
 FROM bookings b
 JOIN users u ON b.users_id = u.users_id
 JOIN events e ON b.events_id = e.events_id
@@ -45,4 +48,15 @@ LEFT JOIN LATERAL (
     FROM booking_lines bl
     JOIN tables t ON t.tables_id = bl.tables_id
     WHERE bl.bookings_id = b.bookings_id AND bl.kind = 'Table'
-) pt_labels ON true;
+) pt_labels ON true
+LEFT JOIN LATERAL (
+    SELECT
+        COUNT(*) FILTER (WHERE bl.kind = 'Ticket')::int AS tickets_total,
+        COUNT(*) FILTER (WHERE bl.kind = 'Ticket' AND bl.status IN ('Claimed', 'CheckedIn'))::int AS tickets_claimed,
+        string_agg(
+            COALESCE(bl.ticket_code, '') || ' ' || COALESCE(gu.email, '') || ' '
+            || COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, ''), ' ') AS guest_search
+    FROM booking_lines bl
+    LEFT JOIN users gu ON gu.users_id = bl.guest_users_id
+    WHERE bl.bookings_id = b.bookings_id
+) tk ON true;

@@ -26,8 +26,8 @@ public sealed class FeeServiceImpl : FeeService.FeeServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT fee_formulas_id, name, percent_bps, flat_cents, "
-            + "COALESCE(min_fee_cents, 0), COALESCE(max_fee_cents, 0), is_active "
-            + "FROM fee_formulas ORDER BY is_active DESC, name", connection);
+            + "min_fee_cents, max_fee_cents, is_active "
+            + "FROM vw_fee_formulas ORDER BY is_active DESC, name", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
@@ -143,20 +143,10 @@ public sealed class FeeServiceImpl : FeeService.FeeServiceBase
 
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT e.events_id, e.tenants_id, t.name, e.title, e.status, "
-            + "       li.id, li.kind, li.label, li.price_cents, li.fee_formulas_id, li.fee_cents "
-            + "FROM events e "
-            + "JOIN tenants t ON t.tenants_id = e.tenants_id "
-            + "LEFT JOIN ( "
-            + "    SELECT event_ticket_types_id AS id, events_id, 'ticket' AS kind, label, "
-            + "           price_cents, fee_formulas_id, COALESCE(platform_fee_cents, 0) AS fee_cents "
-            + "    FROM event_ticket_types WHERE is_active = true "
-            + "    UNION ALL "
-            + "    SELECT event_tables_id AS id, events_id, 'table' AS kind, label, "
-            + "           price_cents, fee_formulas_id, COALESCE(platform_fee_cents, 0) AS fee_cents "
-            + "    FROM event_tables WHERE is_active = true "
-            + ") li ON li.events_id = e.events_id "
-            + "ORDER BY t.name, e.title, li.kind, li.label", connection);
+            "SELECT events_id, tenants_id, tenant_name, title, status, "
+            + "line_id, kind, label, price_cents, fee_formulas_id, fee_cents "
+            + "FROM vw_event_fee_line_items "
+            + "ORDER BY tenant_name, title, kind, label", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {

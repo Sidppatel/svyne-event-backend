@@ -49,13 +49,9 @@ public sealed class LoggingEmailService : IEmailService
                 }
 
                 await using var connection = await db.OpenAsync(null, null, ct);
-                await using var cmd = new NpgsqlCommand(@"
-                    INSERT INTO email_logs (
-                        email_logs_id, tenants_id, timestamp, recipient, subject, body, status
-                    ) VALUES (
-                        gen_random_uuid(), @tenantId, now(), @recipient, @subject, @body, @status
-                    );", connection);
-                
+                await using var cmd = new NpgsqlCommand(
+                    "SELECT sp_log_email(@tenantId, @recipient, @subject, @body, @status)", connection);
+
                 cmd.Parameters.AddWithValue("tenantId", (object?)tenantId ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("recipient", toAddress);
                 cmd.Parameters.AddWithValue("subject", subject);

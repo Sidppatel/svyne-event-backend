@@ -52,15 +52,15 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
 
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'CheckedIn') FROM booking_lines WHERE events_id = @ev AND kind = 'Ticket'", connection);
+            "SELECT total, checked_in FROM vw_event_checkin_stats WHERE events_id = @ev", connection);
         cmd.Parameters.AddWithValue("ev", eventId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
         {
             return new CheckInStats();
         }
-        var total = (int)reader.GetInt64(0);
-        var checkedIn = (int)reader.GetInt64(1);
+        var total = reader.GetInt32(0);
+        var checkedIn = reader.GetInt32(1);
         return new CheckInStats { Total = total, CheckedIn = checkedIn, Remaining = total - checkedIn };
     }
 
@@ -125,11 +125,9 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
         
         
         await using (var cmd = new NpgsqlCommand(
-            @"SELECT b.bookings_id, b.booking_number, u.first_name, u.last_name, b.status 
-              FROM bookings b 
-              JOIN users u ON u.users_id = b.users_id 
-              WHERE b.events_id = @ev AND b.status IN ('Paid', 'CheckedIn')
-              ORDER BY b.booking_number", connection))
+            @"SELECT bookings_id, booking_number, buyer_first_name, buyer_last_name, status
+              FROM vw_event_guest_bookings WHERE events_id = @ev
+              ORDER BY booking_number", connection))
         {
             cmd.Parameters.AddWithValue("ev", eventId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -147,16 +145,11 @@ public sealed class CheckInServiceImpl : CheckInService.CheckInServiceBase
 
         
         await using (var cmd = new NpgsqlCommand(
-            @"SELECT t.booking_lines_id, t.bookings_id, t.ticket_code, 
-                     gu.first_name, gu.last_name, bu.first_name, bu.last_name, 
-                     t.status::text, t.seat_number, 
-                     (SELECT timestamp FROM checkin_logs WHERE ticket_id = t.booking_lines_id ORDER BY timestamp DESC LIMIT 1) as checked_in_time
-              FROM booking_lines t
-              LEFT JOIN users gu ON gu.users_id = t.guest_users_id
-              JOIN bookings b ON b.bookings_id = t.bookings_id
-              JOIN users bu ON bu.users_id = b.users_id
-              WHERE t.events_id = @ev AND t.kind = 'Ticket' AND b.status IN ('Paid', 'CheckedIn')
-              ORDER BY t.seat_number", connection))
+            @"SELECT booking_lines_id, bookings_id, ticket_code,
+                     guest_first_name, guest_last_name, buyer_first_name, buyer_last_name,
+                     status, seat_number, checked_in_time
+              FROM vw_event_guest_tickets WHERE events_id = @ev
+              ORDER BY seat_number", connection))
         {
             cmd.Parameters.AddWithValue("ev", eventId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);

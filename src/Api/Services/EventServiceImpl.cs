@@ -89,7 +89,7 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         }
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT e.events_id, e.title, e.slug, e.status FROM sp_search_events(@q) s JOIN events e ON e.events_id = s.events_id WHERE e.tenants_id = @tenant", connection);
+            "SELECT events_id, title, slug, status FROM vw_events WHERE events_id IN (SELECT events_id FROM sp_search_events(@q)) AND tenants_id = @tenant", connection);
         cmd.Parameters.AddWithValue("q", request.Query);
         cmd.Parameters.AddWithValue("tenant", tenantsId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -233,7 +233,7 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         var tenantFilter = tenantContext.TenantsId is null
             ? string.Empty
-            : " AND events_id IN (SELECT events_id FROM events WHERE tenants_id = @tenant)";
+            : " AND tenants_id = @tenant";
         await using var cmd = new NpgsqlCommand(
             EventSelect + " WHERE slug = @slug"
             + (isPublicViewer ? " AND status = 'Published'" : string.Empty)
@@ -265,7 +265,7 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             EventSelect
-            + " WHERE events_id IN (SELECT events_id FROM events WHERE tenants_id = @tenant)"
+            + " WHERE tenants_id = @tenant"
             + " AND (@status = '' OR status = @status)"
             + EventScopeFilter
             + " ORDER BY start_date DESC LIMIT @lim OFFSET @off", connection);
@@ -398,7 +398,7 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         await using var cmd = new NpgsqlCommand(
             "SELECT i.storage_key, l.image_type, l.is_primary, l.sort_order "
             + "FROM sp_link_event_image(@ev, @img, @type) l "
-            + "JOIN images i ON i.images_id = @img", connection);
+            + "JOIN vw_images i ON i.images_id = @img", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
         cmd.Parameters.AddWithValue("img", Guid.Parse(request.ImagesId));
         cmd.Parameters.AddWithValue("type", type);
@@ -467,7 +467,7 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         var ct = context.CancellationToken;
         await using var connection = await db.OpenAsync(null, null, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT key, value FROM app_settings WHERE key IN ('event_image_aspect_ratio', 'event_thumbnail_aspect_ratio')",
+            "SELECT key, value FROM vw_app_settings WHERE key IN ('event_image_aspect_ratio', 'event_thumbnail_aspect_ratio')",
             connection);
         var settings = new MediaSettings { EventImageAspectRatio = "16:9", EventThumbnailAspectRatio = "4:3" };
         await using var reader = await cmd.ExecuteReaderAsync(ct);

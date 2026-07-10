@@ -181,7 +181,7 @@ public sealed class StripeWebhookHandler
     {
         Guid? bookingId;
         await using (var look = new NpgsqlCommand(
-            "SELECT bookings_id FROM stripe_transactions WHERE payment_intent_id = @id", conn))
+            "SELECT bookings_id FROM vw_stripe_transactions WHERE payment_intent_id = @id", conn))
         {
             look.Parameters.AddWithValue("id", intentId);
             bookingId = await look.ExecuteScalarAsync(ct) as Guid?;
@@ -293,7 +293,7 @@ public sealed class StripeWebhookHandler
     {
         
         await using (var look = new NpgsqlCommand(
-            "SELECT bookings_id FROM stripe_transactions WHERE payment_intent_id = @id", conn))
+            "SELECT bookings_id FROM vw_stripe_transactions WHERE payment_intent_id = @id", conn))
         {
             look.Parameters.AddWithValue("id", pi.Id);
             if (await look.ExecuteScalarAsync(ct) is Guid g)

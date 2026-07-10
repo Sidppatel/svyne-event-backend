@@ -21,7 +21,7 @@ public sealed class AppSettingsProvider
             return;
         }
         await using var connection = await db.OpenAsync(null, null, ct);
-        await using var cmd = new NpgsqlCommand("SELECT key, value FROM app_settings", connection);
+        await using var cmd = new NpgsqlCommand("SELECT key, value FROM vw_app_settings", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {

@@ -5,7 +5,10 @@ SELECT
     u.phone, u.opt_in_location_email, u.has_completed_onboarding,
     i.storage_key AS image_storage_key, u.created_at,
     a.line1 AS address_line1,
-    a.city, a.state, a.zip_code
+    a.city, a.state, a.zip_code,
+    u.email_verified,
+    u.images_id,
+    (u.google_subject IS NOT NULL) AS google_connected
 FROM users u
 LEFT JOIN addresses a ON u.addresses_id = a.addresses_id
 LEFT JOIN images i ON u.images_id = i.images_id;

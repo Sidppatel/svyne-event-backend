@@ -1,5 +1,3 @@
-DROP FUNCTION IF EXISTS sp_calculate_price(uuid, int, timestamptz, int);
-
 
 
 

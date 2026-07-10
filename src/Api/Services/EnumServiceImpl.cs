@@ -21,7 +21,7 @@ public sealed class EnumServiceImpl : EnumService.EnumServiceBase
         await using var connection = await db.OpenAsync(null, null, ct);
         var filter = string.IsNullOrEmpty(request.EnumType) ? string.Empty : " WHERE enum_type = @type";
         await using var cmd = new NpgsqlCommand(
-            "SELECT enum_type, enum_value, int_value, used_in, description FROM enum_definitions"
+            "SELECT enum_type, enum_value, int_value, used_in, description FROM vw_enum_definitions"
             + filter + " ORDER BY enum_type, int_value", connection);
         if (!string.IsNullOrEmpty(request.EnumType))
         {

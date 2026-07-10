@@ -73,10 +73,7 @@ public sealed class StartupSeeder
             foreach (var (value, intValue) in group.Values)
             {
                 await using var cmd = new NpgsqlCommand(
-                    "INSERT INTO enum_definitions (enum_definitions_id, enum_type, enum_value, int_value, used_in, description, created_at, updated_at) "
-                    + "VALUES (gen_random_uuid(), @type, @value, @int, @used, @desc, now(), now()) "
-                    + "ON CONFLICT (enum_type, enum_value) DO UPDATE SET int_value = EXCLUDED.int_value, used_in = EXCLUDED.used_in, description = EXCLUDED.description, updated_at = now()",
-                    connection);
+                    "SELECT sp_seed_enum_definition(@type, @value, @int, @used, @desc)", connection);
                 cmd.Parameters.AddWithValue("type", group.EnumType);
                 cmd.Parameters.AddWithValue("value", value);
                 cmd.Parameters.AddWithValue("int", intValue);
@@ -89,33 +86,16 @@ public sealed class StartupSeeder
         foreach (var (key, value, description) in AppSettings)
         {
             await using var cmd = new NpgsqlCommand(
-                "INSERT INTO app_settings (app_settings_id, key, value, description, created_at, updated_at) "
-                + "VALUES (gen_random_uuid(), @key, @value, @desc, now(), now()) "
-                + "ON CONFLICT (key) DO NOTHING",
-                connection);
+                "SELECT sp_seed_app_setting(@key, @value, @desc)", connection);
             cmd.Parameters.AddWithValue("key", key);
             cmd.Parameters.AddWithValue("value", value);
             cmd.Parameters.AddWithValue("desc", description);
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
-        await using (var formula = new NpgsqlCommand(
-            "INSERT INTO fee_formulas (fee_formulas_id, name, percent_bps, flat_cents, is_active, created_at, updated_at) "
-            + "SELECT gen_random_uuid(), @name, 600, 150, true, now(), now() "
-            + "WHERE NOT EXISTS (SELECT 1 FROM fee_formulas WHERE name = @name)",
-            connection))
+        await using (var defaults = new NpgsqlCommand("SELECT sp_seed_platform_defaults()", connection))
         {
-            formula.Parameters.AddWithValue("name", "Standard 6% + $1.50");
-            await formula.ExecuteNonQueryAsync(ct);
-        }
-
-        await using (var taxSeed = new NpgsqlCommand(
-            "INSERT INTO tax_rate_cache (zip_code, state, county, city, state_rate, county_rate, city_rate, local_rate, combined_rate, api_response_id, fetched_at, updated_at) "
-            + "VALUES ('36611', 'AL', 'Mobile', 'Mobile', 0.04, 0.06, 0.00, 0.00, 0.10, 'manual_injection', '2099-01-01 00:00:00+00', now()) "
-            + "ON CONFLICT (zip_code) DO NOTHING",
-            connection))
-        {
-            await taxSeed.ExecuteNonQueryAsync(ct);
+            await defaults.ExecuteNonQueryAsync(ct);
         }
     }
 

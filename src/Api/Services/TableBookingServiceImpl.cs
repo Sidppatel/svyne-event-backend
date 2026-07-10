@@ -41,11 +41,10 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
     };
 
     private const string TableSelect =
-        "SELECT t.tables_id, t.event_tables_id, t.label, t.pos_x, t.pos_y, t.width, t.height, t.status, "
-        + "COALESCE(et.price_cents, 0), COALESCE(et.platform_fee_cents, 0), et.fee_formulas_id, "
-        + "t.shape_override, t.color_override, t.capacity_override, et.prices_id "
-        + "FROM tables t LEFT JOIN event_tables et ON et.event_tables_id = t.event_tables_id "
-        + "WHERE t.events_id = @ev ORDER BY t.sort_order";
+        "SELECT tables_id, event_tables_id, label, pos_x, pos_y, width, height, status, "
+        + "price_cents, platform_fee_cents, fee_formulas_id, "
+        + "shape_override, color_override, capacity_override, prices_id "
+        + "FROM vw_event_layout_tables WHERE events_id = @ev ORDER BY sort_order";
 
     public override async Task<EventLayout> GetEventLayout(UuidValue request, ServerCallContext context)
     {
@@ -63,7 +62,7 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
                 layout.Tables.Add(MapTable(reader));
             }
         }
-        await using (var objCmd = new NpgsqlCommand("SELECT * FROM sp_list_layout_objects_for_event(@ev)", connection))
+        await using (var objCmd = new NpgsqlCommand("SELECT layout_objects_id, object_type, label, pos_x, pos_y, width, height, color, sort_order FROM sp_list_layout_objects_for_event(@ev)", connection))
         {
             objCmd.Parameters.AddWithValue("ev", eventsId);
             await using var objReader = await objCmd.ExecuteReaderAsync(ct);
@@ -109,9 +108,9 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await EventAccess.RequireAsync(connection, tenantContext, Guid.Parse(request.Value), ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT event_tables_id, label, capacity, shape, COALESCE(color, ''), price_cents, prices_id, "
-            + "COALESCE(default_width, 80), COALESCE(default_height, 80), COALESCE(platform_fee_cents, 0) "
-            + "FROM event_tables WHERE events_id = @ev AND is_active = true ORDER BY label", connection);
+            "SELECT event_tables_id, label, capacity, shape, color, price_cents, prices_id, "
+            + "default_width, default_height, platform_fee_cents "
+            + "FROM vw_event_table_types WHERE events_id = @ev AND is_active = true ORDER BY label", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -154,7 +153,7 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         RequireUser();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT id FROM sp_lock_table(@u, (SELECT events_id FROM tables WHERE tables_id = @t), @t, 15)", connection);
+            "SELECT id FROM sp_lock_table(@u, (SELECT events_id FROM vw_event_layout_tables WHERE tables_id = @t), @t, 15)", connection);
         cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
         cmd.Parameters.AddWithValue("t", Guid.Parse(request.TablesId));
         var result = await cmd.ExecuteScalarAsync(ct);
@@ -167,7 +166,7 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         RequireUser();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_release_table_lock(@u, (SELECT events_id FROM tables WHERE tables_id = @t), @t)", connection);
+            "SELECT sp_release_table_lock(@u, (SELECT events_id FROM vw_event_layout_tables WHERE tables_id = @t), @t)", connection);
         cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
         cmd.Parameters.AddWithValue("t", Guid.Parse(request.TablesId));
         var ok = (bool)(await cmd.ExecuteScalarAsync(ct))!;
@@ -277,7 +276,7 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         RequireTenant();
         var response = new ListTableTemplatePriceRulesResponse();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-        await using var cmd = new NpgsqlCommand("SELECT * FROM sp_list_table_template_price_rules(@tpl)", connection);
+        await using var cmd = new NpgsqlCommand("SELECT table_template_price_rules_id, table_templates_id, name, rule_type, priority, price_cents, active_from, active_until, min_remaining, max_remaining, is_active FROM sp_list_table_template_price_rules(@tpl)", connection);
         cmd.Parameters.AddWithValue("tpl", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -311,9 +310,9 @@ public sealed class TableBookingServiceImpl : TableBookingService.TableBookingSe
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT table_templates_id, name, default_capacity, default_shape, "
-            + "COALESCE(default_color, ''), default_price_cents, is_active, "
-            + "COALESCE(default_width, 80), COALESCE(default_height, 80), default_is_all_inclusive "
-            + "FROM table_templates ORDER BY name", connection);
+            + "default_color, default_price_cents, is_active, "
+            + "default_width, default_height, default_is_all_inclusive "
+            + "FROM vw_table_templates ORDER BY name", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {

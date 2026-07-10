@@ -328,7 +328,7 @@ app.MapGet("/images/{imagesId}", async (string imagesId, Db db, Svyne.Api.Storag
     string storageKey;
     string contentType;
     await using (var connection = await db.OpenBootstrapAsync(ct))
-    await using (var cmd = new Npgsql.NpgsqlCommand("SELECT storage_key, content_type FROM images WHERE images_id = @id", connection))
+    await using (var cmd = new Npgsql.NpgsqlCommand("SELECT storage_key, content_type FROM vw_images WHERE images_id = @id", connection))
     {
         cmd.Parameters.AddWithValue("id", id);
         await using var reader = await cmd.ExecuteReaderAsync(ct);

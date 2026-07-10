@@ -325,10 +325,10 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
     {
         await using var connection = await db.OpenAsync(usersId, tc.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT u.email, u.first_name, u.last_name, u.email_verified, COALESCE(u.phone, ''), u.images_id, "
-            + "COALESCE(a.line1, ''), COALESCE(a.city, ''), COALESCE(a.state, ''), COALESCE(a.zip_code, ''), "
-            + "u.google_subject IS NOT NULL "
-            + "FROM users u LEFT JOIN addresses a ON a.addresses_id = u.addresses_id WHERE u.users_id = @id", connection);
+            "SELECT email, first_name, last_name, email_verified, COALESCE(phone, ''), images_id, "
+            + "COALESCE(address_line1, ''), COALESCE(city, ''), COALESCE(state, ''), COALESCE(zip_code, ''), "
+            + "google_connected "
+            + "FROM vw_user_profile WHERE users_id = @id", connection);
         cmd.Parameters.AddWithValue("id", usersId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -478,7 +478,7 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
             return null;
         }
         await using var connection = await db.OpenAsync(null, null, ct);
-        await using var cmd = new NpgsqlCommand("SELECT tenants_id FROM tenants WHERE slug = @s AND archived_at IS NULL", connection);
+        await using var cmd = new NpgsqlCommand("SELECT tenants_id FROM vw_tenant_identity WHERE slug = @s AND archived_at IS NULL", connection);
         cmd.Parameters.AddWithValue("s", slug);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is Guid g ? g : null;
@@ -487,7 +487,7 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
     private async Task<string?> ResolveSlugAsync(Guid tenantsId, CancellationToken ct)
     {
         await using var connection = await db.OpenAsync(null, null, ct);
-        await using var cmd = new NpgsqlCommand("SELECT slug FROM tenants WHERE tenants_id = @id AND archived_at IS NULL", connection);
+        await using var cmd = new NpgsqlCommand("SELECT slug FROM vw_tenant_identity WHERE tenants_id = @id AND archived_at IS NULL", connection);
         cmd.Parameters.AddWithValue("id", tenantsId);
         return await cmd.ExecuteScalarAsync(ct) as string;
     }

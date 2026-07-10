@@ -24,11 +24,9 @@ public static class BookingEmailSender
         {
             
             await using var cmd = new NpgsqlCommand(
-                "SELECT b.booking_number, b.subtotal_cents, b.fee_cents, b.total_cents, b.user_email, " +
-                "b.event_title, b.event_start_date, b.venue_name, e.fees_included " +
-                "FROM vw_bookings b " +
-                "JOIN events e ON b.events_id = e.events_id " +
-                "WHERE b.bookings_id = @id", conn);
+                "SELECT booking_number, subtotal_cents, fee_cents, total_cents, user_email, " +
+                "event_title, event_start_date, venue_name, fees_included " +
+                "FROM vw_bookings WHERE bookings_id = @id", conn);
             cmd.Parameters.AddWithValue("id", bookingId);
 
             string bookingNumber = "";
@@ -66,7 +64,7 @@ public static class BookingEmailSender
             
             var ticketsList = new List<(string code, int seat)>();
             await using (var ticketCmd = new NpgsqlCommand(
-                "SELECT ticket_code, seat_number FROM booking_lines WHERE bookings_id = @id AND kind = 'Ticket' ORDER BY seat_number", conn))
+                "SELECT ticket_code, seat_number FROM vw_booking_ticket_lines WHERE bookings_id = @id ORDER BY seat_number", conn))
             {
                 ticketCmd.Parameters.AddWithValue("id", bookingId);
                 await using var reader = await ticketCmd.ExecuteReaderAsync(ct);

@@ -208,7 +208,7 @@ public sealed partial class BookingServiceImpl
         }
 
         await using (var look = new NpgsqlCommand(
-            "SELECT payment_intent_id FROM stripe_transactions WHERE bookings_id = @b "
+            "SELECT payment_intent_id FROM vw_stripe_transactions WHERE bookings_id = @b "
             + "AND status NOT IN ('Succeeded','Refunded')", connection))
         {
             look.Parameters.AddWithValue("b", bookingId);
@@ -256,9 +256,7 @@ public sealed partial class BookingServiceImpl
         }
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT b.status, COALESCE(st.status, '') FROM bookings b "
-            + "LEFT JOIN stripe_transactions st ON st.bookings_id = b.bookings_id "
-            + "WHERE b.bookings_id = @b", connection);
+            "SELECT status, COALESCE(payment_status, '') FROM vw_bookings WHERE bookings_id = @b", connection);
         cmd.Parameters.AddWithValue("b", bookingId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))

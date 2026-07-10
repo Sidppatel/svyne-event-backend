@@ -49,17 +49,11 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         var response = new ListEventTicketTypesResponse();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT tt.event_ticket_types_id, tt.label, tt.price_cents, COALESCE(tt.platform_fee_cents, 0), "
-            + "COALESCE(tt.max_quantity, 0), COALESCE(tt.description, ''), tt.fee_formulas_id, COALESCE(tt.capacity, 0), "
-            + "COALESCE(bp.selling_price_cents, tt.price_cents), COALESCE(vs.sold_count, 0), "
-            + "COALESCE(bp.platform_fee_cents + bp.gateway_fee_cents, 0), COALESCE(bp.tax_cents, 0), "
-            + "COALESCE(bp.final_price_cents, tt.price_cents) "
-            + "FROM event_ticket_types tt "
-            + "LEFT JOIN vw_event_ticket_types_summary vs ON vs.event_ticket_types_id = tt.event_ticket_types_id "
-            + "LEFT JOIN prices p ON p.events_id = tt.events_id AND p.pricing_type = 'TicketTier' "
-            + "AND lower(p.name) = lower(tt.label) AND p.is_active "
-            + "LEFT JOIN LATERAL sp_calculate_price(p.prices_id, 1, now(), -1) bp ON p.prices_id IS NOT NULL "
-            + "WHERE tt.events_id = @ev AND tt.is_active = true ORDER BY tt.sort_order, tt.label", connection);
+            "SELECT event_ticket_types_id, label, price_cents, platform_fee_cents, "
+            + "max_quantity, description, fee_formulas_id, capacity, "
+            + "selling_price_cents, sold_count, service_fee_cents, tax_cents, total_cents "
+            + "FROM vw_event_ticket_types_pricing "
+            + "WHERE events_id = @ev AND is_active = true ORDER BY sort_order, label", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.Value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -175,7 +169,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
             rateCmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
             taxRate = await rateCmd.ExecuteScalarAsync(ct) is decimal r ? r : 0m;
         }
-        await using var cmd = new NpgsqlCommand("SELECT * FROM sp_quote_cart(@ev, @lines::jsonb)", connection);
+        await using var cmd = new NpgsqlCommand("SELECT kind, ref_id, label, seats, base_price_cents, selling_price_cents, discount_cents, applied_price_rules_id, applied_rule_name, platform_fee_cents, gateway_fee_cents, tax_cents, final_price_cents, organizer_net_cents, currency, ach_available, ach_final_cents FROM sp_quote_cart(@ev, @lines::jsonb)", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
         cmd.Parameters.AddWithValue("lines", linesJson);
 
@@ -278,7 +272,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
 
         string? intentId = null;
         await using (var look = new NpgsqlCommand(
-            "SELECT payment_intent_id FROM stripe_transactions WHERE bookings_id = @b AND status NOT IN ('Succeeded','Refunded')", connection))
+            "SELECT payment_intent_id FROM vw_stripe_transactions WHERE bookings_id = @b AND status NOT IN ('Succeeded','Refunded')", connection))
         {
             look.Parameters.AddWithValue("b", bookingId);
             intentId = await look.ExecuteScalarAsync(ct) as string;
@@ -351,16 +345,12 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         }
 
         await using (var lc = new NpgsqlCommand(
-            "SELECT bl.booking_lines_id, bl.kind, "
-            + "COALESCE(ett.label, t.label, '') AS label, bl.event_ticket_types_id, bl.tables_id, "
-            + "bl.seats, bl.subtotal_cents, bl.fee_cents, bl.total_cents, "
-            + "bl.base_price_cents, bl.selling_price_cents, bl.discount_cents, "
-            + "COALESCE(bl.applied_rule_name, ''), bl.platform_fee_cents, bl.gateway_fee_cents, "
-            + "0 as tax_cents, bl.final_price_cents, bl.currency "
-            + "FROM booking_lines bl "
-            + "LEFT JOIN event_ticket_types ett ON ett.event_ticket_types_id = bl.event_ticket_types_id "
-            + "LEFT JOIN tables t ON t.tables_id = bl.tables_id "
-            + "WHERE bl.bookings_id = @id ORDER BY bl.created_at", connection))
+            "SELECT booking_lines_id, kind, label, event_ticket_types_id, tables_id, "
+            + "seats, subtotal_cents, fee_cents, total_cents, "
+            + "base_price_cents, selling_price_cents, discount_cents, "
+            + "applied_rule_name, platform_fee_cents, gateway_fee_cents, "
+            + "0 as tax_cents, final_price_cents, currency "
+            + "FROM vw_booking_lines_detail WHERE bookings_id = @id ORDER BY created_at", connection))
         {
             lc.Parameters.AddWithValue("id", bookingId);
             await using var lr = await lc.ExecuteReaderAsync(ct);
@@ -401,10 +391,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         await using var cmd = new NpgsqlCommand(
             BookingSelect + " WHERE (@ev = '00000000-0000-0000-0000-000000000000' OR b.events_id = @ev) "
             + "AND b.status = 'Paid' "
-            + "AND (@q = '' OR b.booking_number ILIKE @q OR b.event_title ILIKE @q OR EXISTS ("
-            + "SELECT 1 FROM booking_lines bl LEFT JOIN users gu ON gu.users_id = bl.guest_users_id "
-            + "WHERE bl.bookings_id = b.bookings_id AND (bl.ticket_code ILIKE @q OR gu.email ILIKE @q "
-            + "OR gu.first_name ILIKE @q OR gu.last_name ILIKE @q))) "
+            + "AND (@q = '' OR b.booking_number ILIKE @q OR b.event_title ILIKE @q OR b.guest_search ILIKE @q) "
             + "ORDER BY b.created_at DESC LIMIT @lim OFFSET @off", connection);
         cmd.Parameters.AddWithValue("ev", string.IsNullOrEmpty(request.EventsId) ? Guid.Empty : Guid.Parse(request.EventsId));
         var search = page.Search ?? string.Empty;
@@ -423,9 +410,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
     private const string BookingSelect =
         "SELECT b.bookings_id, b.booking_number, b.status, b.users_id, b.events_id, b.subtotal_cents, b.fee_cents, b.total_cents, "
         + "COALESCE(b.seats_reserved, 0), COALESCE(b.event_title, ''), COALESCE(b.event_slug, ''), b.event_start_date, "
-        + "(SELECT COUNT(*) FROM booking_lines bl WHERE bl.bookings_id = b.bookings_id AND bl.kind = 'Ticket')::int, "
-        + "(SELECT COUNT(*) FROM booking_lines bl WHERE bl.bookings_id = b.bookings_id AND bl.kind = 'Ticket' AND bl.status IN ('Claimed', 'CheckedIn'))::int, "
-        + "(SELECT payment_intent_id FROM stripe_transactions st WHERE st.bookings_id = b.bookings_id LIMIT 1), "
+        + "b.tickets_total, b.tickets_claimed, b.payment_intent_id, "
         + "b.fees_included, COALESCE(b.venue_name, ''), b.venue_address, b.venue_city, b.venue_state, b.venue_zip_code, b.paid_at, "
         + "b.tax_cents, b.service_fee_cents "
         + "FROM vw_bookings b";
