@@ -15,7 +15,7 @@ var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<str
 }).Build();
 
 var jwt = new JwtTokenService(config);
-var devUserId = Guid.Parse("22222222-2222-2222-2222-222222222220");
+var devUserId = Guid.Parse("20000000-0000-0000-0000-000000000099");
 var (devToken, _) = jwt.Issue(devUserId, "developer@svyne.test", null, 99, "");
 
 var channel = GrpcChannel.ForAddress("http://localhost:5262");
