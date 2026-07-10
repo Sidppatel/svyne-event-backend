@@ -118,4 +118,4 @@ remote-data.sql
 .claude/
 .cursor/
 src/Api/Properties/launchSettings.json
-**/svyne-event-systemlocal_emails/*
+**/svyne-event-systemlocal_emails/
