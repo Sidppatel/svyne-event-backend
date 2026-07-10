@@ -27,7 +27,7 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
           # Build the connection string for the runner
-          CONN_STRING="Host=${DB_HOST};Port=${DB_PORT_SESSION};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD};SslMode=VerifyFull;"
+          CONN_STRING="Host=${DB_HOST};Port=${DB_PORT_SESSION};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD};SslMode=Require;Trust Server Certificate=true;"
           
           # Run the migration container
           docker run --rm -e MIGRATION_DATABASE_URL="$CONN_STRING" migrate-runner
