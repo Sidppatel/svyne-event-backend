@@ -35,7 +35,13 @@ jobs:
       - name: Trigger Render API Deploy
         if: success()
         run: |
-          curl -s -X POST "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+          HTTP_STATUS=$(curl -s -o /tmp/render_response.json -w "%{http_code}" -X POST \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            -H "Accept: application/json"
-          echo "Render deploy triggered successfully!"
+            -H "Accept: application/json")
+          cat /tmp/render_response.json
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "Render deploy trigger FAILED with HTTP $HTTP_STATUS"
+            exit 1
+          fi
+          echo "Render deploy triggered successfully (HTTP $HTTP_STATUS)"
