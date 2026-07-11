@@ -3,7 +3,7 @@ using Npgsql;
 
 namespace Svyne.Api.Services;
 
-public sealed record TenantReportingAccessInfo(string Tier, bool OverrideEnabled, bool HasAdvanced);
+public sealed record TenantReportingAccessInfo(string Tier, bool OverrideEnabled, bool HasAdvanced, string TaxCollectionMode);
 
 public sealed class ReportingAccessProvider
 {
@@ -22,12 +22,12 @@ public sealed class ReportingAccessProvider
             return cached;
         }
         await using var cmd = new NpgsqlCommand(
-            "SELECT tier, advanced_reporting_enabled, has_advanced_reporting FROM vw_tenant_reporting_access WHERE tenants_id = @t", connection);
+            "SELECT tier, advanced_reporting_enabled, has_advanced_reporting, tax_collection_mode FROM vw_tenant_reporting_access WHERE tenants_id = @t", connection);
         cmd.Parameters.AddWithValue("t", tenantsId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         var info = await reader.ReadAsync(ct)
-            ? new TenantReportingAccessInfo(reader.GetString(0), reader.GetBoolean(1), reader.GetBoolean(2))
-            : new TenantReportingAccessInfo("free", false, false);
+            ? new TenantReportingAccessInfo(reader.GetString(0), reader.GetBoolean(1), reader.GetBoolean(2), reader.GetString(3))
+            : new TenantReportingAccessInfo("free", false, false, "platform");
         cache.Set(CacheKey(tenantsId), info, CacheTtl);
         return info;
     }

@@ -23,4 +23,7 @@ public class StripeTransaction : BaseEntity
     public DateTime? PaidAt { get; set; }
     public string? RefundId { get; set; }
     public DateTime? RefundedAt { get; set; }
+
+    public string? PaymentMethodType { get; set; }
+    public string? PaymentMethodLast4 { get; set; }
 }

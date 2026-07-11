@@ -24,7 +24,7 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
     {
         var ct = context.CancellationToken;
         RequireTenant();
-        ValidateVenue(request.Name, request.Email, request.Phone, request.State);
+        ValidateVenue(request.Name, request.Email, request.Phone, request.State, request.Zip);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT sp_create_venue(@t, @name, @desc, @img, @phone, @email, @web, @l1, @l2, @city, @state, @zip)", connection);
@@ -61,7 +61,7 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
     {
         var ct = context.CancellationToken;
         RequireTenant();
-        ValidateVenue(request.Name, request.Email, request.Phone, request.State);
+        ValidateVenue(request.Name, request.Email, request.Phone, request.State, request.Zip);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT sp_update_venue(@id, @name, @desc, NULL, @phone, @email, @web, @active, @l1, @l2, @city, @state, @zip)", connection);
@@ -215,7 +215,9 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
 
     private const string VenueSelect =
         "SELECT venues_id, name, description, image_path, phone, email, website, is_active, state, "
-        + "address_line1, address_line2, city, zip_code FROM vw_venues";
+        + "address_line1, address_line2, city, zip_code, "
+        + "state_tax_rate, county_tax_rate, city_tax_rate, local_tax_rate, combined_tax_rate "
+        + "FROM vw_venues";
 
     private static Venue MapVenue(NpgsqlDataReader reader) => new()
     {
@@ -231,7 +233,12 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
         Line1 = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
         Line2 = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
         City = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
-        Zip = reader.IsDBNull(12) ? string.Empty : reader.GetString(12)
+        Zip = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
+        StateTaxRate = reader.IsDBNull(13) ? 0 : reader.GetDouble(13),
+        CountyTaxRate = reader.IsDBNull(14) ? 0 : reader.GetDouble(14),
+        CityTaxRate = reader.IsDBNull(15) ? 0 : reader.GetDouble(15),
+        LocalTaxRate = reader.IsDBNull(16) ? 0 : reader.GetDouble(16),
+        CombinedTaxRate = reader.IsDBNull(17) ? 0 : reader.GetDouble(17)
     };
 
     private void RequireTenant()
@@ -250,8 +257,10 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
         new(@"^\+1[0-9]{10}$", System.Text.RegularExpressions.RegexOptions.Compiled);
     private static readonly System.Text.RegularExpressions.Regex StateRx =
         new(@"^[A-Z]{2}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex ZipRx =
+        new(@"^[0-9]{5}$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    private static void ValidateVenue(string name, string email, string phone, string state)
+    private static void ValidateVenue(string name, string email, string phone, string state, string zip)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -268,6 +277,10 @@ public sealed class VenueServiceImpl : VenueService.VenueServiceBase
         if (!string.IsNullOrEmpty(state) && !StateRx.IsMatch(state))
         {
             throw new RpcException(new Status(StatusCode.InvalidArgument, "State must be a 2-letter code"));
+        }
+        if (!string.IsNullOrEmpty(zip) && !ZipRx.IsMatch(zip))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Zip must be 5 digits"));
         }
     }
 }

@@ -412,7 +412,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         + "COALESCE(b.seats_reserved, 0), COALESCE(b.event_title, ''), COALESCE(b.event_slug, ''), b.event_start_date, "
         + "b.tickets_total, b.tickets_claimed, b.payment_intent_id, "
         + "b.fees_included, COALESCE(b.venue_name, ''), b.venue_address, b.venue_city, b.venue_state, b.venue_zip_code, b.paid_at, "
-        + "b.tax_cents, b.service_fee_cents "
+        + "b.tax_cents, b.service_fee_cents, b.payment_method_type, b.payment_method_last4 "
         + "FROM vw_bookings b";
 
     private static Booking MapBooking(NpgsqlDataReader r) => new()
@@ -439,7 +439,9 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
         VenueZip = r.GetString(20),
         PaidAt = r.IsDBNull(21) ? 0 : new DateTimeOffset(r.GetDateTime(21), TimeSpan.Zero).ToUnixTimeSeconds(),
         TaxCents = r.GetInt32(22),
-        ServiceFeeCents = r.GetInt32(23)
+        ServiceFeeCents = r.GetInt32(23),
+        PaymentMethodType = r.IsDBNull(24) ? string.Empty : r.GetString(24),
+        PaymentMethodLast4 = r.IsDBNull(25) ? string.Empty : r.GetString(25)
     };
 
     private static string ComposeAddress(string line1, string city, string state, string zip)

@@ -10,5 +10,6 @@ SELECT
     (t.tier IN ('professional','business','enterprise') OR t.advanced_reporting_enabled) AS has_advanced_reporting,
     t.archived_at IS NOT NULL AS archived,
     t.ach_enabled,
-    t.ach_fee_formulas_id
+    t.ach_fee_formulas_id,
+    t.tax_collection_mode::text AS tax_collection_mode
 FROM tenants t;

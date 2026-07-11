@@ -6,7 +6,8 @@ CREATE OR REPLACE FUNCTION sp_reprice_booking_for_method(
     subtotal_cents int,
     fee_cents int,
     total_cents int,
-    baseline_total_cents int
+    baseline_total_cents int,
+    tax_cents int
 ) LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -19,6 +20,7 @@ DECLARE
     v_platform int; v_gateway int;
     v_card_platform int; v_card_gateway int;
     v_sub int := 0; v_fee int := 0; v_total int := 0; v_baseline int := 0;
+    v_tax_rate numeric; v_tax int := 0; v_baseline_tax int := 0;
 BEGIN
     IF p_method NOT IN ('card', 'ach') THEN
         RAISE EXCEPTION 'Unknown payment method %', p_method USING ERRCODE = '22023';
@@ -90,13 +92,32 @@ BEGIN
         v_baseline := v_baseline + v_line.selling_price_cents + v_card_platform + v_card_gateway;
     END LOOP;
 
+    SELECT bt.combined_rate INTO v_tax_rate
+      FROM booking_taxes bt
+     WHERE bt.bookings_id = p_booking_id;
+    IF COALESCE(v_tax_rate, 0) > 0 AND v_sub > 0 THEN
+        v_tax := round((v_sub + v_fee) * v_tax_rate)::int;
+        v_baseline_tax := round(v_baseline * v_tax_rate)::int;
+        UPDATE booking_taxes
+           SET taxable_amount_cents = v_sub + v_fee,
+               tax_amount_cents = v_tax,
+               calculated_at = now(),
+               updated_at = now()
+         WHERE bookings_id = p_booking_id;
+    END IF;
+    v_fee := v_fee + v_tax;
+    v_total := v_total + v_tax;
+    v_baseline := v_baseline + v_baseline_tax;
+
     UPDATE bookings
-       SET subtotal_cents = v_sub, fee_cents = v_fee, total_cents = v_total, updated_at = now()
+       SET subtotal_cents = v_sub, fee_cents = v_fee, total_cents = v_total,
+           tax_cents = v_tax, updated_at = now()
      WHERE bookings_id = p_booking_id;
 
     subtotal_cents := v_sub;
     fee_cents := v_fee;
     total_cents := v_total;
     baseline_total_cents := v_baseline;
+    tax_cents := v_tax;
     RETURN NEXT;
 END; $$;

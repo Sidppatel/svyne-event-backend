@@ -32,7 +32,8 @@ CREATE OR REPLACE FUNCTION sp_get_booking_for_payment(
     tax_county_cents int,
     tax_city_cents int,
     tax_local_cents int,
-    tax_jurisdiction text
+    tax_jurisdiction text,
+    tax_collection_mode text
 ) LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -84,7 +85,8 @@ BEGIN
            round(bt.taxable_amount_cents * bt.county_rate)::int,
            round(bt.taxable_amount_cents * bt.city_rate)::int,
            round(bt.taxable_amount_cents * bt.local_rate)::int,
-           NULLIF(concat_ws('-', bt.state, bt.county, bt.city), '')::text
+           NULLIF(concat_ws('-', bt.state, bt.county, bt.city), '')::text,
+           COALESCE(bt.collected_by, t.tax_collection_mode)::text
       FROM bookings b
       JOIN tenants t ON t.tenants_id = b.tenants_id
       JOIN events e ON e.events_id = b.events_id

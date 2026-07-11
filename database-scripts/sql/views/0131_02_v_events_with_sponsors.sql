@@ -54,7 +54,12 @@ SELECT
     COALESCE(perf.performers, '[]'::jsonb) AS performers,
     COALESCE(spon.sponsors, '[]'::jsonb) AS sponsors,
     COALESCE(e.meta, '[]'::jsonb) AS extra_info,
-    prim.images_id AS primary_image_id
+    prim.images_id AS primary_image_id,
+    COALESCE(tr.state_rate, 0) AS venue_state_tax_rate,
+    COALESCE(tr.county_rate, 0) AS venue_county_tax_rate,
+    COALESCE(tr.city_rate, 0) AS venue_city_tax_rate,
+    COALESCE(tr.local_rate, 0) AS venue_local_tax_rate,
+    COALESCE(tr.combined_rate, 0) AS venue_combined_tax_rate
 FROM events e
 JOIN venues v ON e.venues_id = v.venues_id
 LEFT JOIN addresses a ON v.addresses_id = a.addresses_id
@@ -126,4 +131,5 @@ LEFT JOIN LATERAL (
     WHERE ei.events_id = e.events_id AND ei.is_primary = true
     ORDER BY CASE ei.type WHEN 'event_thumbnail' THEN 0 WHEN 'event_image' THEN 1 ELSE 2 END
     LIMIT 1
-) prim ON true;
+) prim ON true
+LEFT JOIN tax_rate_cache tr ON tr.zip_code = a.zip_code;

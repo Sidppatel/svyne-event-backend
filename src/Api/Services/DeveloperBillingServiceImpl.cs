@@ -550,6 +550,54 @@ public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.Develo
         return response;
     }
 
+    public override async Task<TaxRemittanceReport> GetTaxRemittanceReport(RevenueReportRequest request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        var ct = context.CancellationToken;
+        var (from, to) = Range(request.FromEpochSeconds, request.ToEpochSeconds);
+        await using var connection = await OpenAsync(ct);
+        var response = new TaxRemittanceReport { GeneratedAtEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
+
+        await using var cmd = RangeCmd(connection,
+            "SELECT collected_by, month_start, tenants_id, tenant_name, tax_cents, taxable_cents, orders "
+            + "FROM sp_developer_tax_remittance(@f, @t)", from, to);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        TaxRemitMonthRow? month = null;
+        string currentMode = "";
+        while (await reader.ReadAsync(ct))
+        {
+            var mode = reader.GetString(0);
+            var monthStart = EpochOrZero(reader, 1);
+            if (month is null || mode != currentMode || month.MonthStartEpochSeconds != monthStart)
+            {
+                month = new TaxRemitMonthRow { MonthStartEpochSeconds = monthStart };
+                currentMode = mode;
+                (mode == "self" ? response.SelfMonths : response.PlatformMonths).Add(month);
+            }
+            var row = new TaxRemitTenantRow
+            {
+                TenantsId = reader.GetGuid(2).ToString(),
+                TenantName = reader.GetString(3),
+                TaxCents = reader.GetInt64(4),
+                TaxableCents = reader.GetInt64(5),
+                Orders = reader.GetInt32(6)
+            };
+            month.Tenants.Add(row);
+            month.TaxCents += row.TaxCents;
+            month.TaxableCents += row.TaxableCents;
+            month.Orders += row.Orders;
+            if (mode == "self")
+            {
+                response.SelfTotalCents += row.TaxCents;
+            }
+            else
+            {
+                response.PlatformTotalCents += row.TaxCents;
+            }
+        }
+        return response;
+    }
+
     public override async Task<TenantDashboard> GetTenantDashboard(TenantRequest request, ServerCallContext context)
     {
         RequireDeveloper();

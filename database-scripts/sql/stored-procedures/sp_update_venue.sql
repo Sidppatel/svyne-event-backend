@@ -10,7 +10,13 @@ AS $$
 DECLARE v_addr_id uuid;
 BEGIN
     SELECT addresses_id INTO v_addr_id FROM venues WHERE venues_id = p_id;
-    IF v_addr_id IS NOT NULL THEN
+    IF v_addr_id IS NULL THEN
+        INSERT INTO addresses (line1, line2, city, state, zip_code, created_at, updated_at)
+        VALUES (COALESCE(p_line1,''), p_line2, COALESCE(p_city,''),
+            COALESCE(p_state,''), COALESCE(p_zip,''), now(), now())
+        RETURNING addresses_id INTO v_addr_id;
+        UPDATE venues SET addresses_id = v_addr_id WHERE venues_id = p_id;
+    ELSE
         UPDATE addresses SET
             line1 = COALESCE(p_line1, line1),
             line2 = COALESCE(p_line2, line2),

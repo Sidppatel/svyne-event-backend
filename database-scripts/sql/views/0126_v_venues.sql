@@ -9,7 +9,12 @@ SELECT
     COALESCE(a.state, '') AS state,
     COALESCE(a.zip_code, '') AS zip_code,
     COALESCE(ec.cnt, 0)::int AS event_count,
-    img.storage_key AS primary_image_key
+    img.storage_key AS primary_image_key,
+    COALESCE(tr.state_rate, 0) AS state_tax_rate,
+    COALESCE(tr.county_rate, 0) AS county_tax_rate,
+    COALESCE(tr.city_rate, 0) AS city_tax_rate,
+    COALESCE(tr.local_rate, 0) AS local_tax_rate,
+    COALESCE(tr.combined_rate, 0) AS combined_tax_rate
 FROM venues v
 LEFT JOIN addresses a ON v.addresses_id = a.addresses_id
 LEFT JOIN LATERAL (
@@ -21,4 +26,5 @@ LEFT JOIN LATERAL (
     JOIN images i ON i.images_id = vi.images_id
     WHERE vi.venues_id = v.venues_id AND vi.is_primary = true
     LIMIT 1
-) img ON true;
+) img ON true
+LEFT JOIN tax_rate_cache tr ON tr.zip_code = a.zip_code;

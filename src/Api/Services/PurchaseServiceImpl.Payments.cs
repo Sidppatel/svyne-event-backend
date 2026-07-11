@@ -29,8 +29,8 @@ public sealed partial class BookingServiceImpl
 
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
 
-        long subtotal, fee, total;
-        string currency, status;
+        long subtotal, fee, total, tax;
+        string currency, status, taxCollectionMode;
         string? connectedAccount, existingIntent;
         DateTime? holdExpiresAt;
         bool achAllowed;
@@ -41,7 +41,8 @@ public sealed partial class BookingServiceImpl
                 "SELECT status, subtotal_cents, fee_cents, total_cents, currency, connected_account_id, "
                 + "charges_enabled, existing_intent_id, hold_expires_at, ach_allowed, "
                 + "tax_cents, tax_rate, venue_zip, venue_city, venue_state, event_name, ticket_count, "
-                + "tenant_name, event_date, tax_state_cents, tax_county_cents, tax_city_cents, tax_local_cents, tax_jurisdiction "
+                + "tenant_name, event_date, tax_state_cents, tax_county_cents, tax_city_cents, tax_local_cents, tax_jurisdiction, "
+                + "tax_collection_mode "
                 + "FROM sp_get_booking_for_payment(@b, @u)", connection);
             cmd.Parameters.AddWithValue("b", bookingId);
             cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
@@ -60,11 +61,13 @@ public sealed partial class BookingServiceImpl
             existingIntent = reader.IsDBNull(7) ? null : reader.GetString(7);
             holdExpiresAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8);
             achAllowed = !reader.IsDBNull(9) && reader.GetBoolean(9);
+            tax = reader.IsDBNull(10) ? 0 : reader.GetInt32(10);
+            taxCollectionMode = reader.IsDBNull(24) ? "platform" : reader.GetString(24);
 
             metadata["tenant_id"] = tenantContext.TenantsId?.ToString() ?? string.Empty;
             metadata["subtotal_cents"] = subtotal.ToString();
-            metadata["service_fee_cents"] = (fee - (reader.IsDBNull(10) ? 0 : reader.GetInt32(10))).ToString();
-            metadata["tax_cents"] = (reader.IsDBNull(10) ? 0 : reader.GetInt32(10)).ToString();
+            metadata["service_fee_cents"] = (fee - tax).ToString();
+            metadata["tax_cents"] = tax.ToString();
             metadata["tax_rate"] = reader.IsDBNull(11) ? "0" : reader.GetDecimal(11).ToString(System.Globalization.CultureInfo.InvariantCulture);
             metadata["total_cents"] = total.ToString();
             metadata["venue_zip"] = reader.IsDBNull(12) ? string.Empty : reader.GetString(12);
@@ -79,6 +82,7 @@ public sealed partial class BookingServiceImpl
             metadata["tax_city_cents"] = (reader.IsDBNull(21) ? 0 : reader.GetInt32(21)).ToString();
             metadata["tax_local_cents"] = (reader.IsDBNull(22) ? 0 : reader.GetInt32(22)).ToString();
             metadata["tax_jurisdiction"] = reader.IsDBNull(23) ? string.Empty : reader.GetString(23);
+            metadata["tax_collected_by"] = taxCollectionMode;
             metadata["payment_purpose"] = "ticket_purchase";
 
             if (string.IsNullOrEmpty(connectedAccount) || !chargesEnabled)
@@ -98,7 +102,7 @@ public sealed partial class BookingServiceImpl
             try
             {
                 await using var rp = new NpgsqlCommand(
-                    "SELECT total_cents, fee_cents FROM sp_reprice_booking_for_method(@b, @u, 'ach')", connection);
+                    "SELECT total_cents, fee_cents, tax_cents FROM sp_reprice_booking_for_method(@b, @u, 'ach')", connection);
                 rp.Parameters.AddWithValue("b", bookingId);
                 rp.Parameters.AddWithValue("u", tenantContext.UsersId!);
                 await using var rr = await rp.ExecuteReaderAsync(ct);
@@ -106,6 +110,10 @@ public sealed partial class BookingServiceImpl
                 {
                     total = rr.GetInt32(0);
                     fee = rr.GetInt32(1);
+                    tax = rr.GetInt32(2);
+                    metadata["tax_cents"] = tax.ToString();
+                    metadata["service_fee_cents"] = (fee - tax).ToString();
+                    metadata["total_cents"] = total.ToString();
                 }
             }
             catch (PostgresException ex)
@@ -114,6 +122,7 @@ public sealed partial class BookingServiceImpl
             }
         }
 
+        var applicationFee = taxCollectionMode == "self" ? fee - tax : fee;
         Stripe.PaymentIntent intent;
         try
         {
@@ -130,12 +139,12 @@ public sealed partial class BookingServiceImpl
                 }
                 else
                 {
-                    intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct, metadata);
+                    intent = await stripe.CreateDestinationPaymentIntentAsync(total, applicationFee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct, metadata);
                 }
             }
             else
             {
-                intent = await stripe.CreateDestinationPaymentIntentAsync(total, fee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct, metadata);
+                intent = await stripe.CreateDestinationPaymentIntentAsync(total, applicationFee, currency, connectedAccount!, bookingId, achAllowed, preferAch, ct, metadata);
             }
         }
         catch (StripeException ex)

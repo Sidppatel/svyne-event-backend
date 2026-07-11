@@ -147,10 +147,11 @@ BEGIN
 
     INSERT INTO booking_taxes (tenants_id, bookings_id, zip_code, state, county, city,
         combined_rate, state_rate, county_rate, city_rate, local_rate,
-        taxable_amount_cents, tax_amount_cents, api_response_id, calculated_at, created_at, updated_at)
+        taxable_amount_cents, tax_amount_cents, collected_by, api_response_id, calculated_at, created_at, updated_at)
     VALUES (v_tenant, v_id, COALESCE(v_tzip, ''), v_tstate, v_tcounty, v_tcity,
         COALESCE(v_tax_rate, 0), v_tstate_rate, v_tcounty_rate, v_tcity_rate, v_tlocal_rate,
-        v_taxable, v_tax_total, v_tapi, now(), now(), now());
+        v_taxable, v_tax_total, (SELECT t.tax_collection_mode FROM tenants t WHERE t.tenants_id = v_tenant),
+        v_tapi, now(), now(), now());
 
     FOR v_seat_idx IN 1..p_seats LOOP
         v_code := 'TK-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 8));

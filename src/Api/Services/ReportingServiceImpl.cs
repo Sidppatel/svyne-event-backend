@@ -30,7 +30,8 @@ public sealed class ReportingServiceImpl : ReportingService.ReportingServiceBase
         {
             Tier = access.Tier,
             HasAdvancedReporting = access.HasAdvanced,
-            AdvancedReportingOverride = access.OverrideEnabled
+            AdvancedReportingOverride = access.OverrideEnabled,
+            TaxCollectionMode = access.TaxCollectionMode
         };
     }
 
@@ -183,6 +184,48 @@ public sealed class ReportingServiceImpl : ReportingService.ReportingServiceBase
                 TicketsSold = reader.GetInt32(2),
                 RevenueCents = reader.GetInt64(3)
             });
+        }
+        return response;
+    }
+
+    public override async Task<TaxReport> GetTaxReport(ReportRangeRequest request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        var tenantsId = RequireTenant();
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantsId, ct);
+        var access = await accessProvider.GetAsync(connection, tenantsId, ct);
+        if (access.TaxCollectionMode != "self")
+        {
+            await LogAccessAttemptAsync(connection, tenantsId, "tax_report_denied", ct);
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Tax reporting is only available when your organization collects its own sales tax"));
+        }
+        await using var cmd = new NpgsqlCommand(
+            "SELECT month_start, events_id, event_title, tax_cents, taxable_cents, orders "
+            + "FROM sp_report_tax_by_month_event(@f, @t)", connection);
+        AddRange(cmd, request.FromEpochSeconds, request.ToEpochSeconds);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var response = new TaxReport { GeneratedAtEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
+        TaxMonthRow? month = null;
+        while (await reader.ReadAsync(ct))
+        {
+            var monthStart = new DateTimeOffset(reader.GetDateTime(0), TimeSpan.Zero).ToUnixTimeSeconds();
+            if (month is null || month.MonthStartEpochSeconds != monthStart)
+            {
+                month = new TaxMonthRow { MonthStartEpochSeconds = monthStart };
+                response.Months.Add(month);
+            }
+            var row = new TaxEventRow
+            {
+                EventsId = reader.GetGuid(1).ToString(),
+                EventTitle = reader.GetString(2),
+                TaxCents = reader.GetInt64(3),
+                TaxableCents = reader.GetInt64(4),
+                Orders = reader.GetInt32(5)
+            };
+            month.Events.Add(row);
+            month.TaxCents += row.TaxCents;
+            month.TaxableCents += row.TaxableCents;
+            month.Orders += row.Orders;
         }
         return response;
     }

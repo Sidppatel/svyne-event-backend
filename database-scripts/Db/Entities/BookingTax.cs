@@ -22,6 +22,8 @@ public class BookingTax : BaseEntity
     public int TaxableAmountCents { get; set; }
     public int TaxAmountCents { get; set; }
 
+    public string CollectedBy { get; set; } = "platform";
+
     public string? ApiResponseId { get; set; }
     public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
 }

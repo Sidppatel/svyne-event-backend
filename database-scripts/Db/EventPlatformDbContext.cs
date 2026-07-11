@@ -79,7 +79,11 @@ public class EventPlatformDbContext(
 
         modelBuilder.Entity<Tenant>(entity =>
         {
-            entity.ToTable("tenants");
+            entity.ToTable("tenants", t =>
+            {
+                t.HasCheckConstraint("CK_tenants_TaxCollectionMode",
+                    "tax_collection_mode IN ('platform','self')");
+            });
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.Slug).IsUnique();
             entity.HasIndex(e => e.StripeConnectedAccountId)
@@ -108,6 +112,7 @@ public class EventPlatformDbContext(
             entity.HasOne(e => e.AchFeeFormula).WithMany()
                 .HasForeignKey(e => e.AchFeeFormulasId)
                 .IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            entity.Property(e => e.TaxCollectionMode).HasMaxLength(16).HasDefaultValue("platform");
         });
 
         modelBuilder.Entity<TenantStripeProfile>(entity =>
@@ -844,6 +849,8 @@ public class EventPlatformDbContext(
             {
                 t.HasCheckConstraint("CK_booking_taxes_TaxableAmountCents", "taxable_amount_cents >= 0");
                 t.HasCheckConstraint("CK_booking_taxes_TaxAmountCents", "tax_amount_cents >= 0");
+                t.HasCheckConstraint("CK_booking_taxes_CollectedBy",
+                    "collected_by IN ('platform','self')");
             });
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.TenantsId);
@@ -853,6 +860,7 @@ public class EventPlatformDbContext(
             entity.Property(e => e.State).HasMaxLength(64);
             entity.Property(e => e.County).HasMaxLength(128);
             entity.Property(e => e.City).HasMaxLength(128);
+            entity.Property(e => e.CollectedBy).HasMaxLength(16).HasDefaultValue("platform");
             entity.Property(e => e.ApiResponseId).HasMaxLength(128);
             entity.Property(e => e.CombinedRate).HasPrecision(6, 5);
             entity.Property(e => e.StateRate).HasPrecision(6, 5);

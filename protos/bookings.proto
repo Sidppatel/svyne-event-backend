@@ -78,6 +78,8 @@ message Booking {
   string venue_zip = 24;
   string venue_city = 25;
   string venue_state = 26;
+  string payment_method_type = 27;
+  string payment_method_last4 = 28;
 }
 
 // One line of a booking, for display on checkout / booking detail. Carries the

@@ -74,4 +74,6 @@ public class Tenant : BaseEntity
     
     public Guid? AchFeeFormulasId { get; set; }
     public FeeFormula? AchFeeFormula { get; set; }
+
+    public string TaxCollectionMode { get; set; } = "platform";
 }

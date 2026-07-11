@@ -47,7 +47,7 @@ public sealed class TenantTierServiceImpl : TenantTierService.TenantTierServiceB
 
         await using var cmd = new NpgsqlCommand(
             "SELECT tenants_id, slug, name, tier, advanced_reporting_enabled, has_advanced_reporting, archived, "
-            + "ach_enabled, ach_fee_formulas_id "
+            + "ach_enabled, ach_fee_formulas_id, tax_collection_mode "
             + "FROM vw_tenant_reporting_access WHERE (@q IS NULL OR name ILIKE @q OR slug ILIKE @q) "
             + "ORDER BY name OFFSET @o LIMIT @l", connection);
         cmd.Parameters.Add(new NpgsqlParameter("q", NpgsqlTypes.NpgsqlDbType.Text)
@@ -69,7 +69,8 @@ public sealed class TenantTierServiceImpl : TenantTierService.TenantTierServiceB
                 HasAdvancedReporting = reader.GetBoolean(5),
                 Archived = reader.GetBoolean(6),
                 AchEnabled = reader.GetBoolean(7),
-                AchFeeFormulasId = reader.IsDBNull(8) ? string.Empty : reader.GetGuid(8).ToString()
+                AchFeeFormulasId = reader.IsDBNull(8) ? string.Empty : reader.GetGuid(8).ToString(),
+                TaxCollectionMode = reader.GetString(9)
             });
         }
         return response;
@@ -158,6 +159,43 @@ public sealed class TenantTierServiceImpl : TenantTierService.TenantTierServiceB
         });
         await LogTierAuditAsync(connection, tenantsId, "ach_changed", metadataJson, ct);
         return new AckResponse { Success = true, Message = $"ACH {(request.Enabled ? "enabled" : "disabled")}" };
+    }
+
+    public override async Task<AckResponse> SetTenantTaxMode(SetTenantTaxModeRequest request, ServerCallContext context)
+    {
+        RequireDeveloper();
+        var ct = context.CancellationToken;
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "A change reason is required"));
+        }
+        if (request.Mode is not ("platform" or "self"))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Mode must be 'platform' or 'self'"));
+        }
+        var tenantsId = Guid.Parse(request.TenantsId);
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+        System.Text.Json.JsonElement oldState;
+        try
+        {
+            await using var cmd = new NpgsqlCommand("SELECT sp_set_tenant_tax_mode(@t, @m)", connection);
+            cmd.Parameters.AddWithValue("t", tenantsId);
+            cmd.Parameters.AddWithValue("m", request.Mode);
+            oldState = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+                (string)(await cmd.ExecuteScalarAsync(ct))!);
+        }
+        catch (PostgresException exception) when (exception.SqlState is "P0001" or "22023")
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, exception.MessageText));
+        }
+        var metadataJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            from_mode = oldState.GetProperty("mode").GetString(),
+            to_mode = request.Mode,
+            reason = request.Reason
+        });
+        await LogTierAuditAsync(connection, tenantsId, "tax_mode_changed", metadataJson, ct);
+        return new AckResponse { Success = true, Message = $"Tax collection mode set to {request.Mode}" };
     }
 
     private void RequireDeveloper()

@@ -516,7 +516,9 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
 
     private const string EventSelect =
         "SELECT events_id, title, slug, description, status, category, start_date, end_date, image_path, "
-        + "is_featured, layout_mode, total_capacity, venues_id, performers::text, sponsors::text, fees_included, event_type, primary_image_id, extra_info::text, ach_enabled FROM vw_events";
+        + "is_featured, layout_mode, total_capacity, venues_id, performers::text, sponsors::text, fees_included, event_type, primary_image_id, extra_info::text, ach_enabled, "
+        + "venue_state_tax_rate, venue_county_tax_rate, venue_city_tax_rate, venue_local_tax_rate, venue_combined_tax_rate "
+        + "FROM vw_events";
 
     private static Event MapEvent(NpgsqlDataReader r) => new()
     {
@@ -539,7 +541,12 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
         EventType = r.IsDBNull(16) ? string.Empty : r.GetString(16),
         PrimaryImageId = r.IsDBNull(17) ? string.Empty : r.GetGuid(17).ToString(),
         ExtraInfoJson = r.IsDBNull(18) ? "[]" : r.GetString(18),
-        AchEnabled = !r.IsDBNull(19) && r.GetBoolean(19)
+        AchEnabled = !r.IsDBNull(19) && r.GetBoolean(19),
+        VenueStateTaxRate = r.IsDBNull(20) ? 0.0 : r.GetDouble(20),
+        VenueCountyTaxRate = r.IsDBNull(21) ? 0.0 : r.GetDouble(21),
+        VenueCityTaxRate = r.IsDBNull(22) ? 0.0 : r.GetDouble(22),
+        VenueLocalTaxRate = r.IsDBNull(23) ? 0.0 : r.GetDouble(23),
+        VenueCombinedTaxRate = r.IsDBNull(24) ? 0.0 : r.GetDouble(24)
     };
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;

@@ -130,13 +130,22 @@ public sealed class StripeWebhookHandler
             confirmed = await cmd.ExecuteScalarAsync(ct) is true;
         }
 
-        
+        var methodType = pi.LatestCharge?.PaymentMethodDetails?.Type;
+        var methodLast4 = methodType switch
+        {
+            "card" => pi.LatestCharge?.PaymentMethodDetails?.Card?.Last4,
+            "us_bank_account" => pi.LatestCharge?.PaymentMethodDetails?.UsBankAccount?.Last4,
+            _ => null
+        };
+
         await using (var enrich = new NpgsqlCommand(
-            "SELECT sp_enrich_stripe_transaction(@id, @total, @fees)", conn))
+            "SELECT sp_enrich_stripe_transaction(@id, @total, @fees, @mtype, @mlast4)", conn))
         {
             enrich.Parameters.AddWithValue("id", pi.Id);
             enrich.Parameters.AddWithValue("total", (int)pi.AmountReceived);
             enrich.Parameters.AddWithValue("fees", DBNull.Value);
+            enrich.Parameters.AddWithValue("mtype", (object?)methodType ?? DBNull.Value);
+            enrich.Parameters.AddWithValue("mlast4", (object?)methodLast4 ?? DBNull.Value);
             await enrich.ExecuteNonQueryAsync(ct);
         }
 

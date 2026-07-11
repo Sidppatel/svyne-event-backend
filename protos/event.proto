@@ -131,6 +131,11 @@ message Event {
   string primary_image_id = 19;      // images_id of primary thumbnail (fallback event image)
   string extra_info_json = 20;       // JSON array [{key,value,isPublic,sortOrder}]
   bool ach_enabled = 21;             // admin opted this event in to ACH (tenant-gated)
+  double venue_state_tax_rate = 22;
+  double venue_county_tax_rate = 23;
+  double venue_city_tax_rate = 24;
+  double venue_local_tax_rate = 25;
+  double venue_combined_tax_rate = 26;
 }
 
 message GetEventBySlugRequest { string slug = 1; }

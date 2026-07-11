@@ -11,6 +11,8 @@ SELECT
     st.transfer_amount_cents,
     st.stripe_fees_cents,
     st.total_charged_cents,
+    st.payment_method_type,
+    st.payment_method_last4,
     st.created_at,
     p.bookings_id AS bookings_id,
     p.booking_number,

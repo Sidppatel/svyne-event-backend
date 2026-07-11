@@ -49,7 +49,12 @@ SELECT
     ettp.min_price::int AS min_ticket_type_price_cents,
     ts.min_total_price::int AS display_min_table_price_cents,
     ettp.min_total_price::int AS display_min_ticket_type_price_cents,
-    COALESCE(perf.performers, '[]'::jsonb) AS performers
+    COALESCE(perf.performers, '[]'::jsonb) AS performers,
+    COALESCE(tr.state_rate, 0) AS venue_state_tax_rate,
+    COALESCE(tr.county_rate, 0) AS venue_county_tax_rate,
+    COALESCE(tr.city_rate, 0) AS venue_city_tax_rate,
+    COALESCE(tr.local_rate, 0) AS venue_local_tax_rate,
+    COALESCE(tr.combined_rate, 0) AS venue_combined_tax_rate
 FROM events e
 JOIN venues v ON e.venues_id = v.venues_id
 LEFT JOIN addresses a ON v.addresses_id = a.addresses_id
@@ -97,4 +102,5 @@ LEFT JOIN LATERAL (
     FROM event_performers ep
     JOIN performers p ON p.performers_id = ep.performers_id
     WHERE ep.events_id = e.events_id
-) perf ON true;
+) perf ON true
+LEFT JOIN tax_rate_cache tr ON tr.zip_code = a.zip_code;

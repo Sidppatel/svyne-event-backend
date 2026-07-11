@@ -81,6 +81,11 @@ message Venue {
   string line2 = 11;
   string city = 12;
   string zip = 13;
+  double state_tax_rate = 14;
+  double county_tax_rate = 15;
+  double city_tax_rate = 16;
+  double local_tax_rate = 17;
+  double combined_tax_rate = 18;
 }
 
 message CreateVenueRequest {

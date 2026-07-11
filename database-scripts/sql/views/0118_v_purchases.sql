@@ -32,6 +32,8 @@ SELECT
     st.total_charged_cents,
     st.stripe_fees_cents,
     st.transfer_amount_cents,
+    st.payment_method_type,
+    st.payment_method_last4,
     e.created_by_users_id,
     COALESCE(pt_labels.labels, ARRAY[]::text[]) AS table_labels,
     COALESCE(tk.tickets_total, 0) AS tickets_total,

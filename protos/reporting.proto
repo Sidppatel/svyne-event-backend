@@ -13,6 +13,9 @@ service ReportingService {
   rpc GetEventPerformance (ReportRangeRequest) returns (EventPerformanceList);
   rpc GetTicketTypeBreakdown (ReportRangeRequest) returns (TicketTypeBreakdownList);
   rpc GetSalesByChannel (ReportRangeRequest) returns (SalesByChannelList);
+  // Only available when the tenant's tax_collection_mode is 'self' (tenant
+  // remits their own sales tax); monthly totals with per-event drill-down.
+  rpc GetTaxReport (ReportRangeRequest) returns (TaxReport);
 }
 
 service TenantTierService {
@@ -22,12 +25,38 @@ service TenantTierService {
   // Developer gate for ACH: enable/disable ACH for a tenant and set the fee formula
   // that replaces the service fee when a buyer pays by ACH.
   rpc SetTenantAch (SetTenantAchRequest) returns (svyne.common.AckResponse);
+  // Developer gate for tax routing: 'platform' = Svyne collects and remits sales
+  // tax on the tenant's behalf (default); 'self' = tax flows to the tenant payout
+  // and the tenant remits it themselves.
+  rpc SetTenantTaxMode (SetTenantTaxModeRequest) returns (svyne.common.AckResponse);
 }
 
 message ReportingAccess {
   string tier = 1;
   bool has_advanced_reporting = 2;
   bool advanced_reporting_override = 3;
+  string tax_collection_mode = 4;  // 'platform' | 'self'
+}
+
+message TaxEventRow {
+  string events_id = 1;
+  string event_title = 2;
+  int64 tax_cents = 3;
+  int64 taxable_cents = 4;
+  int32 orders = 5;
+}
+
+message TaxMonthRow {
+  int64 month_start_epoch_seconds = 1;
+  int64 tax_cents = 2;
+  int64 taxable_cents = 3;
+  int32 orders = 4;
+  repeated TaxEventRow events = 5;
+}
+
+message TaxReport {
+  repeated TaxMonthRow months = 1;
+  int64 generated_at_epoch_seconds = 2;
 }
 
 message ReportRangeRequest {
@@ -130,6 +159,7 @@ message TenantReportingAccessRow {
   bool archived = 7;
   bool ach_enabled = 8;
   string ach_fee_formulas_id = 9;   // empty = none assigned
+  string tax_collection_mode = 10;  // 'platform' | 'self'
 }
 
 message TenantReportingAccessList {
@@ -152,4 +182,10 @@ message SetTenantAchRequest {
   bool enabled = 2;
   string fee_formulas_id = 3;   // required when enabling
   string reason = 4;
+}
+
+message SetTenantTaxModeRequest {
+  string tenants_id = 1;
+  string mode = 2;              // 'platform' | 'self'
+  string reason = 3;
 }

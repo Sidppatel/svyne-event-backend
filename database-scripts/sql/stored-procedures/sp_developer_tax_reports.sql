@@ -6,7 +6,7 @@ AS $$
     SELECT b.events_id, e.title::text,
            COALESCE(SUM(bt.tax_amount_cents), 0)::bigint, COUNT(*)::int
       FROM bookings b
-      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id
+      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id AND bt.collected_by = 'platform'
       JOIN events e ON e.events_id = b.events_id
      WHERE b.status IN ('Paid','CheckedIn')
        AND b.created_at >= p_from AND b.created_at < p_to
@@ -22,7 +22,7 @@ AS $$
     SELECT b.tenants_id, t.name::text,
            COALESCE(SUM(bt.tax_amount_cents), 0)::bigint, COUNT(*)::int
       FROM bookings b
-      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id
+      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id AND bt.collected_by = 'platform'
       JOIN tenants t ON t.tenants_id = b.tenants_id
      WHERE b.status IN ('Paid','CheckedIn')
        AND b.created_at >= p_from AND b.created_at < p_to
@@ -38,7 +38,7 @@ AS $$
     SELECT date_trunc('month', b.created_at),
            COALESCE(SUM(bt.tax_amount_cents), 0)::bigint, COUNT(*)::int
       FROM bookings b
-      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id
+      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id AND bt.collected_by = 'platform'
      WHERE b.status IN ('Paid','CheckedIn')
        AND b.created_at >= p_from AND b.created_at < p_to
      GROUP BY 1
@@ -64,7 +64,7 @@ AS $$
            COALESCE(round(SUM(bt.taxable_amount_cents * bt.city_rate)), 0)::bigint,
            COUNT(*)::int
       FROM bookings b
-      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id
+      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id AND bt.collected_by = 'platform'
      WHERE b.status IN ('Paid','CheckedIn')
        AND b.created_at >= p_from AND b.created_at < p_to
      GROUP BY 1, 2, 3
@@ -79,7 +79,7 @@ AS $$
     SELECT bt.combined_rate, COALESCE(bt.state, ''),
            COALESCE(SUM(bt.tax_amount_cents), 0)::bigint, COUNT(*)::int
       FROM bookings b
-      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id
+      JOIN booking_taxes bt ON bt.bookings_id = b.bookings_id AND bt.collected_by = 'platform'
      WHERE b.status IN ('Paid','CheckedIn')
        AND b.created_at >= p_from AND b.created_at < p_to
      GROUP BY bt.combined_rate, bt.state

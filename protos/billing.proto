@@ -32,6 +32,10 @@ service DeveloperBillingService {
   rpc GetRevenueReport (RevenueReportRequest) returns (RevenueReport);
   rpc GetTenantActivity (TenantActivityRequest) returns (TenantActivityList);
   rpc GetTaxReport (RevenueReportRequest) returns (TaxReport);
+  // Monthly remittance view split by who collected the tax: 'platform' months
+  // are what Svyne owes the tax authorities; 'self' months are informational
+  // (tenants remit those themselves). Tenant breakdown inside each month.
+  rpc GetTaxRemittanceReport (RevenueReportRequest) returns (TaxRemittanceReport);
   rpc GetTenantDashboard (TenantRequest) returns (TenantDashboard);
 
   rpc ListTaxOverrides (svyne.common.Empty) returns (TaxOverrideList);
@@ -330,6 +334,30 @@ message TaxReport {
   repeated TaxByJurisdictionRow by_jurisdiction = 5;
   repeated TaxRateSummaryRow rate_summary = 6;
   int64 generated_at_epoch_seconds = 7;
+}
+
+message TaxRemitTenantRow {
+  string tenants_id = 1;
+  string tenant_name = 2;
+  int64 tax_cents = 3;
+  int64 taxable_cents = 4;
+  int32 orders = 5;
+}
+
+message TaxRemitMonthRow {
+  int64 month_start_epoch_seconds = 1;
+  int64 tax_cents = 2;
+  int64 taxable_cents = 3;
+  int32 orders = 4;
+  repeated TaxRemitTenantRow tenants = 5;
+}
+
+message TaxRemittanceReport {
+  int64 platform_total_cents = 1;
+  int64 self_total_cents = 2;
+  repeated TaxRemitMonthRow platform_months = 3;
+  repeated TaxRemitMonthRow self_months = 4;
+  int64 generated_at_epoch_seconds = 5;
 }
 
 message TenantDashboardEventRow {
