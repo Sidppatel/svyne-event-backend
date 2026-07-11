@@ -42,21 +42,33 @@ if (args.Contains("--reload-sql"))
     
     var conn = ctx.Database.GetDbConnection();
     if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
-    foreach (var folder in new[] { "functions", "views", "stored-procedures", "policies", "security" })
+    await using var tx = await conn.BeginTransactionAsync();
+    try
     {
-        var dir = Path.Combine(sqlRoot, folder);
-        if (Directory.Exists(dir))
+        foreach (var folder in new[] { "functions", "views", "stored-procedures", "policies", "security" })
         {
-            var files = Directory.GetFiles(dir, "*.sql").OrderBy(f => f).ToList();
-            foreach (var file in files)
+            var dir = Path.Combine(sqlRoot, folder);
+            if (Directory.Exists(dir))
             {
-                Console.WriteLine($"[migrate] executing {Path.GetFileName(file)}");
-                var sql = await File.ReadAllTextAsync(file);
-                await using var cmd = conn.CreateCommand();
-                cmd.CommandText = sql;
-                await cmd.ExecuteNonQueryAsync();
+                var files = Directory.GetFiles(dir, "*.sql").OrderBy(f => f).ToList();
+                foreach (var file in files)
+                {
+                    Console.WriteLine($"[migrate] executing {Path.GetFileName(file)}");
+                    var sql = await File.ReadAllTextAsync(file);
+                    await using var cmd = conn.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = sql;
+                    await cmd.ExecuteNonQueryAsync();
+                }
             }
         }
+        await tx.CommitAsync();
+    }
+    catch
+    {
+        await tx.RollbackAsync();
+        Console.Error.WriteLine("[migrate] reload failed; transaction rolled back, DB unchanged.");
+        throw;
     }
     Console.WriteLine("[migrate] SQL objects reloaded.");
     return 0;

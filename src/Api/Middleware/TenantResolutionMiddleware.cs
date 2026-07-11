@@ -59,7 +59,7 @@ public sealed class TenantResolutionMiddleware
     {
         await using var connection = await db.OpenAsync(null, null, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT tenants_id FROM vw_tenant_identity WHERE slug = @s AND archived_at IS NULL", connection);
+            "SELECT tenants_id FROM sp_public_tenant_identity() WHERE slug = @s AND archived_at IS NULL", connection);
         cmd.Parameters.AddWithValue("s", slug);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is Guid g ? g : null;

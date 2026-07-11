@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION sp_get_public_tenant_branding(
     brand_button text,
     brand_highlight text,
     brand_tokens text
-) LANGUAGE plpgsql
+) LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path = public, extensions, pg_catalog
 AS $$
 BEGIN

@@ -195,7 +195,7 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         var response = new ListPublicTenantsResponse();
         await using var connection = await db.OpenAsync(null, null, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT slug, name FROM vw_tenant_identity WHERE archived_at IS NULL ORDER BY name", connection);
+            "SELECT slug, name FROM sp_public_tenant_identity() WHERE archived_at IS NULL ORDER BY name", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {

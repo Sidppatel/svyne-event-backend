@@ -478,7 +478,7 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
             return null;
         }
         await using var connection = await db.OpenAsync(null, null, ct);
-        await using var cmd = new NpgsqlCommand("SELECT tenants_id FROM vw_tenant_identity WHERE slug = @s AND archived_at IS NULL", connection);
+        await using var cmd = new NpgsqlCommand("SELECT tenants_id FROM sp_public_tenant_identity() WHERE slug = @s AND archived_at IS NULL", connection);
         cmd.Parameters.AddWithValue("s", slug);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is Guid g ? g : null;
@@ -487,7 +487,7 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
     private async Task<string?> ResolveSlugAsync(Guid tenantsId, CancellationToken ct)
     {
         await using var connection = await db.OpenAsync(null, null, ct);
-        await using var cmd = new NpgsqlCommand("SELECT slug FROM vw_tenant_identity WHERE tenants_id = @id AND archived_at IS NULL", connection);
+        await using var cmd = new NpgsqlCommand("SELECT slug FROM sp_public_tenant_identity() WHERE tenants_id = @id AND archived_at IS NULL", connection);
         cmd.Parameters.AddWithValue("id", tenantsId);
         return await cmd.ExecuteScalarAsync(ct) as string;
     }
