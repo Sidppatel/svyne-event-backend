@@ -24,7 +24,9 @@ BEGIN
 
     UPDATE events SET
         status = p_status,
-        published_at = CASE WHEN p_status = 'Published' AND published_at IS NULL THEN now() ELSE published_at END,
+        published_at = CASE WHEN p_status = 'Published' AND published_at IS NULL THEN now()
+                            WHEN p_status = 'Draft' THEN NULL
+                            ELSE published_at END,
         scheduled_publish_at = p_scheduled_publish_at,
         updated_at = now()
     WHERE events_id = p_id;

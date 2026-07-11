@@ -250,7 +250,6 @@ public sealed class EventServiceImpl : EventService.EventServiceBase
             : " AND tenants_id = @tenant";
         await using var cmd = new NpgsqlCommand(
             EventSelect + " WHERE slug = @slug"
-            + (isPublicViewer ? " AND status = 'Published'" : string.Empty)
             + tenantFilter + EventScopeFilter, connection);
         cmd.Parameters.AddWithValue("slug", request.Slug);
         if (tenantContext.TenantsId is { } tenantsId)
