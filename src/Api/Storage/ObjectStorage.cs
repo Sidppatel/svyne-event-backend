@@ -1,3 +1,4 @@
+using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 
@@ -18,23 +19,34 @@ public sealed class ObjectStorage
 
     public bool UsesS3 => !string.IsNullOrEmpty(bucket);
 
+    private AmazonS3Config BuildConfig()
+    {
+        var config = new AmazonS3Config
+        {
+            RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
+        };
+        if (!string.IsNullOrEmpty(serviceUrl))
+        {
+            config.ServiceURL = serviceUrl;
+            config.ForcePathStyle = true;
+        }
+        return config;
+    }
+
     public async Task PutAsync(string key, Stream content, string contentType, CancellationToken ct)
     {
         if (UsesS3)
         {
-            var config = new AmazonS3Config();
-            if (!string.IsNullOrEmpty(serviceUrl))
-            {
-                config.ServiceURL = serviceUrl;
-                config.ForcePathStyle = true;
-            }
-            using var client = new AmazonS3Client(config);
+            using var client = new AmazonS3Client(BuildConfig());
             await client.PutObjectAsync(new PutObjectRequest
             {
                 BucketName = bucket,
                 Key = key,
                 InputStream = content,
-                ContentType = contentType
+                ContentType = contentType,
+                DisablePayloadSigning = true,
+                UseChunkEncoding = false
             }, ct);
             return;
         }
@@ -49,13 +61,7 @@ public sealed class ObjectStorage
     {
         if (UsesS3)
         {
-            var config = new AmazonS3Config();
-            if (!string.IsNullOrEmpty(serviceUrl))
-            {
-                config.ServiceURL = serviceUrl;
-                config.ForcePathStyle = true;
-            }
-            var client = new AmazonS3Client(config);
+            var client = new AmazonS3Client(BuildConfig());
             try
             {
                 var response = await client.GetObjectAsync(bucket, key, ct);

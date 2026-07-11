@@ -281,7 +281,7 @@ app.MapPost("/webhooks/stripe", async (
     return Results.Ok();
 }).AllowAnonymous();
 
-app.MapPost("/uploads/images", async (HttpRequest request, Db db, TenantContext tenant, Svyne.Api.Storage.ObjectStorage storage, CancellationToken ct) =>
+app.MapPost("/uploads/images", async (HttpRequest request, Db db, TenantContext tenant, Svyne.Api.Storage.ObjectStorage storage, Svyne.Api.ErrorHandling.ErrorLogger errorLogger, CancellationToken ct) =>
 {
     if (!request.HasFormContentType)
     {
@@ -306,23 +306,48 @@ app.MapPost("/uploads/images", async (HttpRequest request, Db db, TenantContext 
     var entityType = form["entityType"].ToString();
     var entityId = form["entityId"].ToString();
     var storageKey = $"{entityType}/{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";
-    await using (var blob = file.OpenReadStream())
+    try
     {
-        await storage.PutAsync(storageKey, blob, file.ContentType, ct);
+        await using (var blob = file.OpenReadStream())
+        {
+            await storage.PutAsync(storageKey, blob, file.ContentType, ct);
+        }
+        await using var connection = await db.OpenAsync(tenant.UsersId, tenant.TenantsId, ct);
+        await using var cmd = new Npgsql.NpgsqlCommand(
+            "SELECT sp_create_image(@et, @eid, @key, @name, @size, 0, 0, 0, @uid, NULL, NULL, NULL, @ct, NULL, @t)", connection);
+        cmd.Parameters.AddWithValue("et", string.IsNullOrEmpty(entityType) ? "generic" : entityType);
+        cmd.Parameters.AddWithValue("eid", Guid.TryParse(entityId, out var eid) ? eid : Guid.Empty);
+        cmd.Parameters.AddWithValue("key", storageKey);
+        cmd.Parameters.AddWithValue("name", file.FileName);
+        cmd.Parameters.AddWithValue("size", (int)file.Length);
+        cmd.Parameters.AddWithValue("uid", (object?)tenant.UsersId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("ct", file.ContentType);
+        cmd.Parameters.AddWithValue("t", (object?)tenant.TenantsId ?? DBNull.Value);
+        var imageId = await cmd.ExecuteScalarAsync(ct);
+        return Results.Ok(new { imagesId = imageId?.ToString(), storageKey });
     }
-    await using var connection = await db.OpenAsync(tenant.UsersId, tenant.TenantsId, ct);
-    await using var cmd = new Npgsql.NpgsqlCommand(
-        "SELECT sp_create_image(@et, @eid, @key, @name, @size, 0, 0, 0, @uid, NULL, NULL, NULL, @ct, NULL, @t)", connection);
-    cmd.Parameters.AddWithValue("et", string.IsNullOrEmpty(entityType) ? "generic" : entityType);
-    cmd.Parameters.AddWithValue("eid", Guid.TryParse(entityId, out var eid) ? eid : Guid.Empty);
-    cmd.Parameters.AddWithValue("key", storageKey);
-    cmd.Parameters.AddWithValue("name", file.FileName);
-    cmd.Parameters.AddWithValue("size", (int)file.Length);
-    cmd.Parameters.AddWithValue("uid", (object?)tenant.UsersId ?? DBNull.Value);
-    cmd.Parameters.AddWithValue("ct", file.ContentType);
-    cmd.Parameters.AddWithValue("t", (object?)tenant.TenantsId ?? DBNull.Value);
-    var imageId = await cmd.ExecuteScalarAsync(ct);
-    return Results.Ok(new { imagesId = imageId?.ToString(), storageKey });
+    catch (Exception ex)
+    {
+        await errorLogger.LogErrorAsync(
+            Svyne.Api.ErrorHandling.ErrorSeverity.High,
+            "ImageUploadFailure",
+            $"Failed uploading image {file.FileName} for {entityType}/{entityId}",
+            ex,
+            new Svyne.Api.ErrorHandling.ErrorContext
+            {
+                RequestPath = "/uploads/images",
+                RequestMethod = "POST",
+                StatusCode = StatusCodes.Status500InternalServerError,
+                Extra = new Dictionary<string, string>
+                {
+                    ["entity_type"] = entityType,
+                    ["entity_id"] = entityId,
+                    ["storage_key"] = storageKey
+                }
+            },
+            ct);
+        return Results.StatusCode(StatusCodes.Status500InternalServerError);
+    }
 }).RequireAuthorization();
 
 app.MapGet("/images/{imagesId}", async (string imagesId, Db db, Svyne.Api.Storage.ObjectStorage storage, CancellationToken ct) =>
