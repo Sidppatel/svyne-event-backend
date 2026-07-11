@@ -22,7 +22,16 @@ public sealed class SalesTaxService
         this.logger = logger;
         var configUrl = configuration["SALESTAXZIP_BASE_URL"];
         MockMode = string.IsNullOrWhiteSpace(configUrl) && environment.IsDevelopment();
-        baseUrl = (string.IsNullOrWhiteSpace(configUrl) ? "https://salestaxzip.com" : configUrl).TrimEnd('/');
+        var rawUrl = string.IsNullOrWhiteSpace(configUrl) ? "https://salestaxzip.com" : configUrl;
+        if (rawUrl.EndsWith("/api/v1", StringComparison.OrdinalIgnoreCase))
+        {
+            rawUrl = rawUrl.Substring(0, rawUrl.Length - 7);
+        }
+        else if (rawUrl.EndsWith("/api/v1/", StringComparison.OrdinalIgnoreCase))
+        {
+            rawUrl = rawUrl.Substring(0, rawUrl.Length - 8);
+        }
+        baseUrl = rawUrl.TrimEnd('/');
         var hours = int.TryParse(configuration["SALESTAXZIP_CACHE_TTL_HOURS"], out var h) ? h : 24;
         ttl = TimeSpan.FromHours(hours);
         http = httpClientFactory.CreateClient("salestaxzip");
