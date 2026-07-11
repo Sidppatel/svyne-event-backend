@@ -10,6 +10,17 @@ namespace Db.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql(@"
+                DO $$
+                DECLARE
+                    r RECORD;
+                BEGIN
+                    FOR r IN (SELECT viewname FROM pg_views WHERE schemaname = 'public' AND viewname LIKE 'vw_%') LOOP
+                        EXECUTE 'DROP VIEW IF EXISTS ' || quote_ident(r.viewname) || ' CASCADE';
+                    END LOOP;
+                END $$;
+            ");
+
             db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.functions");
             db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.views");
             db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.stored_procedures");
