@@ -157,7 +157,7 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT v.tenants_id, v.slug, v.name, v.legal_name, v.country_code, v.member_count, v.event_count, v.total_revenue_cents, v.archived_at IS NOT NULL, "
-            + "v.ach_enabled, v.default_fee_formulas_id "
+            + "v.ach_enabled, v.default_fee_formulas_id, v.ach_fee_formulas_id "
             + "FROM vw_tenants v "
             + "WHERE v.archived_at IS NULL "
             + "AND (@search::text IS NULL OR v.name ILIKE '%' || @search || '%' OR v.legal_name ILIKE '%' || @search || '%' OR v.slug ILIKE '%' || @search || '%') "
@@ -181,7 +181,8 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
                 TotalRevenueCents = reader.GetInt64(7),
                 Archived = reader.GetBoolean(8),
                 AchEnabled = reader.GetBoolean(9),
-                DefaultFeeFormulasId = reader.IsDBNull(10) ? string.Empty : reader.GetGuid(10).ToString()
+                DefaultFeeFormulasId = reader.IsDBNull(10) ? string.Empty : reader.GetGuid(10).ToString(),
+                AchFeeFormulasId = reader.IsDBNull(11) ? string.Empty : reader.GetGuid(11).ToString()
             });
         }
         response.Meta.Total = response.Tenants.Count;

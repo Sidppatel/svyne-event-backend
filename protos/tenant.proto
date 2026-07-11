@@ -74,6 +74,8 @@ message Tenant {
   bool ach_enabled = 25;
   // JSON object of advanced theme-token overrides, e.g. {"stage":"#101010"}.
   string brand_tokens_json = 26;
+  // ACH fee formula assigned to this tenant; empty = none (developer-managed).
+  string ach_fee_formulas_id = 27;
 }
 
 message UpdateMyTenantBrandingRequest {

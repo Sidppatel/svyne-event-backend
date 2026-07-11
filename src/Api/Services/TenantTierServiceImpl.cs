@@ -126,9 +126,13 @@ public sealed class TenantTierServiceImpl : TenantTierService.TenantTierServiceB
     {
         RequireDeveloper();
         var ct = context.CancellationToken;
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "A change reason is required"));
+        }
         var tenantsId = Guid.Parse(request.TenantsId);
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-        bool oldValue;
+        System.Text.Json.JsonElement oldState;
         try
         {
             await using var cmd = new NpgsqlCommand("SELECT sp_set_tenant_ach(@t, @e, @f)", connection);
@@ -136,14 +140,23 @@ public sealed class TenantTierServiceImpl : TenantTierService.TenantTierServiceB
             cmd.Parameters.AddWithValue("e", request.Enabled);
             cmd.Parameters.AddWithValue("f", string.IsNullOrEmpty(request.FeeFormulasId)
                 ? DBNull.Value : Guid.Parse(request.FeeFormulasId));
-            oldValue = (bool)(await cmd.ExecuteScalarAsync(ct))!;
+            oldState = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+                (string)(await cmd.ExecuteScalarAsync(ct))!);
         }
         catch (PostgresException exception) when (exception.SqlState is "P0001" or "22023")
         {
             throw new RpcException(new Status(StatusCode.InvalidArgument, exception.MessageText));
         }
-        await LogTierAuditAsync(connection, tenantsId, "ach_toggled",
-            $"{{\"from\":{(oldValue ? "true" : "false")},\"to\":{(request.Enabled ? "true" : "false")}}}", ct);
+        var metadataJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            from_enabled = oldState.GetProperty("enabled").GetBoolean(),
+            to_enabled = request.Enabled,
+            from_fee_formulas_id = oldState.GetProperty("fee_formulas_id").ValueKind == System.Text.Json.JsonValueKind.Null
+                ? string.Empty : oldState.GetProperty("fee_formulas_id").GetString(),
+            to_fee_formulas_id = request.FeeFormulasId,
+            reason = request.Reason
+        });
+        await LogTierAuditAsync(connection, tenantsId, "ach_changed", metadataJson, ct);
         return new AckResponse { Success = true, Message = $"ACH {(request.Enabled ? "enabled" : "disabled")}" };
     }
 

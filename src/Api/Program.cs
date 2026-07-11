@@ -31,6 +31,12 @@ if (http2Only)
             listen.Protocols = HttpProtocols.Http2));
 }
 
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
+{
+    builder.WebHost.UseUrls($"http://*:{port}");
+}
+
 const string CorsPolicy = "frontend";
 var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? string.Empty)
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

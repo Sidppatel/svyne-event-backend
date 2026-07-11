@@ -16,7 +16,8 @@ SELECT
     COALESCE(ec.cnt, 0)::int AS event_count,
     COALESCE(rev.total, 0)::bigint AS total_revenue_cents,
     o.ach_enabled,
-    o.default_fee_formulas_id
+    o.default_fee_formulas_id,
+    o.ach_fee_formulas_id
 FROM tenants o
 LEFT JOIN LATERAL (
     SELECT COUNT(*)::int AS cnt FROM users bu WHERE bu.tenants_id = o.tenants_id AND bu.role IN (1, 2, 3, 4)

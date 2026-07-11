@@ -151,4 +151,5 @@ message SetTenantAchRequest {
   string tenants_id = 1;
   bool enabled = 2;
   string fee_formulas_id = 3;   // required when enabling
+  string reason = 4;
 }
