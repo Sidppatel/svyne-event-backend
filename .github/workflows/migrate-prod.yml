@@ -42,7 +42,13 @@ jobs:
           echo "No destructive statements in sql/."
 
       - name: Install postgres client
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+        # Server is PostgreSQL 17; ubuntu-24.04's default client is 16 and
+        # pg_dump refuses on major-version mismatch. PGDG repo is preconfigured
+        # on GitHub runners.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          pg_dump --version
 
       # ── Pre-migration backup ────────────────────────────────────────────
       # Custom-format dump; restore with:

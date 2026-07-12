@@ -309,7 +309,20 @@ app.MapPost("/uploads/images", async (HttpRequest request, Db db, TenantContext 
     }
     var entityType = form["entityType"].ToString();
     var entityId = form["entityId"].ToString();
-    var storageKey = $"{entityType}/{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";
+    var allowedEntityTypes = new[] { "event", "venue", "performer", "sponsor", "tenant", "user", "generic" };
+    if (string.IsNullOrEmpty(entityType))
+    {
+        entityType = "generic";
+    }
+    if (!allowedEntityTypes.Contains(entityType))
+    {
+        return Results.BadRequest("invalid entityType");
+    }
+    var extension = Path.GetExtension(file.FileName);
+    var safeExtension = extension.Length is > 0 and <= 5 && extension.All(c => char.IsLetterOrDigit(c) || c == '.')
+        ? extension
+        : string.Empty;
+    var storageKey = $"{entityType}/{Guid.NewGuid():N}{safeExtension}";
     try
     {
         await using (var blob = file.OpenReadStream())
