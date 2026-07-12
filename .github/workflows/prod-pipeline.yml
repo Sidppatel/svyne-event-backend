@@ -53,9 +53,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v5
 
-      # ── Pre-migration validation ────────────────────────────────────────
-      # Compiling Db + MigrationRunner catches malformed migrations and
-      # missing embedded SQL before anything touches the database.
       - name: Validate migrations compile
         run: docker build -f Dockerfile.migrate -t migrate-runner .
 
@@ -70,9 +67,6 @@ jobs:
           echo "No destructive statements in sql/."
 
       - name: Install postgres client
-        # Server is PostgreSQL 17; ubuntu-24.04's default client is 16 and
-        # pg_dump refuses on major-version mismatch. We configure the official
-        # PostgreSQL repository to get version 17.
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-common
@@ -85,11 +79,6 @@ jobs:
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/17/bin/pg_dump --version
 
-      # ── Pre-migration backup ────────────────────────────────────────────
-      # Custom-format dump; restore with:
-      #   pg_restore --clean --if-exists -d "$CONN" backup.dump
-      # Kept 7 days as a private repo artifact. Supabase PITR remains the
-      # primary recovery path; this is the belt to that suspender.
       - name: Backup database
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
@@ -106,9 +95,6 @@ jobs:
           path: pre-migration-*.dump
           retention-days: 7
 
-      # ── Migration ───────────────────────────────────────────────────────
-      # EF applies each migration inside a transaction: failure mid-migration
-      # rolls back automatically, so no per-migration rollback scripts needed.
       - name: Run Schema Migrations
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
@@ -120,7 +106,6 @@ jobs:
           CONN_STRING="Host=${DB_HOST};Port=${DB_PORT_SESSION};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD};SslMode=Require;Trust Server Certificate=true;"
           docker run --rm -e MIGRATION_DATABASE_URL="$CONN_STRING" migrate-runner
 
-      # ── Post-migration verification ─────────────────────────────────────
       - name: Verify database health
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
@@ -156,10 +141,10 @@ jobs:
           echo "All post-migration checks passed."
 
   deploy-prod:
-    # Backend-only push: migrate-prod is skipped and this runs alone.
-    # Combined push: runs only after migrate-prod succeeds (!failure()).
+    # Held behind a flag: set repo variable AUTO_DEPLOY_RENDER=true to enable
+    # automatic Render deploys. While unset/false, deploy Render manually.
     needs: [changes, migrate-prod]
-    if: ${{ !failure() && !cancelled() && needs.changes.outputs.backend == 'true' }}
+    if: ${{ !failure() && !cancelled() && needs.changes.outputs.backend == 'true' && vars.AUTO_DEPLOY_RENDER == 'true' }}
     runs-on: ubuntu-latest
     environment: production
 
