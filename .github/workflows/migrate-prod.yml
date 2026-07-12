@@ -100,7 +100,7 @@ jobs:
           CONN="host=${{ secrets.DB_HOST }} port=${{ secrets.DB_PORT_SESSION }} dbname=${{ secrets.DB_NAME }} user=${{ secrets.DB_USER }} sslmode=require"
 
           echo "== migration history head =="
-          psql "$CONN" -tAc 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 1'
+          psql "$CONN" -tAc 'SELECT migration_id FROM "__EFMigrationsHistory" ORDER BY migration_id DESC LIMIT 1'
 
           echo "== RLS audit: tables missing RLS outside allowlist =="
           VIOLATIONS=$(psql "$CONN" -tAc "
