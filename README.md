@@ -1,6 +1,6 @@
 # Svyne Event Backend
 
-The server-side backend engine for **Svyne** — a premium multi-tenant event ticketing and VIP table booking platform designed for nightlife, concerts, and exclusive social events.
+The server-side backend engine for **Svyne** — a premium multi-tenant event ticketing and table booking platform designed for nightlife, concerts, and exclusive social events.
 
 Built on **.NET 10** using a high-performance **gRPC-Web** interface, raw **PostgreSQL** queries, and server-authoritative money math.
 
