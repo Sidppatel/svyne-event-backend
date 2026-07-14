@@ -1,9 +1,9 @@
 using Grpc.Core;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Protos.Enums;
+using EntryVine.Api.Data;
+using EntryVine.Protos.Enums;
 
-namespace Svyne.Api.Services;
+namespace EntryVine.Api.Services;
 
 public sealed class EnumServiceImpl : EnumService.EnumServiceBase
 {
@@ -30,7 +30,7 @@ public sealed class EnumServiceImpl : EnumService.EnumServiceBase
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            response.Values.Add(new Svyne.Protos.Enums.EnumValue
+            response.Values.Add(new EntryVine.Protos.Enums.EnumValue
             {
                 EnumType = reader.GetString(0),
                 Value = reader.GetString(1),

@@ -1,37 +1,37 @@
 syntax = "proto3";
 
-package svyne.admin;
+package entryvine.admin;
 
-option csharp_namespace = "Svyne.Protos.Admin";
+option csharp_namespace = "EntryVine.Protos.Admin";
 
 import "common.proto";
 
 service DashboardService {
-  rpc GetAdminDashboard (svyne.common.Empty) returns (AdminDashboard);
-  rpc GetDeveloperDashboard (svyne.common.Empty) returns (DeveloperDashboard);
+  rpc GetAdminDashboard (entryvine.common.Empty) returns (AdminDashboard);
+  rpc GetDeveloperDashboard (entryvine.common.Empty) returns (DeveloperDashboard);
 }
 
 service FinancialService {
   rpc GetMonthlyReport (MonthlyReportRequest) returns (MonthlyReport);
-  rpc GetStripeStatus (svyne.common.UuidValue) returns (StripeStatus);
-  rpc StartStripeOnboarding (svyne.common.UuidValue) returns (StripeOnboardingLink);
+  rpc GetStripeStatus (entryvine.common.UuidValue) returns (StripeStatus);
+  rpc StartStripeOnboarding (entryvine.common.UuidValue) returns (StripeOnboardingLink);
 }
 
 service StaffService {
-  rpc ListStaffForEvent (svyne.common.UuidValue) returns (ListStaffResponse);
-  rpc AssignStaff (AssignStaffRequest) returns (svyne.common.AckResponse);
-  rpc UnassignStaff (AssignStaffRequest) returns (svyne.common.AckResponse);
-  rpc ListAllStaff (svyne.common.Empty) returns (ListStaffResponse);
+  rpc ListStaffForEvent (entryvine.common.UuidValue) returns (ListStaffResponse);
+  rpc AssignStaff (AssignStaffRequest) returns (entryvine.common.AckResponse);
+  rpc UnassignStaff (AssignStaffRequest) returns (entryvine.common.AckResponse);
+  rpc ListAllStaff (entryvine.common.Empty) returns (ListStaffResponse);
   rpc AssignStaffByEmail (AssignStaffByEmailRequest) returns (AssignStaffByEmailResponse);
   rpc AddOrInviteStaff (AddOrInviteStaffRequest) returns (AddOrInviteStaffResponse);
-  rpc RemoveStaffRole (svyne.common.UuidValue) returns (svyne.common.AckResponse);
+  rpc RemoveStaffRole (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
 }
 
 service InvitationService {
-  rpc CreateInvitation (CreateInvitationRequest) returns (svyne.common.UuidValue);
-  rpc AcceptInvitation (AcceptInvitationRequest) returns (svyne.common.AckResponse);
-  rpc RevokeInvitation (svyne.common.UuidValue) returns (svyne.common.AckResponse);
-  rpc ListInvitations (svyne.common.PageRequest) returns (ListInvitationsResponse);
+  rpc CreateInvitation (CreateInvitationRequest) returns (entryvine.common.UuidValue);
+  rpc AcceptInvitation (AcceptInvitationRequest) returns (entryvine.common.AckResponse);
+  rpc RevokeInvitation (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
+  rpc ListInvitations (entryvine.common.PageRequest) returns (ListInvitationsResponse);
 }
 
 service LogService {
@@ -39,24 +39,24 @@ service LogService {
   rpc GetDeveloperLogs (LogQuery) returns (LogPage);
   rpc GetSystemLogs (LogQuery) returns (LogPage);
   rpc GetErrorLogs (ErrorLogQuery) returns (ErrorLogPage);
-  rpc GetErrorLogStats (svyne.common.Empty) returns (ErrorLogStats);
-  rpc ResolveErrorLog (ResolveErrorLogRequest) returns (svyne.common.AckResponse);
-  rpc ReportClientErrors (ClientErrorBatch) returns (svyne.common.AckResponse);
+  rpc GetErrorLogStats (entryvine.common.Empty) returns (ErrorLogStats);
+  rpc ResolveErrorLog (ResolveErrorLogRequest) returns (entryvine.common.AckResponse);
+  rpc ReportClientErrors (ClientErrorBatch) returns (entryvine.common.AckResponse);
 }
 
 service FeedbackService {
-  rpc CreateFeedback (CreateFeedbackRequest) returns (svyne.common.UuidValue);
-  rpc ListFeedback (svyne.common.PageRequest) returns (ListFeedbackResponse);
-  rpc DeleteFeedback (svyne.common.UuidValue) returns (svyne.common.AckResponse);
+  rpc CreateFeedback (CreateFeedbackRequest) returns (entryvine.common.UuidValue);
+  rpc ListFeedback (entryvine.common.PageRequest) returns (ListFeedbackResponse);
+  rpc DeleteFeedback (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
 }
 
 service PlatformLeadService {
-  rpc CreatePlatformLead (CreatePlatformLeadRequest) returns (svyne.common.UuidValue);
-  rpc ListPlatformLeads (svyne.common.PageRequest) returns (ListPlatformLeadsResponse);
+  rpc CreatePlatformLead (CreatePlatformLeadRequest) returns (entryvine.common.UuidValue);
+  rpc ListPlatformLeads (entryvine.common.PageRequest) returns (ListPlatformLeadsResponse);
 }
 
 service HealthService {
-  rpc Check (svyne.common.Empty) returns (HealthStatus);
+  rpc Check (entryvine.common.Empty) returns (HealthStatus);
 }
 
 message AdminDashboard {
@@ -153,11 +153,11 @@ message Invitation {
 
 message ListInvitationsResponse {
   repeated Invitation invitations = 1;
-  svyne.common.PageMeta meta = 2;
+  entryvine.common.PageMeta meta = 2;
 }
 
 message LogQuery {
-  svyne.common.PageRequest page = 1;
+  entryvine.common.PageRequest page = 1;
   string action = 2;
   string entity_type = 3;
   int64 from = 4;
@@ -177,11 +177,11 @@ message LogEntry {
 
 message LogPage {
   repeated LogEntry entries = 1;
-  svyne.common.PageMeta meta = 2;
+  entryvine.common.PageMeta meta = 2;
 }
 
 message ErrorLogQuery {
-  svyne.common.PageRequest page = 1;
+  entryvine.common.PageRequest page = 1;
   string severity = 2;
   string source = 3;
   int32 resolved_filter = 4;
@@ -214,7 +214,7 @@ message ErrorLogEntry {
 
 message ErrorLogPage {
   repeated ErrorLogEntry entries = 1;
-  svyne.common.PageMeta meta = 2;
+  entryvine.common.PageMeta meta = 2;
 }
 
 message ErrorLogCount {
@@ -276,7 +276,7 @@ message Feedback {
 
 message ListFeedbackResponse {
   repeated Feedback feedback = 1;
-  svyne.common.PageMeta meta = 2;
+  entryvine.common.PageMeta meta = 2;
 }
 
 message CreatePlatformLeadRequest {
@@ -299,7 +299,7 @@ message PlatformLead {
 
 message ListPlatformLeadsResponse {
   repeated PlatformLead leads = 1;
-  svyne.common.PageMeta meta = 2;
+  entryvine.common.PageMeta meta = 2;
 }
 
 message HealthStatus {

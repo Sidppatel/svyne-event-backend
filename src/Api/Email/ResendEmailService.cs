@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
-namespace Svyne.Api.Email;
+namespace EntryVine.Api.Email;
 
 public sealed class ResendEmailService : IEmailService
 {

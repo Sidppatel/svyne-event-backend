@@ -1,4 +1,4 @@
-namespace Svyne.Api.Email;
+namespace EntryVine.Api.Email;
 
 public interface IEmailService
 {

@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Api.Email;
+using EntryVine.Api.Data;
+using EntryVine.Api.Email;
 
-namespace Svyne.Api.ErrorHandling;
+namespace EntryVine.Api.ErrorHandling;
 
 public enum ErrorSeverity
 {

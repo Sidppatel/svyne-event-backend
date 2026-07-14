@@ -1,7 +1,7 @@
 using Grpc.Core;
 using Npgsql;
 
-namespace Svyne.Api.Security;
+namespace EntryVine.Api.Security;
 
 
 

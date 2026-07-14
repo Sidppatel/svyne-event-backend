@@ -1,26 +1,26 @@
 syntax = "proto3";
 
-package svyne.tenant;
+package entryvine.tenant;
 
-option csharp_namespace = "Svyne.Protos.Tenant";
+option csharp_namespace = "EntryVine.Protos.Tenant";
 
 import "common.proto";
 
 service TenantService {
   rpc CreateTenant (CreateTenantRequest) returns (CreateTenantResponse);
-  rpc UpdateTenant (UpdateTenantRequest) returns (svyne.common.AckResponse);
-  rpc ArchiveTenant (svyne.common.UuidValue) returns (svyne.common.AckResponse);
-  rpc GetTenant (svyne.common.UuidValue) returns (Tenant);
-  rpc GetMyTenant (svyne.common.Empty) returns (Tenant);
-  rpc UpdateMyTenantContact (UpdateMyTenantContactRequest) returns (svyne.common.AckResponse);
-  rpc UpdateMyTenantBranding (UpdateMyTenantBrandingRequest) returns (svyne.common.AckResponse);
+  rpc UpdateTenant (UpdateTenantRequest) returns (entryvine.common.AckResponse);
+  rpc ArchiveTenant (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
+  rpc GetTenant (entryvine.common.UuidValue) returns (Tenant);
+  rpc GetMyTenant (entryvine.common.Empty) returns (Tenant);
+  rpc UpdateMyTenantContact (UpdateMyTenantContactRequest) returns (entryvine.common.AckResponse);
+  rpc UpdateMyTenantBranding (UpdateMyTenantBrandingRequest) returns (entryvine.common.AckResponse);
   rpc GetPublicTenantBranding (PublicTenantBrandingRequest) returns (PublicTenantBranding);
-  rpc ListTenants (svyne.common.PageRequest) returns (ListTenantsResponse);
-  rpc ListPublicTenants (svyne.common.Empty) returns (ListPublicTenantsResponse);
-  rpc ListTenantMembers (svyne.common.UuidValue) returns (ListTenantMembersResponse);
-  rpc GetTenantStripeStatus (svyne.common.UuidValue) returns (TenantStripeStatus);
-  rpc GetTenantStripeProfile (svyne.common.UuidValue) returns (TenantStripeProfile);
-  rpc UpdateTenantStripeProfile (UpdateTenantStripeProfileRequest) returns (svyne.common.AckResponse);
+  rpc ListTenants (entryvine.common.PageRequest) returns (ListTenantsResponse);
+  rpc ListPublicTenants (entryvine.common.Empty) returns (ListPublicTenantsResponse);
+  rpc ListTenantMembers (entryvine.common.UuidValue) returns (ListTenantMembersResponse);
+  rpc GetTenantStripeStatus (entryvine.common.UuidValue) returns (TenantStripeStatus);
+  rpc GetTenantStripeProfile (entryvine.common.UuidValue) returns (TenantStripeProfile);
+  rpc UpdateTenantStripeProfile (UpdateTenantStripeProfileRequest) returns (entryvine.common.AckResponse);
 }
 
 message TenantStripeProfile {
@@ -149,7 +149,7 @@ message UpdateTenantRequest {
 
 message ListTenantsResponse {
   repeated Tenant tenants = 1;
-  svyne.common.PageMeta meta = 2;
+  entryvine.common.PageMeta meta = 2;
 }
 
 message PublicTenant {

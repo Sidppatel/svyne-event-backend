@@ -1,4 +1,4 @@
-namespace Svyne.Api;
+namespace EntryVine.Api;
 
 public static class Lookups
 {

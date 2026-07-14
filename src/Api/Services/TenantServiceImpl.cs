@@ -1,13 +1,13 @@
 using Grpc.Core;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Api.Email;
-using Svyne.Api.Payments;
-using Svyne.Api.Security;
-using Svyne.Protos.Common;
-using Svyne.Protos.Tenant;
+using EntryVine.Api.Data;
+using EntryVine.Api.Email;
+using EntryVine.Api.Payments;
+using EntryVine.Api.Security;
+using EntryVine.Protos.Common;
+using EntryVine.Protos.Tenant;
 
-namespace Svyne.Api.Services;
+namespace EntryVine.Api.Services;
 
 public sealed class TenantServiceImpl : TenantService.TenantServiceBase
 {
@@ -121,8 +121,8 @@ public sealed class TenantServiceImpl : TenantService.TenantServiceBase
 
         try
         {
-            var fromAddress = await settings.GetStringAsync("tenant_setup_email", "noreply@svyne.com", ct);
-            var subject = await settings.GetStringAsync("tenant_setup_subject", "Activate your Svyne workspace", ct);
+            var fromAddress = await settings.GetStringAsync("tenant_setup_email", "noreply@entryvine.com", ct);
+            var subject = await settings.GetStringAsync("tenant_setup_subject", "Activate your EntryVine workspace", ct);
             var values = new Dictionary<string, string>
             {
                 ["Subject"] = subject,

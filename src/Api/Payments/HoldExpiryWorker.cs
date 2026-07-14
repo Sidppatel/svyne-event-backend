@@ -1,7 +1,7 @@
-using Svyne.Api.Data;
-using Svyne.Api.ErrorHandling;
+using EntryVine.Api.Data;
+using EntryVine.Api.ErrorHandling;
 
-namespace Svyne.Api.Payments;
+namespace EntryVine.Api.Payments;
 
 
 

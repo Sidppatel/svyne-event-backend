@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package svyne.common;
+package entryvine.common;
 
-option csharp_namespace = "Svyne.Protos.Common";
+option csharp_namespace = "EntryVine.Protos.Common";
 
 message AckResponse {
   bool success = 1;

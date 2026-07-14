@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Svyne.Api.Email;
+namespace EntryVine.Api.Email;
 
 public sealed class LocalFileEmailService : IEmailService
 {
@@ -18,7 +18,7 @@ public sealed class LocalFileEmailService : IEmailService
             var current = Directory.GetCurrentDirectory();
             var candidates = new[]
             {
-                @"D:\svyne-event-system\local_emails",
+                @"D:\entryvine-event-system\local_emails",
                 Path.Combine(current, "local_emails"),
                 Path.Combine(current, "..", "local_emails"),
                 Path.Combine(current, "..", "..", "local_emails")
@@ -36,7 +36,7 @@ public sealed class LocalFileEmailService : IEmailService
             
             if (string.IsNullOrEmpty(outputDir))
             {
-                outputDir = @"D:\svyne-event-system\local_emails";
+                outputDir = @"D:\entryvine-event-system\local_emails";
             }
         }
     }

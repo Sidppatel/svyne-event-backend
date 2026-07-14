@@ -4,13 +4,13 @@ using Grpc.Core;
 using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
 using NpgsqlTypes;
-using Svyne.Api.Data;
-using Svyne.Api.ErrorHandling;
-using Svyne.Api.Security;
-using Svyne.Protos.Admin;
-using Svyne.Protos.Common;
+using EntryVine.Api.Data;
+using EntryVine.Api.ErrorHandling;
+using EntryVine.Api.Security;
+using EntryVine.Protos.Admin;
+using EntryVine.Protos.Common;
 
-namespace Svyne.Api.Services;
+namespace EntryVine.Api.Services;
 
 public sealed class LogServiceImpl : LogService.LogServiceBase
 {

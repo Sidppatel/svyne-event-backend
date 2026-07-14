@@ -1,4 +1,4 @@
 #!/bin/sh
 set -e
 
-exec dotnet /app/Svyne.Api.dll
+exec dotnet /app/EntryVine.Api.dll

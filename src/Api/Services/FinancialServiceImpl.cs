@@ -1,12 +1,12 @@
 using Grpc.Core;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Api.Payments;
-using Svyne.Api.Security;
-using Svyne.Protos.Admin;
-using Svyne.Protos.Common;
+using EntryVine.Api.Data;
+using EntryVine.Api.Payments;
+using EntryVine.Api.Security;
+using EntryVine.Protos.Admin;
+using EntryVine.Protos.Common;
 
-namespace Svyne.Api.Services;
+namespace EntryVine.Api.Services;
 
 public sealed class FinancialServiceImpl : FinancialService.FinancialServiceBase
 {

@@ -1,7 +1,7 @@
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 
-namespace Svyne.Api.Security;
+namespace EntryVine.Api.Security;
 
 public sealed class EventManagerAuthorizationInterceptor : Interceptor
 {

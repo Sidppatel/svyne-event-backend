@@ -1,10 +1,10 @@
 using Grpc.Core;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Protos.Admin;
-using Svyne.Protos.Common;
+using EntryVine.Api.Data;
+using EntryVine.Protos.Admin;
+using EntryVine.Protos.Common;
 
-namespace Svyne.Api.Services;
+namespace EntryVine.Api.Services;
 
 public sealed class HealthServiceImpl : HealthService.HealthServiceBase
 {

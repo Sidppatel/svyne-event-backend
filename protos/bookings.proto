@@ -1,14 +1,14 @@
 syntax = "proto3";
 
-package svyne.booking;
+package entryvine.booking;
 
-option csharp_namespace = "Svyne.Protos.Booking";
+option csharp_namespace = "EntryVine.Protos.Booking";
 
 import "common.proto";
 import "pricing.proto";
 
 service BookingService {
-  rpc ListEventTicketTypes (svyne.common.UuidValue) returns (ListEventTicketTypesResponse);
+  rpc ListEventTicketTypes (entryvine.common.UuidValue) returns (ListEventTicketTypesResponse);
   rpc CreateBooking (CreateBookingRequest) returns (CreateBookingResponse);
   rpc ReserveOpenCapacity (ReserveOpenCapacityRequest) returns (CreateBookingResponse);
   // Cart checkout: one booking aggregating many ticket/table lines, one payment.
@@ -21,30 +21,30 @@ service BookingService {
   // Re-price the booking for the chosen method (card/ach) and update the Stripe
   // intent amount server-side. Returns the new total + ACH savings.
   rpc UpdatePaymentIntentForMethod (UpdatePaymentMethodRequest) returns (UpdatePaymentMethodResponse);
-  rpc GetPaymentStatus (svyne.common.UuidValue) returns (PaymentStatusResponse);
-  rpc ConfirmBooking (ConfirmBookingRequest) returns (svyne.common.AckResponse);
-  rpc CancelBooking (svyne.common.UuidValue) returns (svyne.common.AckResponse);
-  rpc RefundBooking (svyne.common.UuidValue) returns (svyne.common.AckResponse);
-  rpc GetBooking (svyne.common.UuidValue) returns (Booking);
+  rpc GetPaymentStatus (entryvine.common.UuidValue) returns (PaymentStatusResponse);
+  rpc ConfirmBooking (ConfirmBookingRequest) returns (entryvine.common.AckResponse);
+  rpc CancelBooking (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
+  rpc RefundBooking (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
+  rpc GetBooking (entryvine.common.UuidValue) returns (Booking);
   rpc ListBookings (ListBookingsRequest) returns (ListBookingsResponse);
-  rpc GetBookingStats (svyne.common.UuidValue) returns (BookingStats);
+  rpc GetBookingStats (entryvine.common.UuidValue) returns (BookingStats);
 }
 
 service TicketService {
-  rpc GetTicket (svyne.common.UuidValue) returns (Ticket);
-  rpc ClaimTicket (ClaimTicketRequest) returns (svyne.common.AckResponse);
-  rpc InviteTicket (InviteTicketRequest) returns (svyne.common.AckResponse);
-  rpc ListTickets (svyne.common.UuidValue) returns (ListTicketsResponse);
-  rpc ClaimTicketSelf (svyne.common.UuidValue) returns (svyne.common.AckResponse);
-  rpc RevokeTicket (svyne.common.UuidValue) returns (svyne.common.AckResponse);
-  rpc ListMyTickets (svyne.common.Empty) returns (ListTicketsResponse);
+  rpc GetTicket (entryvine.common.UuidValue) returns (Ticket);
+  rpc ClaimTicket (ClaimTicketRequest) returns (entryvine.common.AckResponse);
+  rpc InviteTicket (InviteTicketRequest) returns (entryvine.common.AckResponse);
+  rpc ListTickets (entryvine.common.UuidValue) returns (ListTicketsResponse);
+  rpc ClaimTicketSelf (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
+  rpc RevokeTicket (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
+  rpc ListMyTickets (entryvine.common.Empty) returns (ListTicketsResponse);
 }
 
 service CheckInService {
   rpc Scan (ScanRequest) returns (ScanResponse);
-  rpc GetCheckInStats (svyne.common.UuidValue) returns (CheckInStats);
-  rpc ListEventsForStaff (svyne.common.Empty) returns (ListEventsForStaffResponse);
-  rpc GetGuestList (svyne.common.UuidValue) returns (GetGuestListResponse);
+  rpc GetCheckInStats (entryvine.common.UuidValue) returns (CheckInStats);
+  rpc ListEventsForStaff (entryvine.common.Empty) returns (ListEventsForStaffResponse);
+  rpc GetGuestList (entryvine.common.UuidValue) returns (GetGuestListResponse);
   rpc CheckInGuest (CheckInGuestRequest) returns (ScanResponse);
   rpc ListCheckInLogs (ListCheckInLogsRequest) returns (ListCheckInLogsResponse);
 }
@@ -117,7 +117,7 @@ message CartQuoteLine {
   string ref_id = 2;          // event_ticket_types_id (Ticket) or tables_id (Table)
   string label = 3;
   int32 seats = 4;
-  svyne.pricing.PriceBreakdown breakdown = 5;
+  entryvine.pricing.PriceBreakdown breakdown = 5;
 }
 
 // A non-reserving preview of an entire cart: per-line breakdowns + summed totals.
@@ -237,14 +237,14 @@ message ConfirmBookingRequest {
 }
 
 message ListBookingsRequest {
-  svyne.common.PageRequest page = 1;
+  entryvine.common.PageRequest page = 1;
   string events_id = 2;
   string status = 3;
 }
 
 message ListBookingsResponse {
   repeated Booking bookings = 1;
-  svyne.common.PageMeta meta = 2;
+  entryvine.common.PageMeta meta = 2;
 }
 
 message BookingStats {

@@ -1,9 +1,9 @@
 using System.Security.Claims;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Api.Security;
+using EntryVine.Api.Data;
+using EntryVine.Api.Security;
 
-namespace Svyne.Api.Middleware;
+namespace EntryVine.Api.Middleware;
 
 public sealed class TenantResolutionMiddleware
 {

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Hosting;
 
-namespace Svyne.Api.Email;
+namespace EntryVine.Api.Email;
 
 public sealed class EmailTemplateRenderer
 {

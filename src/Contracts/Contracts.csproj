@@ -4,8 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>Svyne.Protos</RootNamespace>
-    <AssemblyName>Svyne.Protos</AssemblyName>
+    <RootNamespace>EntryVine.Protos</RootNamespace>
+    <AssemblyName>EntryVine.Protos</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

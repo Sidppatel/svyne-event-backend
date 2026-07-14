@@ -1,12 +1,12 @@
 using System.Text.Json;
 using Grpc.Core;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Api.Security;
-using Svyne.Protos.Catalog;
-using Svyne.Protos.Common;
+using EntryVine.Api.Data;
+using EntryVine.Api.Security;
+using EntryVine.Protos.Catalog;
+using EntryVine.Protos.Common;
 
-namespace Svyne.Api.Services;
+namespace EntryVine.Api.Services;
 
 public sealed class PerformerServiceImpl : PerformerService.PerformerServiceBase
 {

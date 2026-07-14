@@ -5,9 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using Svyne.Api.Data;
+using EntryVine.Api.Data;
 
-namespace Svyne.Api.Email;
+namespace EntryVine.Api.Email;
 
 public static class BookingEmailSender
 {
@@ -105,7 +105,7 @@ public static class BookingEmailSender
                 ticketBuilder.Append("</ul>");
             }
 
-            var fromAddress = await settings.GetStringAsync("admin_invitation_email", "noreply@svyne.com", ct);
+            var fromAddress = await settings.GetStringAsync("admin_invitation_email", "noreply@entryvine.com", ct);
             var subject = $"Your Booking Confirmation: {bookingNumber}";
 
             var values = new Dictionary<string, string>

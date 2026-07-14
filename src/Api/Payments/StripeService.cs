@@ -1,6 +1,6 @@
 using Stripe;
 
-namespace Svyne.Api.Payments;
+namespace EntryVine.Api.Payments;
 
 public sealed class StripeService
 {

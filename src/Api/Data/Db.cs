@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Svyne.Api.Data;
+namespace EntryVine.Api.Data;
 
 public sealed class Db
 {

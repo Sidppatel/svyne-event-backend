@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Svyne.Api.Security;
+namespace EntryVine.Api.Security;
 
 public static class EmailHasher
 {

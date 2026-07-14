@@ -1,9 +1,9 @@
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Api.Email;
-using Svyne.Api.ErrorHandling;
+using EntryVine.Api.Data;
+using EntryVine.Api.Email;
+using EntryVine.Api.ErrorHandling;
 
-namespace Svyne.Api.Payments;
+namespace EntryVine.Api.Payments;
 
 
 
@@ -119,8 +119,8 @@ public sealed class BillingWorker : BackgroundService
             {
                 var daysLeft = Math.Max((int)Math.Ceiling((reminder.EndsAt - DateTime.UtcNow).TotalDays), 0);
                 await emailService.SendAsync(
-                    "noreply@svyne.com", email,
-                    $"Your svyne trial ends in {daysLeft} day{(daysLeft == 1 ? "" : "s")}",
+                    "noreply@entryvine.com", email,
+                    $"Your entryvine trial ends in {daysLeft} day{(daysLeft == 1 ? "" : "s")}",
                     $"<p>Hi {tenantName},</p><p>Your 14-day Professional trial ends on "
                     + $"{reminder.EndsAt:MMMM d, yyyy}. Subscribe to keep Advanced Analytics and your "
                     + "trial features — or do nothing and your account returns to the free plan.</p>",

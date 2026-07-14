@@ -1,34 +1,34 @@
 syntax = "proto3";
 
-package svyne.event;
+package entryvine.event;
 
-option csharp_namespace = "Svyne.Protos.Event";
+option csharp_namespace = "EntryVine.Protos.Event";
 
 import "common.proto";
 
 service EventService {
   rpc CreateEvent (CreateEventRequest) returns (CreateEventResponse);
-  rpc UpdateEvent (UpdateEventRequest) returns (svyne.common.AckResponse);
-  rpc DeleteEvent (svyne.common.UuidValue) returns (svyne.common.AckResponse);
-  rpc GetEvent (svyne.common.UuidValue) returns (Event);
+  rpc UpdateEvent (UpdateEventRequest) returns (entryvine.common.AckResponse);
+  rpc DeleteEvent (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
+  rpc GetEvent (entryvine.common.UuidValue) returns (Event);
   rpc GetEventBySlug (GetEventBySlugRequest) returns (Event);
   rpc ListEvents (ListEventsRequest) returns (ListEventsResponse);
   rpc SearchEvents (SearchEventsRequest) returns (ListEventsResponse);
-  rpc ChangeEventStatus (ChangeEventStatusRequest) returns (svyne.common.AckResponse);
-  rpc GetEventStats (svyne.common.UuidValue) returns (EventStats);
-  rpc SetEventFeesIncluded (SetEventFeesIncludedRequest) returns (svyne.common.AckResponse);
+  rpc ChangeEventStatus (ChangeEventStatusRequest) returns (entryvine.common.AckResponse);
+  rpc GetEventStats (entryvine.common.UuidValue) returns (EventStats);
+  rpc SetEventFeesIncluded (SetEventFeesIncludedRequest) returns (entryvine.common.AckResponse);
   // Admin opt-in to offering ACH at checkout (only sticks if the tenant is ACH-enabled).
-  rpc SetEventAch (SetEventAchRequest) returns (svyne.common.AckResponse);
-  rpc ListScheduleItems (svyne.common.UuidValue) returns (ListScheduleItemsResponse);
-  rpc CreateScheduleItem (CreateScheduleItemRequest) returns (svyne.common.UuidValue);
-  rpc UpdateScheduleItem (UpdateScheduleItemRequest) returns (svyne.common.AckResponse);
-  rpc DeleteScheduleItem (svyne.common.UuidValue) returns (svyne.common.AckResponse);
+  rpc SetEventAch (SetEventAchRequest) returns (entryvine.common.AckResponse);
+  rpc ListScheduleItems (entryvine.common.UuidValue) returns (ListScheduleItemsResponse);
+  rpc CreateScheduleItem (CreateScheduleItemRequest) returns (entryvine.common.UuidValue);
+  rpc UpdateScheduleItem (UpdateScheduleItemRequest) returns (entryvine.common.AckResponse);
+  rpc DeleteScheduleItem (entryvine.common.UuidValue) returns (entryvine.common.AckResponse);
   rpc ListEventImages (ListEventImagesRequest) returns (ListEventImagesResponse);
   rpc AddEventImage (AddEventImageRequest) returns (EventImage);
-  rpc RemoveEventImage (RemoveEventImageRequest) returns (svyne.common.AckResponse);
-  rpc SetPrimaryEventImage (RemoveEventImageRequest) returns (svyne.common.AckResponse);
-  rpc ReorderEventImages (ReorderEventImagesRequest) returns (svyne.common.AckResponse);
-  rpc GetMediaSettings (svyne.common.Empty) returns (MediaSettings);
+  rpc RemoveEventImage (RemoveEventImageRequest) returns (entryvine.common.AckResponse);
+  rpc SetPrimaryEventImage (RemoveEventImageRequest) returns (entryvine.common.AckResponse);
+  rpc ReorderEventImages (ReorderEventImagesRequest) returns (entryvine.common.AckResponse);
+  rpc GetMediaSettings (entryvine.common.Empty) returns (MediaSettings);
 }
 
 message EventImage {
@@ -178,7 +178,7 @@ message ChangeEventStatusRequest {
 }
 
 message ListEventsRequest {
-  svyne.common.PageRequest page = 1;
+  entryvine.common.PageRequest page = 1;
   string status = 2;
   string category = 3;
 }
@@ -187,7 +187,7 @@ message SearchEventsRequest { string query = 1; }
 
 message ListEventsResponse {
   repeated Event events = 1;
-  svyne.common.PageMeta meta = 2;
+  entryvine.common.PageMeta meta = 2;
 }
 
 message EventStats {

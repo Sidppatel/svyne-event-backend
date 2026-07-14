@@ -3,10 +3,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Api.Security;
+using EntryVine.Api.Data;
+using EntryVine.Api.Security;
 
-namespace Svyne.Api.Email;
+namespace EntryVine.Api.Email;
 
 public sealed class LoggingEmailService : IEmailService
 {

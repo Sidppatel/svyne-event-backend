@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.IdentityModel.Tokens;
-using Svyne.Api.Data;
-using Svyne.Api.Middleware;
-using Svyne.Api.Security;
-using Svyne.Api.Services;
+using EntryVine.Api.Data;
+using EntryVine.Api.Middleware;
+using EntryVine.Api.Security;
+using EntryVine.Api.Services;
 
 System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
@@ -73,32 +73,32 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddGrpc(options =>
 {
-    options.Interceptors.Add<Svyne.Api.ErrorHandling.ErrorLoggingInterceptor>();
-    options.Interceptors.Add<Svyne.Api.Security.EventManagerAuthorizationInterceptor>();
+    options.Interceptors.Add<EntryVine.Api.ErrorHandling.ErrorLoggingInterceptor>();
+    options.Interceptors.Add<EntryVine.Api.Security.EventManagerAuthorizationInterceptor>();
 });
-builder.Services.AddSingleton<Svyne.Api.ErrorHandling.ErrorLogger>();
-builder.Services.AddSingleton<Svyne.Api.ErrorHandling.ErrorLoggingInterceptor>();
+builder.Services.AddSingleton<EntryVine.Api.ErrorHandling.ErrorLogger>();
+builder.Services.AddSingleton<EntryVine.Api.ErrorHandling.ErrorLoggingInterceptor>();
 builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<StartupSeeder>();
 builder.Services.AddSingleton<AppSettingsProvider>();
-builder.Services.AddSingleton<Svyne.Api.Email.EmailTemplateRenderer>();
+builder.Services.AddSingleton<EntryVine.Api.Email.EmailTemplateRenderer>();
 builder.Services.AddHttpContextAccessor();
 if (!string.IsNullOrEmpty(builder.Configuration["RESEND_API_KEY"]))
 {
-    builder.Services.AddSingleton<Svyne.Api.Email.ResendEmailService>();
-    builder.Services.AddSingleton<Svyne.Api.Email.IEmailService>(sp =>
-        new Svyne.Api.Email.LoggingEmailService(
-            sp.GetRequiredService<Svyne.Api.Email.ResendEmailService>(),
+    builder.Services.AddSingleton<EntryVine.Api.Email.ResendEmailService>();
+    builder.Services.AddSingleton<EntryVine.Api.Email.IEmailService>(sp =>
+        new EntryVine.Api.Email.LoggingEmailService(
+            sp.GetRequiredService<EntryVine.Api.Email.ResendEmailService>(),
             sp.GetRequiredService<Db>(),
             sp
         ));
 }
 else
 {
-    builder.Services.AddSingleton<Svyne.Api.Email.LocalFileEmailService>();
-    builder.Services.AddSingleton<Svyne.Api.Email.IEmailService>(sp =>
-        new Svyne.Api.Email.LoggingEmailService(
-            sp.GetRequiredService<Svyne.Api.Email.LocalFileEmailService>(),
+    builder.Services.AddSingleton<EntryVine.Api.Email.LocalFileEmailService>();
+    builder.Services.AddSingleton<EntryVine.Api.Email.IEmailService>(sp =>
+        new EntryVine.Api.Email.LoggingEmailService(
+            sp.GetRequiredService<EntryVine.Api.Email.LocalFileEmailService>(),
             sp.GetRequiredService<Db>(),
             sp
         ));
@@ -108,13 +108,13 @@ builder.Services.AddSingleton<ReportingAccessProvider>();
 builder.Services.AddSingleton<PasswordHasher>();
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddScoped<TenantContext>();
-builder.Services.AddSingleton<Svyne.Api.Storage.ObjectStorage>();
-builder.Services.AddSingleton<Svyne.Api.Payments.StripeService>();
-builder.Services.AddSingleton<Svyne.Api.Payments.StripeWebhookHandler>();
+builder.Services.AddSingleton<EntryVine.Api.Storage.ObjectStorage>();
+builder.Services.AddSingleton<EntryVine.Api.Payments.StripeService>();
+builder.Services.AddSingleton<EntryVine.Api.Payments.StripeWebhookHandler>();
 builder.Services.AddHttpClient("salestaxzip");
-builder.Services.AddSingleton<Svyne.Api.Payments.SalesTaxService>();
-builder.Services.AddHostedService<Svyne.Api.Payments.HoldExpiryWorker>();
-builder.Services.AddHostedService<Svyne.Api.Payments.BillingWorker>();
+builder.Services.AddSingleton<EntryVine.Api.Payments.SalesTaxService>();
+builder.Services.AddHostedService<EntryVine.Api.Payments.HoldExpiryWorker>();
+builder.Services.AddHostedService<EntryVine.Api.Payments.BillingWorker>();
 
 var jwtService = new JwtTokenService(builder.Configuration);
 var validation = jwtService.ValidationParameters;
@@ -141,7 +141,7 @@ builder.Services.AddRateLimiter(options =>
     options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
     {
         if (!HttpMethods.IsPost(httpContext.Request.Method)
-            || !httpContext.Request.Path.StartsWithSegments("/svyne.auth.AuthService"))
+            || !httpContext.Request.Path.StartsWithSegments("/entryvine.auth.AuthService"))
         {
             return System.Threading.RateLimiting.RateLimitPartition.GetNoLimiter("none");
         }
@@ -159,7 +159,7 @@ var app = builder.Build();
 
 await app.Services.GetRequiredService<StartupSeeder>().SeedAsync(CancellationToken.None);
 
-app.UseMiddleware<Svyne.Api.ErrorHandling.ErrorLoggingMiddleware>();
+app.UseMiddleware<EntryVine.Api.ErrorHandling.ErrorLoggingMiddleware>();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseCors(CorsPolicy);
@@ -193,7 +193,7 @@ app.MapGrpcService<FloorPlanServiceImpl>();
 app.MapGrpcService<ReportingServiceImpl>();
 app.MapGrpcService<TenantTierServiceImpl>();
 app.MapGrpcService<DeveloperBillingServiceImpl>();
-app.MapGet("/", () => "Svyne gRPC API");
+app.MapGet("/", () => "EntryVine gRPC API");
 app.MapGet("/health/live", () => Results.Ok("live"));
 app.MapGet("/health/ready", async (Db db, CancellationToken ct) =>
 {
@@ -213,8 +213,8 @@ app.MapGet("/health/ready", async (Db db, CancellationToken ct) =>
 app.MapPost("/webhooks/stripe", async (
     HttpRequest request,
     IConfiguration config,
-    Svyne.Api.Payments.StripeWebhookHandler handler,
-    Svyne.Api.ErrorHandling.ErrorLogger errorLogger,
+    EntryVine.Api.Payments.StripeWebhookHandler handler,
+    EntryVine.Api.ErrorHandling.ErrorLogger errorLogger,
     CancellationToken ct) =>
 {
     using var reader = new StreamReader(request.Body);
@@ -263,11 +263,11 @@ app.MapPost("/webhooks/stripe", async (
     catch (Exception ex)
     {
         await errorLogger.LogErrorAsync(
-            Svyne.Api.ErrorHandling.ErrorSeverity.Critical,
+            EntryVine.Api.ErrorHandling.ErrorSeverity.Critical,
             "StripeWebhookFailure",
             $"Failed handling Stripe event {stripeEvent.Type} {stripeEvent.Id}",
             ex,
-            new Svyne.Api.ErrorHandling.ErrorContext
+            new EntryVine.Api.ErrorHandling.ErrorContext
             {
                 RequestPath = "/webhooks/stripe",
                 RequestMethod = "POST",
@@ -285,7 +285,7 @@ app.MapPost("/webhooks/stripe", async (
     return Results.Ok();
 }).AllowAnonymous();
 
-app.MapPost("/uploads/images", async (HttpRequest request, Db db, TenantContext tenant, Svyne.Api.Storage.ObjectStorage storage, Svyne.Api.ErrorHandling.ErrorLogger errorLogger, CancellationToken ct) =>
+app.MapPost("/uploads/images", async (HttpRequest request, Db db, TenantContext tenant, EntryVine.Api.Storage.ObjectStorage storage, EntryVine.Api.ErrorHandling.ErrorLogger errorLogger, CancellationToken ct) =>
 {
     if (!request.HasFormContentType)
     {
@@ -346,11 +346,11 @@ app.MapPost("/uploads/images", async (HttpRequest request, Db db, TenantContext 
     catch (Exception ex)
     {
         await errorLogger.LogErrorAsync(
-            Svyne.Api.ErrorHandling.ErrorSeverity.High,
+            EntryVine.Api.ErrorHandling.ErrorSeverity.High,
             "ImageUploadFailure",
             $"Failed uploading image {file.FileName} for {entityType}/{entityId}",
             ex,
-            new Svyne.Api.ErrorHandling.ErrorContext
+            new EntryVine.Api.ErrorHandling.ErrorContext
             {
                 RequestPath = "/uploads/images",
                 RequestMethod = "POST",
@@ -367,7 +367,7 @@ app.MapPost("/uploads/images", async (HttpRequest request, Db db, TenantContext 
     }
 }).RequireAuthorization();
 
-app.MapGet("/images/{imagesId}", async (string imagesId, Db db, Svyne.Api.Storage.ObjectStorage storage, CancellationToken ct) =>
+app.MapGet("/images/{imagesId}", async (string imagesId, Db db, EntryVine.Api.Storage.ObjectStorage storage, CancellationToken ct) =>
 {
     if (!Guid.TryParse(imagesId, out var id))
     {
@@ -401,7 +401,7 @@ app.MapGet("/stripe/onboard/refresh", (string? tenant, IConfiguration config) =>
     Results.Redirect($"{AdminFrontend(config)}/financial?stripe=refresh")).AllowAnonymous();
 
 
-var lifecycleLogger = app.Services.GetRequiredService<Svyne.Api.ErrorHandling.ErrorLogger>();
+var lifecycleLogger = app.Services.GetRequiredService<EntryVine.Api.ErrorHandling.ErrorLogger>();
 app.Lifetime.ApplicationStarted.Register(() =>
     _ = lifecycleLogger.LogInfoAsync("SystemLifecycle", "Application started"));
 app.Lifetime.ApplicationStopping.Register(() =>

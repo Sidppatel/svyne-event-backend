@@ -1,19 +1,19 @@
 using Grpc.Core;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Api.Security;
-using Svyne.Protos.Catalog;
-using Svyne.Protos.Common;
+using EntryVine.Api.Data;
+using EntryVine.Api.Security;
+using EntryVine.Protos.Catalog;
+using EntryVine.Protos.Common;
 
-namespace Svyne.Api.Services;
+namespace EntryVine.Api.Services;
 
 public sealed class VenueServiceImpl : VenueService.VenueServiceBase
 {
     private readonly Db db;
     private readonly TenantContext tenantContext;
-    private readonly Svyne.Api.Payments.SalesTaxService salesTaxService;
+    private readonly EntryVine.Api.Payments.SalesTaxService salesTaxService;
 
-    public VenueServiceImpl(Db db, TenantContext tenantContext, Svyne.Api.Payments.SalesTaxService salesTaxService)
+    public VenueServiceImpl(Db db, TenantContext tenantContext, EntryVine.Api.Payments.SalesTaxService salesTaxService)
     {
         this.db = db;
         this.tenantContext = tenantContext;

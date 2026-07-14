@@ -1,13 +1,13 @@
 using Grpc.Core;
 using Npgsql;
-using Svyne.Api.Data;
-using Svyne.Api.Security;
-using Svyne.Protos.Common;
-using Svyne.Protos.Booking;
+using EntryVine.Api.Data;
+using EntryVine.Api.Security;
+using EntryVine.Protos.Common;
+using EntryVine.Protos.Booking;
 
-using Svyne.Api.Email;
+using EntryVine.Api.Email;
 
-namespace Svyne.Api.Services;
+namespace EntryVine.Api.Services;
 
 public sealed class TicketServiceImpl : TicketService.TicketServiceBase
 {
@@ -157,7 +157,7 @@ public sealed class TicketServiceImpl : TicketService.TicketServiceBase
 
                 if (!string.IsNullOrEmpty(ticketCode))
                 {
-                    var fromAddress = await settings.GetStringAsync("admin_invitation_email", "noreply@svyne.com", ct);
+                    var fromAddress = await settings.GetStringAsync("admin_invitation_email", "noreply@entryvine.com", ct);
                     var subject = $"You have been invited to {eventTitle}!";
                     var linkBase = await settings.GetStringAsync("ticket_claim_link_base", "", ct);
                     if (string.IsNullOrEmpty(linkBase))

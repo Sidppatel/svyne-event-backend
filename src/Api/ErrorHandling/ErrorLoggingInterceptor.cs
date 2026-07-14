@@ -1,8 +1,8 @@
 using Grpc.Core;
 using Grpc.Core.Interceptors;
-using Svyne.Api.Security;
+using EntryVine.Api.Security;
 
-namespace Svyne.Api.ErrorHandling;
+namespace EntryVine.Api.ErrorHandling;
 
 public sealed class ErrorLoggingInterceptor : Interceptor
 {

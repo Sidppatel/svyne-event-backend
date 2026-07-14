@@ -2,10 +2,10 @@ using System.Security.Cryptography;
 using Npgsql;
 using NpgsqlTypes;
 using Stripe;
-using Svyne.Api.Data;
-using Svyne.Api.Email;
+using EntryVine.Api.Data;
+using EntryVine.Api.Email;
 
-namespace Svyne.Api.Payments;
+namespace EntryVine.Api.Payments;
 
 
 

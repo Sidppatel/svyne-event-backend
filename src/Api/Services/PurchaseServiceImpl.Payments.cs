@@ -1,16 +1,16 @@
 using Grpc.Core;
 using Npgsql;
 using Stripe;
-using Svyne.Api.Data;
-using Svyne.Api.Payments;
-using Svyne.Api.Security;
-using Svyne.Protos.Common;
-using Svyne.Protos.Booking;
-using Svyne.Protos.Pricing;
+using EntryVine.Api.Data;
+using EntryVine.Api.Payments;
+using EntryVine.Api.Security;
+using EntryVine.Protos.Common;
+using EntryVine.Protos.Booking;
+using EntryVine.Protos.Pricing;
 
-using Svyne.Api.Email;
+using EntryVine.Api.Email;
 
-namespace Svyne.Api.Services;
+namespace EntryVine.Api.Services;
 
 public sealed partial class BookingServiceImpl
 {
