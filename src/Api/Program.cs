@@ -142,7 +142,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
-var rateLimitPolicy = new RateLimitPolicy();
+var rateLimitPolicy = new RateLimitPolicy(builder.Configuration);
 builder.Services.AddSingleton(rateLimitPolicy);
 builder.Services.AddRateLimiter(rateLimitPolicy.Configure);
 
@@ -396,6 +396,12 @@ app.MapGet("/stripe/onboard/refresh", (string? tenant, IConfiguration config) =>
 var lifecycleLogger = app.Services.GetRequiredService<TicketSpan.Api.ErrorHandling.ErrorLogger>();
 app.Lifetime.ApplicationStarted.Register(() =>
     _ = lifecycleLogger.LogInfoAsync("SystemLifecycle", "Application started"));
+if (!rateLimitPolicy.Enabled)
+{
+    app.Lifetime.ApplicationStarted.Register(() =>
+        _ = lifecycleLogger.LogWarningAsync("SystemLifecycle",
+            $"Rate limiting is DISABLED via RATE_LIMIT_ENABLED=false in {app.Environment.EnvironmentName}"));
+}
 app.Lifetime.ApplicationStopping.Register(() =>
     lifecycleLogger.LogInfoAsync("SystemLifecycle", "Application stopping").GetAwaiter().GetResult());
 

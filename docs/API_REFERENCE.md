@@ -115,6 +115,7 @@ Error logging/alerting (all optional): `ERROR_LOGGING_DISABLED=true` turns persi
 - Rejection: REST returns `429` + `Retry-After`. **gRPC-Web returns HTTP 200 with `grpc-status: 8` (RESOURCE_EXHAUSTED)** — gRPC-Web has no 429. Clients must branch on the grpc-status, not the HTTP code.
 - Headers on every response: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` (unix seconds), reflecting whichever bucket is currently tighter. Exposed to browsers via the CORS policy alongside `Retry-After`.
 - Limits are compile-time constants; counters are per-process and reset on restart (single Render instance, so no shared store is needed — revisit if the backend is scaled out).
+- `RATE_LIMIT_ENABLED` — kill switch for testing. **Only the exact value `false` (case-insensitive) disables limiting**; unset, empty, `0`, `off`, or a typo all leave it ON, so a missing variable can never silently drop the control. When disabled no bucket resolves, so the `X-RateLimit-*` headers are omitted entirely rather than reporting fake numbers. Startup logs a Warning to `audit_logs` (visible on the developer `/logs` page) naming the environment, so a prod service running unprotected is visible rather than silent. Read once at startup — Render restarts the service on an env change, which is what applies it.
 - Check: `dotnet run --project tests/RateLimitCheck` — asserts every bucket boundary, tenant isolation, IP header precedence, and exemptions. No database required.
 
 ## Error handling architecture

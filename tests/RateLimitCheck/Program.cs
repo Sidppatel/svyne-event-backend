@@ -1,8 +1,19 @@
 using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using TicketSpan.Api;
 using TicketSpan.Api.Security;
+
+static RateLimitPolicy BuildPolicy(string? rateLimitEnabled = null)
+{
+    var settings = new Dictionary<string, string?>();
+    if (rateLimitEnabled is not null)
+    {
+        settings["RATE_LIMIT_ENABLED"] = rateLimitEnabled;
+    }
+    return new RateLimitPolicy(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+}
 
 static HttpContext BuildContext(
     string path,
@@ -79,7 +90,7 @@ static void Check(List<string> failures, string name, bool condition, string det
 
 Console.WriteLine("Auth endpoint limit (20/min per client IP)");
 {
-    using var policy = new RateLimitPolicy();
+    using var policy = BuildPolicy();
     var attacker = BuildContext("/ticketspan.auth.AuthService/Login", cloudflareIp: "198.51.100.7");
     var rejectedAt = AcquireUntilRejected(policy, attacker, 40);
     Check(failures, "auth rejects the 21st attempt", rejectedAt == 21, $"rejected at attempt {rejectedAt}");
@@ -91,7 +102,7 @@ Console.WriteLine("Auth endpoint limit (20/min per client IP)");
 
 Console.WriteLine("Proxy IP is not the partition key (the bug this replaces)");
 {
-    using var policy = new RateLimitPolicy();
+    using var policy = BuildPolicy();
     var sharedProxyIp = "172.16.0.1";
     var firstUser = BuildContext("/ticketspan.auth.AuthService/Login", clientIp: sharedProxyIp, cloudflareIp: "198.51.100.20");
     var secondUser = BuildContext("/ticketspan.auth.AuthService/Login", clientIp: sharedProxyIp, cloudflareIp: "198.51.100.21");
@@ -104,7 +115,7 @@ Console.WriteLine("Proxy IP is not the partition key (the bug this replaces)");
 
 Console.WriteLine("Client IP header precedence");
 {
-    using var policy = new RateLimitPolicy();
+    using var policy = BuildPolicy();
     var cloudflareWins = BuildContext("/ticketspan.auth.AuthService/Login",
         cloudflareIp: "198.51.100.30", forwardedFor: "198.51.100.31", realIp: "198.51.100.32");
     AcquireUntilRejected(policy, cloudflareWins, 40);
@@ -120,7 +131,7 @@ Console.WriteLine("Client IP header precedence");
 
 Console.WriteLine("Authenticated user limit (100/min)");
 {
-    using var policy = new RateLimitPolicy();
+    using var policy = BuildPolicy();
     var user = BuildContext("/ticketspan.event.EventService/ListEvents",
         subject: Guid.NewGuid().ToString(), role: Lookups.UserRoles.Admin, tenantsId: Guid.NewGuid().ToString());
     var rejectedAt = AcquireUntilRejected(policy, user, 200);
@@ -129,7 +140,7 @@ Console.WriteLine("Authenticated user limit (100/min)");
 
 Console.WriteLine("Tenant cap (1000/hr) binds across users of one tenant");
 {
-    using var policy = new RateLimitPolicy();
+    using var policy = BuildPolicy();
     var tenantsId = Guid.NewGuid().ToString();
     var consumed = 0;
     for (var userIndex = 0; userIndex < 12; userIndex++)
@@ -156,7 +167,7 @@ Console.WriteLine("Tenant cap (1000/hr) binds across users of one tenant");
 
 Console.WriteLine("Developer limit (5000/hr) is not tenant-capped");
 {
-    using var policy = new RateLimitPolicy();
+    using var policy = BuildPolicy();
     var developer = BuildContext("/ticketspan.log.LogService/ListLogs",
         subject: Guid.NewGuid().ToString(), role: Lookups.UserRoles.Developer);
     var consumed = 0;
@@ -174,7 +185,7 @@ Console.WriteLine("Developer limit (5000/hr) is not tenant-capped");
 
 Console.WriteLine("Exempt paths are never limited");
 {
-    using var policy = new RateLimitPolicy();
+    using var policy = BuildPolicy();
     foreach (var path in new[] { "/health/ready", "/webhooks/stripe", "/images/abc" })
     {
         var exempt = BuildContext(path);
@@ -186,7 +197,7 @@ Console.WriteLine("Exempt paths are never limited");
 
 Console.WriteLine("Statistics back the X-RateLimit headers");
 {
-    using var policy = new RateLimitPolicy();
+    using var policy = BuildPolicy();
     var user = BuildContext("/ticketspan.event.EventService/ListEvents",
         subject: Guid.NewGuid().ToString(), role: Lookups.UserRoles.Admin, tenantsId: Guid.NewGuid().ToString());
     var bucket = policy.ResolveEffectiveBucket(user);
@@ -206,7 +217,7 @@ Console.WriteLine("Statistics back the X-RateLimit headers");
 
 Console.WriteLine("Effective bucket switches to the tenant once it is the tighter cap");
 {
-    using var policy = new RateLimitPolicy();
+    using var policy = BuildPolicy();
     var tenantsId = Guid.NewGuid().ToString();
     for (var userIndex = 0; userIndex < 10; userIndex++)
     {
@@ -229,6 +240,49 @@ Console.WriteLine("Effective bucket switches to the tenant once it is the tighte
     Check(failures, "effective bucket reports the tenant limit",
         policy.ResolveEffectiveBucket(freshUser)?.PermitLimit == 1000,
         $"limit was {policy.ResolveEffectiveBucket(freshUser)?.PermitLimit}");
+}
+
+Console.WriteLine("RATE_LIMIT_ENABLED flag");
+{
+    using var disabled = BuildPolicy("false");
+    Check(failures, "RATE_LIMIT_ENABLED=false reports disabled", !disabled.Enabled, "policy still reports enabled");
+    var authFlood = BuildContext("/ticketspan.auth.AuthService/Login", cloudflareIp: "198.51.100.60");
+    Check(failures, "auth is unlimited when disabled",
+        AcquireUntilRejected(disabled, authFlood, 200) == -1, "auth was still limited");
+    var user = BuildContext("/ticketspan.event.EventService/ListEvents",
+        subject: Guid.NewGuid().ToString(), role: Lookups.UserRoles.Admin, tenantsId: Guid.NewGuid().ToString());
+    Check(failures, "user traffic is unlimited when disabled",
+        AcquireUntilRejected(disabled, user, 500) == -1, "user was still limited");
+    Check(failures, "no bucket resolves when disabled", disabled.ResolveEffectiveBucket(user) is null,
+        "a bucket resolved, so X-RateLimit headers would still be emitted");
+
+    using var mixedCase = BuildPolicy("FALSE");
+    Check(failures, "RATE_LIMIT_ENABLED=FALSE also disables", !mixedCase.Enabled, "case-sensitive comparison rejected FALSE");
+}
+
+Console.WriteLine("RATE_LIMIT_ENABLED fails safe");
+{
+    foreach (var (value, label) in new[]
+    {
+        ((string?)null, "unset"),
+        ("", "empty"),
+        ("true", "true"),
+        ("0", "0"),
+        ("off", "off"),
+        ("no", "no"),
+        ("disabled", "disabled"),
+        ("fasle", "typo'd fasle")
+    })
+    {
+        using var policy = BuildPolicy(value);
+        Check(failures, $"RATE_LIMIT_ENABLED={label} leaves limiting ON", policy.Enabled,
+            "a value that is not exactly \"false\" disabled rate limiting");
+    }
+
+    using var stillEnforcing = BuildPolicy(null);
+    var attacker = BuildContext("/ticketspan.auth.AuthService/Login", cloudflareIp: "198.51.100.61");
+    Check(failures, "unset flag still rejects the 21st auth attempt",
+        AcquireUntilRejected(stillEnforcing, attacker, 40) == 21, "unset flag did not enforce the auth limit");
 }
 
 Console.WriteLine();

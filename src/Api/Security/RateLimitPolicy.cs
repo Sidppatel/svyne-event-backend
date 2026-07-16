@@ -33,18 +33,26 @@ public sealed class RateLimitPolicy : IDisposable
     public const string RemainingHeaderName = "X-RateLimit-Remaining";
     public const string ResetHeaderName = "X-RateLimit-Reset";
 
+    private const string RateLimitEnabledSetting = "RATE_LIMIT_ENABLED";
+    private const string ExplicitlyDisabledValue = "false";
+
+    private readonly bool enabled;
     private readonly PartitionedRateLimiter<HttpContext> identityLimiter;
     private readonly PartitionedRateLimiter<HttpContext> tenantLimiter;
     private readonly PartitionedRateLimiter<HttpContext> chainedLimiter;
 
-    public RateLimitPolicy()
+    public RateLimitPolicy(IConfiguration configuration)
     {
+        enabled = !string.Equals(
+            configuration[RateLimitEnabledSetting], ExplicitlyDisabledValue, StringComparison.OrdinalIgnoreCase);
         identityLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
             httpContext => CreatePartition(ResolveIdentityBucket(httpContext)));
         tenantLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
             httpContext => CreatePartition(ResolveTenantBucket(httpContext)));
         chainedLimiter = PartitionedRateLimiter.CreateChained(identityLimiter, tenantLimiter);
     }
+
+    public bool Enabled => enabled;
 
     public PartitionedRateLimiter<HttpContext> Limiter => chainedLimiter;
 
@@ -105,9 +113,9 @@ public sealed class RateLimitPolicy : IDisposable
             });
     }
 
-    private static RateLimitBucket? ResolveIdentityBucket(HttpContext httpContext)
+    private RateLimitBucket? ResolveIdentityBucket(HttpContext httpContext)
     {
-        if (IsExempt(httpContext))
+        if (!enabled || IsExempt(httpContext))
         {
             return null;
         }
@@ -133,9 +141,10 @@ public sealed class RateLimitPolicy : IDisposable
         return new RateLimitBucket("user:" + subject, AuthenticatedUserRequestsPerMinute, TimeSpan.FromMinutes(1));
     }
 
-    private static RateLimitBucket? ResolveTenantBucket(HttpContext httpContext)
+    private RateLimitBucket? ResolveTenantBucket(HttpContext httpContext)
     {
-        if (IsExempt(httpContext)
+        if (!enabled
+            || IsExempt(httpContext)
             || httpContext.Request.Path.StartsWithSegments(AuthServicePathPrefix)
             || IsDeveloper(httpContext))
         {
