@@ -158,8 +158,8 @@ namespace Db.Migrations
                 column: "state");
 
             MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.functions");
-            MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.views");
             MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.stored_procedures");
+            MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.views");
             MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.policies");
             MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.security");
         }

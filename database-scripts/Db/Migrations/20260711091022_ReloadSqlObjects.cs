@@ -22,8 +22,8 @@ namespace Db.Migrations
             ");
 
             db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.functions");
-            db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.views");
             db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.stored_procedures");
+            db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.views");
             db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.policies");
             db.Migrations.MigrationSqlLoader.LoadAll(migrationBuilder, "Sql.security");
         }
