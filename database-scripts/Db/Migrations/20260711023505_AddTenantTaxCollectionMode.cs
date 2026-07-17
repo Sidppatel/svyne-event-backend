@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -10,25 +10,13 @@ namespace Db.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "tax_collection_mode",
-                table: "tenants",
-                type: "character varying(16)",
-                maxLength: 16,
-                nullable: false,
-                defaultValue: "platform");
+            migrationBuilder.Sql("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tax_collection_mode varchar(16) DEFAULT 'platform';");
 
             migrationBuilder.Sql("ALTER TABLE stripe_transactions ADD COLUMN IF NOT EXISTS payment_method_last4 text");
 
             migrationBuilder.Sql("ALTER TABLE stripe_transactions ADD COLUMN IF NOT EXISTS payment_method_type text");
 
-            migrationBuilder.AddColumn<string>(
-                name: "collected_by",
-                table: "booking_taxes",
-                type: "character varying(16)",
-                maxLength: 16,
-                nullable: false,
-                defaultValue: "platform");
+            migrationBuilder.Sql("ALTER TABLE booking_taxes ADD COLUMN IF NOT EXISTS collected_by varchar(16) DEFAULT 'platform';");
 
             migrationBuilder.AddCheckConstraint(
                 name: "CK_tenants_TaxCollectionMode",

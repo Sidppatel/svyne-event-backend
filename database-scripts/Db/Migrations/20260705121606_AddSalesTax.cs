@@ -15,6 +15,7 @@ namespace Db.Migrations
             migrationBuilder.Sql("ALTER TABLE stripe_transactions ADD COLUMN IF NOT EXISTS payment_method_type text;");
             migrationBuilder.Sql("ALTER TABLE stripe_transactions ADD COLUMN IF NOT EXISTS payment_method_last4 text;");
             migrationBuilder.Sql("ALTER TABLE stripe_transactions ADD COLUMN IF NOT EXISTS payment_method_brand text;");
+            migrationBuilder.Sql("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tax_collection_mode varchar(16) DEFAULT 'platform';");
 
             migrationBuilder.AddColumn<bool>(
                 name: "tax_exempt",
@@ -91,7 +92,8 @@ namespace Db.Migrations
                     api_response_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     calculated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    collected_by = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, defaultValue: "platform")
                 },
                 constraints: table =>
                 {
