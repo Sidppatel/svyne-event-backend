@@ -3,7 +3,7 @@ CREATE OR REPLACE FUNCTION sp_get_error_logs(
     p_from timestamptz, p_to timestamptz, p_skip int, p_take int
 ) RETURNS TABLE(
     id uuid,
-    timestamp timestamptz,
+    "timestamp" timestamptz,
     severity text,
     message text,
     exception_type text,
@@ -32,9 +32,9 @@ AS $$
            OR (request_path IS NOT NULL AND request_path ILIKE '%' || p_search || '%')
            OR id::text = p_search
            OR (correlation_id IS NOT NULL AND correlation_id = p_search))
-      AND (p_from IS NULL OR timestamp >= p_from)
-      AND (p_to IS NULL OR timestamp <= p_to)
-    ORDER BY timestamp DESC
+      AND (p_from IS NULL OR "timestamp" >= p_from)
+      AND (p_to IS NULL OR "timestamp" <= p_to)
+    ORDER BY "timestamp" DESC
     OFFSET p_skip LIMIT p_take;
 $$;
 
@@ -52,6 +52,6 @@ AS $$
            OR (request_path IS NOT NULL AND request_path ILIKE '%' || p_search || '%')
            OR id::text = p_search
            OR (correlation_id IS NOT NULL AND correlation_id = p_search))
-      AND (p_from IS NULL OR timestamp >= p_from)
-      AND (p_to IS NULL OR timestamp <= p_to);
+      AND (p_from IS NULL OR "timestamp" >= p_from)
+      AND (p_to IS NULL OR "timestamp" <= p_to);
 $$;
