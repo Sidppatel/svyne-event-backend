@@ -1,7 +1,27 @@
 CREATE OR REPLACE FUNCTION sp_get_error_logs(
     p_severity text, p_source text, p_resolved boolean, p_search text,
     p_from timestamptz, p_to timestamptz, p_skip int, p_take int
-) RETURNS SETOF vw_developer_logs LANGUAGE sql STABLE
+) RETURNS TABLE(
+    id uuid,
+    timestamp timestamptz,
+    severity text,
+    message text,
+    exception_type text,
+    stack_trace text,
+    request_path text,
+    request_method text,
+    status_code int,
+    users_id uuid,
+    ip_address text,
+    correlation_id text,
+    metadata_json text,
+    tenants_id uuid,
+    source text,
+    resolved boolean,
+    resolved_notes text,
+    resolved_by text,
+    resolved_at timestamptz
+) LANGUAGE sql STABLE
     SET search_path = public, extensions, pg_catalog
 AS $$
     SELECT * FROM vw_developer_logs
