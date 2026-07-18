@@ -184,6 +184,10 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
     {
         var ct = context.CancellationToken;
         var payload = await ValidateGoogleTokenAsync(request.GoogleToken);
+        if (payload.EmailVerified != true)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, "Google account email is not verified"));
+        }
 
         var tenantsId = await ResolveTenantAsync(request.TenantSlug, ct);
         if (tenantsId is null)
@@ -209,9 +213,13 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
         {
             reader = await cmd.ExecuteReaderAsync(ct);
         }
-        catch (PostgresException ex) when (ex.SqlState is "P0001" or "P0002")
+        catch (PostgresException ex) when (ex.SqlState == "P0001")
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.MessageText));
+        }
+        catch (PostgresException ex) when (ex.SqlState == "P0003")
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Account disabled"));
         }
         await using (reader)
         {

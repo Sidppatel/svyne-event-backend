@@ -122,3 +122,4 @@ src/Api/Properties/launchSettings.json
 **/*local_emails/
 src/Api/event/
 
+jobs.json

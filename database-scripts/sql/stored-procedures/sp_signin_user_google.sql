@@ -11,12 +11,16 @@ CREATE OR REPLACE FUNCTION sp_signin_user_google(
 AS $$
 DECLARE
     v_id uuid;
-    v_existing_password_hash text;
+    v_is_active boolean;
     v_existing_google_subject text;
 BEGIN
-    SELECT users_id INTO v_id FROM users WHERE google_subject = p_google_subject;
+    SELECT users_id, is_active INTO v_id, v_is_active
+      FROM users WHERE google_subject = p_google_subject;
 
     IF v_id IS NOT NULL THEN
+        IF NOT v_is_active THEN
+            RAISE EXCEPTION 'Account disabled' USING ERRCODE = 'P0003';
+        END IF;
         UPDATE users
         SET last_login_at = now(),
             updated_at = now()
@@ -25,8 +29,8 @@ BEGIN
         RETURN;
     END IF;
 
-    SELECT users_id, password_hash, google_subject
-      INTO v_id, v_existing_password_hash, v_existing_google_subject
+    SELECT users_id, is_active, google_subject
+      INTO v_id, v_is_active, v_existing_google_subject
       FROM users
       WHERE email_hash = p_email_hash
         AND tenants_id IS NOT DISTINCT FROM p_tenants_id;
@@ -55,11 +59,13 @@ BEGIN
             USING ERRCODE = 'P0001';
     END IF;
 
-    IF v_existing_password_hash IS NOT NULL AND v_existing_google_subject IS NULL THEN
-        RAISE EXCEPTION 'Existing password account requires password sign-in to link Google'
-            USING ERRCODE = 'P0002';
+    IF NOT v_is_active THEN
+        RAISE EXCEPTION 'Account disabled' USING ERRCODE = 'P0003';
     END IF;
 
+    -- Email match on a password account auto-links Google: caller has verified
+    -- the Google token and that Google reports the email as verified, so the
+    -- caller owns this email. Password sign-in keeps working alongside.
     UPDATE users
     SET google_subject = p_google_subject,
         email_verified = true,
