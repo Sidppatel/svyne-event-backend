@@ -4,6 +4,7 @@
 
 
 
+DROP FUNCTION IF EXISTS app.tier_pricing(text) CASCADE;
 CREATE OR REPLACE FUNCTION app.tier_pricing(p_tier text)
 RETURNS TABLE(monthly_cents int, percent_bps int, flat_cents int)
 LANGUAGE sql IMMUTABLE
@@ -22,6 +23,7 @@ AS $$
 $$;
 
 
+DROP FUNCTION IF EXISTS app.event_tier_pricing(text) CASCADE;
 CREATE OR REPLACE FUNCTION app.event_tier_pricing(p_tier text)
 RETURNS TABLE(price_cents int, percent_bps int, flat_cents int,
               sms_credits int, custom_domain_limit int)
@@ -38,6 +40,7 @@ AS $$
 $$;
 
 
+DROP FUNCTION IF EXISTS app.addon_pricing(text) CASCADE;
 CREATE OR REPLACE FUNCTION app.addon_pricing(p_type text)
 RETURNS TABLE(monthly_cents int, annual_cents int, setup_fee_cents int)
 LANGUAGE sql IMMUTABLE
