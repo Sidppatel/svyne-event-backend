@@ -131,7 +131,7 @@ BEGIN
     ELSE
         v_base_sub := v_base_unit * v_seats;
         v_sell_sub := v_sell_unit * v_seats;
-        v_platform := app.compute_fee(v_sell_unit, v_formula) * v_seats;
+        v_platform := app.compute_fee(v_sell_sub, v_formula);
     END IF;
 
     v_gateway := app.compute_fee(v_sell_sub + v_platform, v_gw_formula);
@@ -154,6 +154,34 @@ BEGIN
     final_price_cents := v_sell_sub + v_platform + v_gateway + v_tax;
     organizer_net_cents := v_sell_sub;
     currency := 'usd';
+    RETURN NEXT;
+END; $$;
+
+CREATE OR REPLACE FUNCTION app.order_fees(
+    p_event_id uuid, p_subtotal_cents int, p_method text DEFAULT 'card'
+)
+RETURNS TABLE(platform_fee_cents int, gateway_fee_cents int)
+LANGUAGE plpgsql STABLE
+SET search_path = public, extensions, pg_catalog
+AS $$
+DECLARE
+    v_tenant uuid; v_formula uuid; v_gw_formula uuid; v_platform int;
+BEGIN
+    SELECT tenants_id INTO v_tenant FROM events WHERE events_id = p_event_id;
+
+    IF p_method = 'ach' THEN
+        v_formula := app.resolve_ach_formula(v_tenant);
+        v_gw_formula := NULL;
+    ELSE
+        -- ponytail: per-order fee uses the event/tenant formula; per-ticket-type
+        -- fee overrides (prices.fee_formulas_id) no longer apply to the charge
+        v_formula := app.resolve_fee_formula(NULL, p_event_id, v_tenant);
+        v_gw_formula := app.resolve_gateway_formula(v_tenant);
+    END IF;
+
+    v_platform := app.compute_fee(COALESCE(p_subtotal_cents, 0), v_formula);
+    platform_fee_cents := v_platform;
+    gateway_fee_cents := app.compute_fee(COALESCE(p_subtotal_cents, 0) + v_platform, v_gw_formula);
     RETURN NEXT;
 END; $$;
 

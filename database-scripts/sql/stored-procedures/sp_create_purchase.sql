@@ -17,6 +17,7 @@ DECLARE
     v_code text;
     v_qr text;
     v_tax_rate numeric; v_tax_total int; v_taxable int;
+    v_sub int; v_platform_total int; v_gateway_total int;
     v_tzip text; v_tstate text; v_tcounty text; v_tcity text;
     v_tstate_rate numeric; v_tcounty_rate numeric; v_tcity_rate numeric; v_tlocal_rate numeric;
     v_tapi text;
@@ -106,10 +107,14 @@ BEGIN
       LEFT JOIN addresses a ON a.addresses_id = ve.addresses_id
       LEFT JOIN tax_rate_cache trc ON trc.zip_code = a.zip_code
      WHERE e.events_id = p_event_id;
-    v_tax_total := CASE WHEN v_kind = 'Ticket' THEN v_bd.tax_cents * v_seats ELSE v_bd.tax_cents END;
-    v_taxable := CASE WHEN v_kind = 'Ticket'
-        THEN (v_bd.selling_price_cents + v_bd.platform_fee_cents + v_bd.gateway_fee_cents) * v_seats
-        ELSE (v_bd.selling_price_cents + v_bd.platform_fee_cents + v_bd.gateway_fee_cents) END;
+    v_sub := CASE WHEN v_kind = 'Ticket' THEN v_bd.selling_price_cents * v_seats
+             ELSE v_bd.selling_price_cents END;
+    SELECT ofees.platform_fee_cents, ofees.gateway_fee_cents
+      INTO v_platform_total, v_gateway_total
+      FROM app.order_fees(p_event_id, v_sub, 'card') ofees;
+    v_taxable := v_sub + v_platform_total + v_gateway_total;
+    v_tax_total := CASE WHEN v_taxable > 0 AND COALESCE(v_tax_rate, 0) > 0
+                   THEN round(v_taxable * v_tax_rate)::int ELSE 0 END;
 
     LOOP
         v_attempt := v_attempt + 1;
@@ -120,9 +125,9 @@ BEGIN
                 tax_cents, tax_rate, tax_state, tax_county, tax_city, tax_calculated_at,
                 hold_expires_at, created_at, updated_at)
             VALUES (v_tenant, v_number, p_status, p_user_id, p_event_id,
-                CASE WHEN v_kind = 'Ticket' THEN v_bd.selling_price_cents * v_seats ELSE v_bd.selling_price_cents END,
-                CASE WHEN v_kind = 'Ticket' THEN (v_bd.platform_fee_cents + v_bd.gateway_fee_cents + v_bd.tax_cents) * v_seats ELSE (v_bd.platform_fee_cents + v_bd.gateway_fee_cents + v_bd.tax_cents) END,
-                CASE WHEN v_kind = 'Ticket' THEN v_bd.final_price_cents * v_seats ELSE v_bd.final_price_cents END,
+                v_sub,
+                v_platform_total + v_gateway_total + v_tax_total,
+                v_taxable + v_tax_total,
                 v_seats,
                 v_tax_total, v_tax_rate, v_tstate, v_tcounty, v_tcity,
                 now(),
@@ -159,10 +164,10 @@ BEGIN
                 NULL, v_prices_id, 1, v_code, v_qr, v_seat_idx, 'Unassigned',
                 v_bd.base_price_cents, v_bd.selling_price_cents, v_bd.discount_cents,
                 v_bd.applied_price_rules_id, v_bd.applied_rule_name,
-                v_bd.platform_fee_cents, v_bd.gateway_fee_cents,
+                0, 0,
                 v_bd.selling_price_cents,
-                v_bd.platform_fee_cents + v_bd.gateway_fee_cents + v_bd.tax_cents,
-                v_bd.final_price_cents, v_bd.final_price_cents, v_bd.currency,
+                0,
+                v_bd.selling_price_cents, v_bd.selling_price_cents, v_bd.currency,
                 now(), now());
         END LOOP;
     ELSIF v_kind = 'Table' THEN
@@ -180,10 +185,10 @@ BEGIN
             p_table_id, v_prices_id, v_seats, v_code, v_qr, 'Unassigned',
             v_bd.base_price_cents, v_bd.selling_price_cents, v_bd.discount_cents,
             v_bd.applied_price_rules_id, v_bd.applied_rule_name,
-            v_bd.platform_fee_cents, v_bd.gateway_fee_cents,
+            0, 0,
             v_bd.selling_price_cents,
-            v_bd.platform_fee_cents + v_bd.gateway_fee_cents,
-            v_bd.final_price_cents, v_bd.final_price_cents, v_bd.currency,
+            0,
+            v_bd.selling_price_cents, v_bd.selling_price_cents, v_bd.currency,
             now(), now());
 
         IF p_status = 'Pending' THEN

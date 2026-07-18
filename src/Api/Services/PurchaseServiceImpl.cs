@@ -206,27 +206,49 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
 
             quote.BaseTotalCents += bd.BasePriceCents;
             quote.SubtotalCents += bd.SellingPriceCents;
-            quote.PlatformFeeCents += bd.PlatformFeeCents;
-            quote.GatewayFeeCents += bd.GatewayFeeCents;
-            quote.TaxCents += bd.TaxCents;
-            quote.TotalCents += bd.FinalPriceCents;
             quote.OrganizerNetCents += bd.OrganizerNetCents;
             quote.Currency = bd.Currency;
 
             quote.AchAvailable = !reader.IsDBNull(15) && reader.GetBoolean(15);
-            quote.AchTotalCents += reader.GetInt32(16);
         }
+        await reader.DisposeAsync();
         quote.DiscountCents = quote.BaseTotalCents - quote.SubtotalCents;
+
+        var achPlatformFeeCents = 0;
+        await using (var feeCmd = new NpgsqlCommand(
+            "SELECT card.platform_fee_cents, card.gateway_fee_cents, ach.platform_fee_cents " +
+            "FROM app.order_fees(@ev, @sub, 'card') card, app.order_fees(@ev, @sub, 'ach') ach", connection))
+        {
+            feeCmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
+            feeCmd.Parameters.AddWithValue("sub", quote.SubtotalCents);
+            await using var feeReader = await feeCmd.ExecuteReaderAsync(ct);
+            if (await feeReader.ReadAsync(ct))
+            {
+                quote.PlatformFeeCents = feeReader.GetInt32(0);
+                quote.GatewayFeeCents = feeReader.GetInt32(1);
+                achPlatformFeeCents = feeReader.GetInt32(2);
+            }
+        }
+
         var taxableCents = quote.SubtotalCents + quote.PlatformFeeCents + quote.GatewayFeeCents;
         quote.TaxCents = taxableCents > 0 && taxRate > 0
             ? (int)Math.Round(taxableCents * taxRate, MidpointRounding.AwayFromZero)
             : 0;
         quote.TotalCents = taxableCents + quote.TaxCents;
         quote.FeeCents = quote.PlatformFeeCents + quote.GatewayFeeCents + quote.TaxCents;
-        quote.AchSavingsCents = quote.AchAvailable ? Math.Max(quote.TotalCents - quote.AchTotalCents, 0) : 0;
-        if (!quote.AchAvailable)
+        if (quote.AchAvailable)
+        {
+            var achTaxableCents = quote.SubtotalCents + achPlatformFeeCents;
+            var achTaxCents = achTaxableCents > 0 && taxRate > 0
+                ? (int)Math.Round(achTaxableCents * taxRate, MidpointRounding.AwayFromZero)
+                : 0;
+            quote.AchTotalCents = achTaxableCents + achTaxCents;
+            quote.AchSavingsCents = Math.Max(quote.TotalCents - quote.AchTotalCents, 0);
+        }
+        else
         {
             quote.AchTotalCents = 0;
+            quote.AchSavingsCents = 0;
         }
         quote.HoldSeconds = await settings.GetIntAsync("booking_hold_seconds", 600, ct);
         return quote;

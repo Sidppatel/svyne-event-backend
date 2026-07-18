@@ -15,7 +15,6 @@ DECLARE
     v_status text; v_owner uuid; v_hold timestamptz;
     v_tenant uuid; v_event uuid;
     v_ach_ok boolean;
-    v_svc_formula uuid; v_gw_formula uuid; v_ach_formula uuid;
     v_line record;
     v_platform int; v_gateway int;
     v_card_platform int; v_card_gateway int;
@@ -54,43 +53,34 @@ BEGIN
         RAISE EXCEPTION 'ACH is not available for this event' USING ERRCODE = '22023';
     END IF;
 
-    v_gw_formula := app.resolve_gateway_formula(v_tenant);
-    v_ach_formula := app.resolve_ach_formula(v_tenant);
-
     FOR v_line IN
-        SELECT bl.booking_lines_id, bl.selling_price_cents, p.fee_formulas_id AS explicit_formula
+        SELECT bl.booking_lines_id, bl.selling_price_cents
           FROM booking_lines bl
-          LEFT JOIN prices p ON p.prices_id = bl.prices_id
          WHERE bl.bookings_id = p_booking_id
            AND bl.selling_price_cents > 0
     LOOP
-        v_svc_formula := app.resolve_fee_formula(v_line.explicit_formula, v_event, v_tenant);
-
-        v_card_platform := app.compute_fee(v_line.selling_price_cents, v_svc_formula);
-        v_card_gateway := app.compute_fee(v_line.selling_price_cents + v_card_platform, v_gw_formula);
-
-        IF p_method = 'ach' THEN
-            v_platform := app.compute_fee(v_line.selling_price_cents, v_ach_formula);
-            v_gateway := 0;
-        ELSE
-            v_platform := v_card_platform;
-            v_gateway := v_card_gateway;
-        END IF;
-
         UPDATE booking_lines
-           SET platform_fee_cents = v_platform,
-               gateway_fee_cents = v_gateway,
-               fee_cents = v_platform + v_gateway,
-               total_cents = selling_price_cents + v_platform + v_gateway,
-               final_price_cents = selling_price_cents + v_platform + v_gateway,
+           SET platform_fee_cents = 0,
+               gateway_fee_cents = 0,
+               fee_cents = 0,
+               total_cents = selling_price_cents,
+               final_price_cents = selling_price_cents,
                updated_at = now()
          WHERE booking_lines_id = v_line.booking_lines_id;
 
         v_sub := v_sub + v_line.selling_price_cents;
-        v_fee := v_fee + v_platform + v_gateway;
-        v_total := v_total + v_line.selling_price_cents + v_platform + v_gateway;
-        v_baseline := v_baseline + v_line.selling_price_cents + v_card_platform + v_card_gateway;
     END LOOP;
+
+    SELECT ofees.platform_fee_cents, ofees.gateway_fee_cents
+      INTO v_card_platform, v_card_gateway
+      FROM app.order_fees(v_event, v_sub, 'card') ofees;
+    SELECT ofees.platform_fee_cents, ofees.gateway_fee_cents
+      INTO v_platform, v_gateway
+      FROM app.order_fees(v_event, v_sub, p_method) ofees;
+
+    v_fee := v_platform + v_gateway;
+    v_total := v_sub + v_fee;
+    v_baseline := v_sub + v_card_platform + v_card_gateway;
 
     SELECT bt.combined_rate INTO v_tax_rate
       FROM booking_taxes bt

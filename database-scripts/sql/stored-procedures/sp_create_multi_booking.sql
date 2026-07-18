@@ -9,6 +9,7 @@ DECLARE
     v_tenant uuid; v_event_type text; v_hold int; v_number text; v_id uuid; v_attempt int := 0;
     v_sub int := 0; v_fee int := 0; v_total int := 0; v_seats_total int := 0;
     v_tax int := 0; v_taxable int := 0; v_tax_rate numeric;
+    v_platform_total int := 0; v_gateway_total int := 0;
     v_tzip text; v_tstate text; v_tcounty text; v_tcity text;
     v_tstate_rate numeric; v_tcounty_rate numeric; v_tcity_rate numeric; v_tlocal_rate numeric;
     v_tapi text;
@@ -85,15 +86,11 @@ BEGIN
                 'prices_id', v_prices_id::text, 'seats', v_seats,
                 'base', v_bd.base_price_cents, 'selling', v_bd.selling_price_cents,
                 'discount', v_bd.discount_cents, 'rule_id', v_bd.applied_price_rules_id,
-                'rule_name', v_bd.applied_rule_name, 'platform', v_bd.platform_fee_cents,
-                'gateway', v_bd.gateway_fee_cents, 'tax', v_bd.tax_cents,
-                'final', v_bd.final_price_cents, 'currency', v_bd.currency);
+                'rule_name', v_bd.applied_rule_name, 'platform', 0,
+                'gateway', 0, 'tax', 0,
+                'final', v_bd.selling_price_cents, 'currency', v_bd.currency);
 
             v_sub := v_sub + v_bd.selling_price_cents * v_seats;
-            v_fee := v_fee + (v_bd.platform_fee_cents + v_bd.gateway_fee_cents + v_bd.tax_cents) * v_seats;
-            v_total := v_total + v_bd.final_price_cents * v_seats;
-            v_tax := v_tax + v_bd.tax_cents * v_seats;
-            v_taxable := v_taxable + (v_bd.selling_price_cents + v_bd.platform_fee_cents + v_bd.gateway_fee_cents) * v_seats;
             v_seats_total := v_seats_total + v_seats;
 
         ELSIF v_kind = 'Table' THEN
@@ -130,27 +127,30 @@ BEGIN
                 'prices_id', v_prices_id::text, 'seats', v_seats,
                 'base', v_bd.base_price_cents, 'selling', v_bd.selling_price_cents,
                 'discount', v_bd.discount_cents, 'rule_id', v_bd.applied_price_rules_id,
-                'rule_name', v_bd.applied_rule_name, 'platform', v_bd.platform_fee_cents,
-                'gateway', v_bd.gateway_fee_cents, 'tax', v_bd.tax_cents,
-                'final', v_bd.final_price_cents, 'currency', v_bd.currency);
+                'rule_name', v_bd.applied_rule_name, 'platform', 0,
+                'gateway', 0, 'tax', 0,
+                'final', v_bd.selling_price_cents, 'currency', v_bd.currency);
 
             v_sub := v_sub + v_bd.selling_price_cents;
-            v_fee := v_fee + v_bd.platform_fee_cents + v_bd.gateway_fee_cents + v_bd.tax_cents;
-            v_total := v_total + v_bd.final_price_cents;
-            v_tax := v_tax + v_bd.tax_cents;
-            v_taxable := v_taxable + v_bd.selling_price_cents + v_bd.platform_fee_cents + v_bd.gateway_fee_cents;
             v_seats_total := v_seats_total + v_seats;
         ELSE
             RAISE EXCEPTION 'Unknown line kind: %', v_kind USING ERRCODE = '22023';
         END IF;
     END LOOP;
 
+    SELECT ofees.platform_fee_cents, ofees.gateway_fee_cents
+      INTO v_platform_total, v_gateway_total
+      FROM app.order_fees(p_event_id, v_sub, 'card') ofees;
+
+    v_taxable := v_sub + v_platform_total + v_gateway_total;
     v_tax_rate := app.event_tax_rate(p_event_id);
     IF v_taxable > 0 AND COALESCE(v_tax_rate, 0) > 0 THEN
-        v_fee := v_fee - v_tax + round(v_taxable * v_tax_rate)::int;
-        v_total := v_total - v_tax + round(v_taxable * v_tax_rate)::int;
         v_tax := round(v_taxable * v_tax_rate)::int;
+    ELSE
+        v_tax := 0;
     END IF;
+    v_fee := v_platform_total + v_gateway_total + v_tax;
+    v_total := v_taxable + v_tax;
     SELECT COALESCE(a.zip_code, ''), trc.state, trc.county, trc.city,
            COALESCE(trc.state_rate, 0), COALESCE(trc.county_rate, 0),
            COALESCE(trc.city_rate, 0), COALESCE(trc.local_rate, 0), trc.api_response_id

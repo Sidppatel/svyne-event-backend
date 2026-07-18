@@ -29,6 +29,7 @@ DECLARE
     v_code text;
     v_qr text;
     v_tax_rate numeric; v_tax_total int; v_taxable int;
+    v_sub int; v_platform_total int; v_gateway_total int;
     v_tzip text; v_tstate text; v_tcounty text; v_tcity text;
     v_tstate_rate numeric; v_tcounty_rate numeric; v_tcity_rate numeric; v_tlocal_rate numeric;
     v_tapi text;
@@ -109,8 +110,13 @@ BEGIN
     SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), 1,
                              app.remaining_for_price(v_prices_id));
 
+    v_sub := v_bd.selling_price_cents * p_seats;
+    SELECT ofees.platform_fee_cents, ofees.gateway_fee_cents
+      INTO v_platform_total, v_gateway_total
+      FROM app.order_fees(p_event_id, v_sub, 'card') ofees;
+
     v_tax_rate := app.event_tax_rate(p_event_id);
-    v_taxable := (v_bd.selling_price_cents + v_bd.platform_fee_cents + v_bd.gateway_fee_cents) * p_seats;
+    v_taxable := v_sub + v_platform_total + v_gateway_total;
     v_tax_total := CASE WHEN v_taxable > 0 AND COALESCE(v_tax_rate, 0) > 0
                    THEN round(v_taxable * v_tax_rate)::int ELSE 0 END;
     SELECT COALESCE(a.zip_code, ''), trc.state, trc.county, trc.city,
@@ -133,8 +139,8 @@ BEGIN
                 tax_cents, tax_rate, tax_state, tax_county, tax_city, tax_calculated_at,
                 hold_expires_at, created_at, updated_at)
             VALUES (v_tenant, v_number, 'Pending', p_user_id, p_event_id,
-                v_bd.selling_price_cents * p_seats,
-                (v_bd.platform_fee_cents + v_bd.gateway_fee_cents) * p_seats + v_tax_total,
+                v_sub,
+                v_platform_total + v_gateway_total + v_tax_total,
                 v_taxable + v_tax_total, p_seats,
                 v_tax_total, v_tax_rate, v_tstate, v_tcounty, v_tcity, now(),
                 now() + make_interval(secs => v_hold), now(), now())
@@ -168,10 +174,10 @@ BEGIN
             NULL, v_prices_id, 1, v_code, v_qr, v_seat_idx, 'Unassigned',
             v_bd.base_price_cents, v_bd.selling_price_cents, v_bd.discount_cents,
             v_bd.applied_price_rules_id, v_bd.applied_rule_name,
-            v_bd.platform_fee_cents, v_bd.gateway_fee_cents,
+            0, 0,
             v_bd.selling_price_cents,
-            v_bd.platform_fee_cents + v_bd.gateway_fee_cents + v_bd.tax_cents,
-            v_bd.final_price_cents, v_bd.final_price_cents, v_bd.currency,
+            0,
+            v_bd.selling_price_cents, v_bd.selling_price_cents, v_bd.currency,
             now(), now());
     END LOOP;
 
