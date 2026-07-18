@@ -225,8 +225,8 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
         }
         catch (PostgresException ex) when (ex.SqlState == "P0004")
         {
-            throw new RpcException(new Status(StatusCode.NotFound,
-                "No account found for this Google account on this portal. Ask your administrator for an invitation."));
+            throw new RpcException(new Status(StatusCode.FailedPrecondition,
+                "This account is not allowed to use Google sign-in. Sign in with your password, then connect Google from your profile."));
         }
         await using (reader)
         {

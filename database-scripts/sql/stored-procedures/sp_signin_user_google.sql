@@ -37,6 +37,11 @@ BEGIN
         RETURN;
     END IF;
 
+    IF NOT (p_role = ANY(p_allowed_roles)) THEN
+        RAISE EXCEPTION 'Google sign-in is not linked to this account'
+            USING ERRCODE = 'P0004';
+    END IF;
+
     SELECT users_id, is_active, google_subject
       INTO v_id, v_is_active, v_existing_google_subject
       FROM users
@@ -47,10 +52,6 @@ BEGIN
       LIMIT 1;
 
     IF v_id IS NULL THEN
-        IF NOT (p_role = ANY(p_allowed_roles)) THEN
-            RAISE EXCEPTION 'No account found for this Google account'
-                USING ERRCODE = 'P0004';
-        END IF;
         INSERT INTO users (
             tenants_id, email, email_hash, first_name, last_name,
             password_hash, role, email_verified, email_verified_at,
