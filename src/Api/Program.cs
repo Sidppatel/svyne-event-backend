@@ -25,6 +25,12 @@ if (!builder.Environment.IsDevelopment())
     {
         throw new InvalidOperationException("JWT_SIGNING_KEY must be set outside Development");
     }
+    var hasPepper = Enumerable.Range(1, 16)
+        .Any(v => !string.IsNullOrEmpty(builder.Configuration[$"PASSWORD_PEPPER_V{v}"]));
+    if (!hasPepper)
+    {
+        throw new InvalidOperationException("At least one PASSWORD_PEPPER_V* must be set outside Development");
+    }
     if (!string.IsNullOrEmpty(builder.Configuration["STRIPE_SECRET_KEY"])
         && string.IsNullOrEmpty(builder.Configuration["STRIPE_WEBHOOK_SECRET"]))
     {

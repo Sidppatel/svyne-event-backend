@@ -34,9 +34,11 @@ public sealed class RateLimitPolicy : IDisposable
     public const string ResetHeaderName = "X-RateLimit-Reset";
 
     private const string RateLimitEnabledSetting = "RATE_LIMIT_ENABLED";
+    private const string TrustForwardedHeadersSetting = "RATE_LIMIT_TRUST_FORWARDED_HEADERS";
     private const string ExplicitlyDisabledValue = "false";
 
     private readonly bool enabled;
+    private readonly bool trustForwardedHeaders;
     private readonly PartitionedRateLimiter<HttpContext> identityLimiter;
     private readonly PartitionedRateLimiter<HttpContext> tenantLimiter;
     private readonly PartitionedRateLimiter<HttpContext> chainedLimiter;
@@ -45,6 +47,8 @@ public sealed class RateLimitPolicy : IDisposable
     {
         enabled = !string.Equals(
             configuration[RateLimitEnabledSetting], ExplicitlyDisabledValue, StringComparison.OrdinalIgnoreCase);
+        trustForwardedHeaders = !string.Equals(
+            configuration[TrustForwardedHeadersSetting], ExplicitlyDisabledValue, StringComparison.OrdinalIgnoreCase);
         identityLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
             httpContext => CreatePartition(ResolveIdentityBucket(httpContext)));
         tenantLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
@@ -170,26 +174,29 @@ public sealed class RateLimitPolicy : IDisposable
             || path.StartsWithSegments(StripeWebhookPath);
     }
 
-    private static string ResolveClientIp(HttpContext httpContext)
+    private string ResolveClientIp(HttpContext httpContext)
     {
-        var cloudflareIp = httpContext.Request.Headers[CloudflareConnectingIpHeader].ToString();
-        if (!string.IsNullOrWhiteSpace(cloudflareIp))
+        if (trustForwardedHeaders)
         {
-            return cloudflareIp.Trim();
-        }
-        var forwardedFor = httpContext.Request.Headers[ForwardedForHeader].ToString();
-        if (!string.IsNullOrWhiteSpace(forwardedFor))
-        {
-            var leftMost = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (leftMost.Length > 0)
+            var cloudflareIp = httpContext.Request.Headers[CloudflareConnectingIpHeader].ToString();
+            if (!string.IsNullOrWhiteSpace(cloudflareIp))
             {
-                return leftMost[0];
+                return cloudflareIp.Trim();
             }
-        }
-        var realIp = httpContext.Request.Headers[RealIpHeader].ToString();
-        if (!string.IsNullOrWhiteSpace(realIp))
-        {
-            return realIp.Trim();
+            var forwardedFor = httpContext.Request.Headers[ForwardedForHeader].ToString();
+            if (!string.IsNullOrWhiteSpace(forwardedFor))
+            {
+                var leftMost = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (leftMost.Length > 0)
+                {
+                    return leftMost[0];
+                }
+            }
+            var realIp = httpContext.Request.Headers[RealIpHeader].ToString();
+            if (!string.IsNullOrWhiteSpace(realIp))
+            {
+                return realIp.Trim();
+            }
         }
         return httpContext.Connection.RemoteIpAddress?.ToString() ?? UnknownClientIp;
     }

@@ -464,8 +464,9 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
     private static object NullIfEmpty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? DBNull.Value : value;
 
-    public override Task<AuthResponse> RefreshToken(RefreshTokenRequest request, ServerCallContext context)
+    public override async Task<AuthResponse> RefreshToken(RefreshTokenRequest request, ServerCallContext context)
     {
+        var ct = context.CancellationToken;
         var v = jwt.ValidationParameters;
         var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler { MapInboundClaims = false };
         var parameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
@@ -497,18 +498,37 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
             throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid refresh token"));
         }
         var email = principal.FindFirst("email")?.Value ?? string.Empty;
-        var role = int.TryParse(principal.FindFirst("role")?.Value, out var r) ? r : 0;
         var slug = principal.FindFirst("tenant_slug")?.Value ?? string.Empty;
-        Guid? tenantsId = Guid.TryParse(principal.FindFirst("tenants_id")?.Value, out var t) ? t : null;
+        Guid? tokenTenant = Guid.TryParse(principal.FindFirst("tenants_id")?.Value, out var t) ? t : null;
+
+        await using var connection = await db.OpenAsync(null, null, ct);
+        await using var cmd = new NpgsqlCommand(
+            "SELECT tenants_id, role, email, is_active FROM sp_get_user_by_email_hash(@h) "
+            + "WHERE users_id = @u AND tenants_id IS NOT DISTINCT FROM @tenant LIMIT 1", connection);
+        cmd.Parameters.AddWithValue("h", EmailHasher.Hash(email));
+        cmd.Parameters.AddWithValue("u", usersId);
+        cmd.Parameters.AddWithValue("tenant", (object?)tokenTenant ?? DBNull.Value);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid refresh token"));
+        }
+        if (!reader.GetBoolean(3))
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Account disabled"));
+        }
+        var rowTenant = reader.IsDBNull(0) ? (Guid?)null : reader.GetGuid(0);
+        var role = reader.GetInt16(1);
+        var freshEmail = reader.GetString(2);
         var profile = new UserProfile
         {
             UsersId = usersId.ToString(),
-            TenantsId = tenantsId?.ToString() ?? string.Empty,
-            Email = email,
+            TenantsId = rowTenant?.ToString() ?? string.Empty,
+            Email = freshEmail,
             Role = role,
             TenantSlug = slug
         };
-        return Task.FromResult(BuildAuth(usersId, email, tenantsId, role, slug, profile));
+        return BuildAuth(usersId, freshEmail, rowTenant, role, slug, profile);
     }
 
     public override async Task<TicketSpan.Protos.Common.AckResponse> Logout(LogoutRequest request, ServerCallContext context)

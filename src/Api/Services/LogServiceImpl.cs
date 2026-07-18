@@ -111,7 +111,10 @@ public sealed class LogServiceImpl : LogService.LogServiceBase
         => QueryAsync("SELECT id, timestamp, action, entity_type, user_email, category FROM vw_system_logs ORDER BY timestamp DESC LIMIT @lim OFFSET @off", request, context);
 
     public override Task<LogPage> GetDeveloperLogs(LogQuery request, ServerCallContext context)
-        => QueryAsync("SELECT id, timestamp, request_method, request_path, severity, message FROM vw_developer_logs ORDER BY timestamp DESC LIMIT @lim OFFSET @off", request, context);
+    {
+        RequireDeveloper();
+        return QueryAsync("SELECT id, timestamp, request_method, request_path, severity, message FROM vw_developer_logs ORDER BY timestamp DESC LIMIT @lim OFFSET @off", request, context);
+    }
 
     public override async Task<ErrorLogPage> GetErrorLogs(ErrorLogQuery request, ServerCallContext context)
     {
