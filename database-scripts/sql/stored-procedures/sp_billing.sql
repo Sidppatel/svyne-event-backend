@@ -220,7 +220,7 @@ BEGIN
     VALUES (gen_random_uuid(), v_tenant, 'pay_per_event', p_tier, p_events_id, t.price_cents,
         format('Pay Per Event: %s', replace(initcap(replace(p_tier, '_', ' ')), ' Event', ' Event')), now(), now());
 
-    v_formula := app.ensure_tier_formula('ppe:' || p_tier, t.percent_bps, t.flat_cents, t.min_fee_cents);
+    v_formula := app.ensure_tier_formula('ppe:' || p_tier, t.percent_bps, t.flat_cents);
     UPDATE events SET fee_formulas_id = v_formula, fee_override_expires_at = NULL, updated_at = now()
      WHERE events_id = p_events_id;
     PERFORM app.recompute_event_cached_fees(p_events_id);
@@ -343,9 +343,11 @@ BEGIN
      WHERE events_id = p_events_id;
 END; $$;
 
+DROP FUNCTION IF EXISTS sp_set_event_fee_override(uuid, int, int, int, int, timestamptz);
+
 CREATE OR REPLACE FUNCTION sp_set_event_fee_override(
     p_events_id uuid, p_percent_bps int, p_flat_cents int,
-    p_min_fee_cents int, p_max_fee_cents int, p_expires_at timestamptz
+    p_max_fee_cents int, p_expires_at timestamptz
 ) RETURNS uuid LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -357,14 +359,14 @@ BEGIN
     SELECT fee_formulas_id INTO v_formula FROM fee_formulas WHERE name = v_name;
     IF FOUND THEN
         UPDATE fee_formulas SET percent_bps = COALESCE(p_percent_bps, 0),
-            flat_cents = COALESCE(p_flat_cents, 0), min_fee_cents = p_min_fee_cents,
+            flat_cents = COALESCE(p_flat_cents, 0),
             max_fee_cents = p_max_fee_cents, is_active = true, updated_at = now()
          WHERE fee_formulas_id = v_formula;
     ELSE
         INSERT INTO fee_formulas (fee_formulas_id, name, percent_bps, flat_cents,
-            min_fee_cents, max_fee_cents, is_active, created_at, updated_at)
+            max_fee_cents, is_active, created_at, updated_at)
         VALUES (gen_random_uuid(), v_name, COALESCE(p_percent_bps, 0), COALESCE(p_flat_cents, 0),
-            p_min_fee_cents, p_max_fee_cents, true, now(), now())
+            p_max_fee_cents, true, now(), now())
         RETURNING fee_formulas_id INTO v_formula;
     END IF;
     UPDATE events SET fee_formulas_id = v_formula, fee_override_expires_at = p_expires_at, updated_at = now()

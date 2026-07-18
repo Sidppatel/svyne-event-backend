@@ -1,10 +1,10 @@
+DROP VIEW IF EXISTS vw_fee_formulas;
 CREATE OR REPLACE VIEW vw_fee_formulas AS
 SELECT
     f.fee_formulas_id,
     f.name,
     f.percent_bps,
     f.flat_cents,
-    COALESCE(f.min_fee_cents, 0) AS min_fee_cents,
     COALESCE(f.max_fee_cents, 0) AS max_fee_cents,
     f.is_active
 FROM fee_formulas f;

@@ -10,15 +10,16 @@ LANGUAGE plpgsql STABLE
 SET search_path = public, extensions, pg_catalog
 AS $$
 DECLARE
-    v_pct int; v_flat int; v_min int; v_max int; v_active bool;
+    v_pct int; v_flat int; v_max int; v_active bool;
     v_fee int;
 BEGIN
-    IF p_formula IS NULL OR p_price_cents IS NULL THEN
+    -- Free entry (price 0) is never charged a service fee; tax follows (0 base = 0 tax).
+    IF p_formula IS NULL OR p_price_cents IS NULL OR p_price_cents = 0 THEN
         RETURN 0;
     END IF;
 
-    SELECT percent_bps, flat_cents, min_fee_cents, max_fee_cents, is_active
-      INTO v_pct, v_flat, v_min, v_max, v_active
+    SELECT percent_bps, flat_cents, max_fee_cents, is_active
+      INTO v_pct, v_flat, v_max, v_active
       FROM fee_formulas
       WHERE fee_formulas_id = p_formula;
 
@@ -27,7 +28,6 @@ BEGIN
     END IF;
 
     v_fee := round(p_price_cents::numeric * v_pct / 10000)::int + v_flat;
-    IF v_min IS NOT NULL AND v_fee < v_min THEN v_fee := v_min; END IF;
     IF v_max IS NOT NULL AND v_fee > v_max THEN v_fee := v_max; END IF;
     IF v_fee < 0 THEN v_fee := 0; END IF;
     RETURN v_fee;

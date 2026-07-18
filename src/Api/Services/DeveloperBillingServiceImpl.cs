@@ -318,7 +318,7 @@ public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.Develo
         var response = new FeeOverrideList();
         await using var cmd = new NpgsqlCommand(
             "SELECT scope, tenants_id, tenant_name, tenant_slug, events_id, event_title, percent_bps, flat_cents, "
-            + "min_fee_cents, max_fee_cents, standard_percent_bps, standard_flat_cents, expires_at, updated_at "
+            + "max_fee_cents, standard_percent_bps, standard_flat_cents, expires_at, updated_at "
             + "FROM vw_fee_overrides ORDER BY updated_at DESC LIMIT 500", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -333,12 +333,11 @@ public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.Develo
                 EventTitle = reader.IsDBNull(5) ? "" : reader.GetString(5),
                 PercentBps = reader.GetInt32(6),
                 FlatCents = reader.GetInt32(7),
-                MinFeeCents = reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
-                MaxFeeCents = reader.IsDBNull(9) ? 0 : reader.GetInt32(9),
-                StandardPercentBps = reader.GetInt32(10),
-                StandardFlatCents = reader.GetInt32(11),
-                ExpiresAtEpochSeconds = EpochOrZero(reader, 12),
-                UpdatedAtEpochSeconds = EpochOrZero(reader, 13)
+                MaxFeeCents = reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
+                StandardPercentBps = reader.GetInt32(9),
+                StandardFlatCents = reader.GetInt32(10),
+                ExpiresAtEpochSeconds = EpochOrZero(reader, 11),
+                UpdatedAtEpochSeconds = EpochOrZero(reader, 12)
             });
         }
         return response;
@@ -351,13 +350,11 @@ public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.Develo
         var ct = context.CancellationToken;
         var eventsId = Guid.Parse(request.EventsId);
         await using var connection = await OpenAsync(ct);
-        await ExecSpAsync(connection, "SELECT sp_set_event_fee_override(@e, @bps, @flat, @min, @max, @exp)", cmd =>
+        await ExecSpAsync(connection, "SELECT sp_set_event_fee_override(@e, @bps, @flat, @max, @exp)", cmd =>
         {
             cmd.Parameters.AddWithValue("e", eventsId);
             cmd.Parameters.AddWithValue("bps", request.PercentBps);
             cmd.Parameters.AddWithValue("flat", request.FlatCents);
-            cmd.Parameters.Add(new NpgsqlParameter("min", NpgsqlDbType.Integer)
-            { Value = request.MinFeeCents > 0 ? request.MinFeeCents : DBNull.Value });
             cmd.Parameters.Add(new NpgsqlParameter("max", NpgsqlDbType.Integer)
             { Value = request.MaxFeeCents > 0 ? request.MaxFeeCents : DBNull.Value });
             cmd.Parameters.Add(new NpgsqlParameter("exp", NpgsqlDbType.TimestampTz)
@@ -372,7 +369,6 @@ public sealed class DeveloperBillingServiceImpl : DeveloperBillingService.Develo
             {
                 percent_bps = request.PercentBps,
                 flat_cents = request.FlatCents,
-                min_fee_cents = request.MinFeeCents,
                 max_fee_cents = request.MaxFeeCents,
                 expires_at_epoch_seconds = request.ExpiresAtEpochSeconds,
                 reason = request.Reason

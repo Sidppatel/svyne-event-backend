@@ -5,35 +5,35 @@
 
 
 CREATE OR REPLACE FUNCTION app.tier_pricing(p_tier text)
-RETURNS TABLE(monthly_cents int, percent_bps int, flat_cents int, min_fee_cents int)
+RETURNS TABLE(monthly_cents int, percent_bps int, flat_cents int)
 LANGUAGE sql IMMUTABLE
 SET search_path = public, extensions, pg_catalog
 AS $$
-    SELECT t.monthly_cents, t.percent_bps, t.flat_cents, t.min_fee_cents FROM (VALUES
-        ('free',             0, 650, 175, 200),
-        ('trial',            0, 550, 150, 200),
-        ('suspended',        0, 650, 175, 200),
-        ('starter',       4900, 600, 150, 200),
-        ('professional',  9900, 550, 150, 200),
-        ('business',     19900, 500, 125, 200),
-        ('enterprise',   39900, 450, 125, 200)
-    ) AS t(tier, monthly_cents, percent_bps, flat_cents, min_fee_cents)
+    SELECT t.monthly_cents, t.percent_bps, t.flat_cents FROM (VALUES
+        ('free',             0, 650, 175),
+        ('trial',            0, 550, 150),
+        ('suspended',        0, 650, 175),
+        ('starter',       4900, 600, 150),
+        ('professional',  9900, 550, 150),
+        ('business',     19900, 500, 125),
+        ('enterprise',   39900, 450, 125)
+    ) AS t(tier, monthly_cents, percent_bps, flat_cents)
     WHERE t.tier = p_tier;
 $$;
 
 
 CREATE OR REPLACE FUNCTION app.event_tier_pricing(p_tier text)
-RETURNS TABLE(price_cents int, percent_bps int, flat_cents int, min_fee_cents int,
+RETURNS TABLE(price_cents int, percent_bps int, flat_cents int,
               sms_credits int, custom_domain_limit int)
 LANGUAGE sql IMMUTABLE
 SET search_path = public, extensions, pg_catalog
 AS $$
-    SELECT t.price_cents, t.percent_bps, t.flat_cents, t.min_fee_cents, t.sms_credits, t.custom_domain_limit FROM (VALUES
-        ('starter_event',     2500, 600, 150, 200,    0, 0),
-        ('pro_event',         4900, 550, 150, 200,    0, 1),
-        ('business_event',    9900, 500, 125, 200,  500, 2),
-        ('enterprise_event', 19900, 450, 125, 200, 2500, 2)
-    ) AS t(tier, price_cents, percent_bps, flat_cents, min_fee_cents, sms_credits, custom_domain_limit)
+    SELECT t.price_cents, t.percent_bps, t.flat_cents, t.sms_credits, t.custom_domain_limit FROM (VALUES
+        ('starter_event',     2500, 600, 150,    0, 0),
+        ('pro_event',         4900, 550, 150,    0, 1),
+        ('business_event',    9900, 500, 125,  500, 2),
+        ('enterprise_event', 19900, 450, 125, 2500, 2)
+    ) AS t(tier, price_cents, percent_bps, flat_cents, sms_credits, custom_domain_limit)
     WHERE t.tier = p_tier;
 $$;
 
@@ -68,7 +68,9 @@ END; $$;
 
 
 
-CREATE OR REPLACE FUNCTION app.ensure_tier_formula(p_name text, p_percent_bps int, p_flat_cents int, p_min_fee_cents int)
+DROP FUNCTION IF EXISTS app.ensure_tier_formula(text, int, int, int);
+
+CREATE OR REPLACE FUNCTION app.ensure_tier_formula(p_name text, p_percent_bps int, p_flat_cents int)
 RETURNS uuid
 LANGUAGE plpgsql
 SET search_path = public, extensions, pg_catalog
@@ -79,15 +81,14 @@ BEGIN
     IF FOUND THEN
         UPDATE fee_formulas
            SET percent_bps = p_percent_bps, flat_cents = p_flat_cents,
-               min_fee_cents = p_min_fee_cents, is_active = true, updated_at = now()
+               is_active = true, updated_at = now()
          WHERE fee_formulas_id = v_id
-           AND (percent_bps <> p_percent_bps OR flat_cents <> p_flat_cents
-                OR min_fee_cents IS DISTINCT FROM p_min_fee_cents OR is_active = false);
+           AND (percent_bps <> p_percent_bps OR flat_cents <> p_flat_cents OR is_active = false);
         RETURN v_id;
     END IF;
     INSERT INTO fee_formulas (fee_formulas_id, name, percent_bps, flat_cents,
-        min_fee_cents, max_fee_cents, is_active, created_at, updated_at)
-    VALUES (gen_random_uuid(), p_name, p_percent_bps, p_flat_cents, p_min_fee_cents, NULL, true, now(), now())
+        max_fee_cents, is_active, created_at, updated_at)
+    VALUES (gen_random_uuid(), p_name, p_percent_bps, p_flat_cents, NULL, true, now(), now())
     RETURNING fee_formulas_id INTO v_id;
     RETURN v_id;
 END; $$;

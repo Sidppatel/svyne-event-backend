@@ -1,25 +1,28 @@
 
 
 
+DROP FUNCTION IF EXISTS sp_create_fee_formula(text, int, int, int, int);
+DROP FUNCTION IF EXISTS sp_update_fee_formula(uuid, text, int, int, int, int, bool);
+
 CREATE OR REPLACE FUNCTION sp_create_fee_formula(
     p_name text, p_percent_bps int, p_flat_cents int,
-    p_min_fee_cents int DEFAULT NULL, p_max_fee_cents int DEFAULT NULL
+    p_max_fee_cents int DEFAULT NULL
 ) RETURNS uuid LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
 DECLARE v_id uuid;
 BEGIN
     INSERT INTO fee_formulas (fee_formulas_id, name, percent_bps, flat_cents,
-        min_fee_cents, max_fee_cents, is_active, created_at, updated_at)
+        max_fee_cents, is_active, created_at, updated_at)
     VALUES (gen_random_uuid(), p_name, COALESCE(p_percent_bps, 0), COALESCE(p_flat_cents, 0),
-        p_min_fee_cents, p_max_fee_cents, true, now(), now())
+        p_max_fee_cents, true, now(), now())
     RETURNING fee_formulas_id INTO v_id;
     RETURN v_id;
 END; $$;
 
 CREATE OR REPLACE FUNCTION sp_update_fee_formula(
     p_id uuid, p_name text, p_percent_bps int, p_flat_cents int,
-    p_min_fee_cents int, p_max_fee_cents int, p_is_active bool
+    p_max_fee_cents int, p_is_active bool
 ) RETURNS void LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -28,7 +31,6 @@ BEGIN
         name = COALESCE(p_name, name),
         percent_bps = COALESCE(p_percent_bps, percent_bps),
         flat_cents = COALESCE(p_flat_cents, flat_cents),
-        min_fee_cents = p_min_fee_cents,
         max_fee_cents = p_max_fee_cents,
         is_active = COALESCE(p_is_active, is_active),
         updated_at = now()

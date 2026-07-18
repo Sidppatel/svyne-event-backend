@@ -256,6 +256,66 @@ public sealed partial class BookingServiceImpl
         };
     }
 
+    public override async Task<PaymentStatusResponse> ConfirmFreeBooking(UuidValue request, ServerCallContext context)
+    {
+        var ct = context.CancellationToken;
+        RequireUser();
+        if (!Guid.TryParse(request.Value, out var bookingId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid booking id"));
+        }
+
+        await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
+
+        string status;
+        long total;
+        try
+        {
+            await using var cmd = new NpgsqlCommand(
+                "SELECT status, total_cents FROM sp_get_booking_for_payment(@b, @u)", connection);
+            cmd.Parameters.AddWithValue("b", bookingId);
+            cmd.Parameters.AddWithValue("u", tenantContext.UsersId!);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                throw new RpcException(new Status(StatusCode.NotFound, "Booking not found"));
+            }
+            status = reader.GetString(0);
+            total = reader.GetInt32(1);
+        }
+        catch (PostgresException ex)
+        {
+            throw MapPostgres(ex);
+        }
+
+        if (status is "Paid" or "CheckedIn")
+        {
+            return new PaymentStatusResponse { BookingStatus = status, PaymentStatus = "Succeeded" };
+        }
+        if (total != 0)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition,
+                "This booking requires payment. Use card checkout."));
+        }
+
+        var qrToken = Convert.ToHexString(
+            System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        bool confirmed;
+        await using (var confirm = new NpgsqlCommand("SELECT sp_confirm_booking(@b, @qr)", connection))
+        {
+            confirm.Parameters.AddWithValue("b", bookingId);
+            confirm.Parameters.AddWithValue("qr", qrToken);
+            confirmed = await confirm.ExecuteScalarAsync(ct) is true;
+        }
+        if (confirmed)
+        {
+            await BookingEmailSender.SendBookingConfirmationEmailAsync(
+                connection, bookingId, email, templates, settings, logger, ct);
+        }
+
+        return new PaymentStatusResponse { BookingStatus = "Paid", PaymentStatus = "Succeeded" };
+    }
+
     public override async Task<PaymentStatusResponse> GetPaymentStatus(UuidValue request, ServerCallContext context)
     {
         var ct = context.CancellationToken;

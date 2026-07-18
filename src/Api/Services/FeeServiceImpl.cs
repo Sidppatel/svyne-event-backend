@@ -26,7 +26,7 @@ public sealed class FeeServiceImpl : FeeService.FeeServiceBase
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT fee_formulas_id, name, percent_bps, flat_cents, "
-            + "min_fee_cents, max_fee_cents, is_active "
+            + "max_fee_cents, is_active "
             + "FROM vw_fee_formulas ORDER BY is_active DESC, name", connection);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -42,9 +42,8 @@ public sealed class FeeServiceImpl : FeeService.FeeServiceBase
         Name = r.GetString(1),
         PercentBps = r.GetInt32(2),
         FlatCents = r.GetInt32(3),
-        MinFeeCents = r.GetInt32(4),
-        MaxFeeCents = r.GetInt32(5),
-        IsActive = r.GetBoolean(6)
+        MaxFeeCents = r.GetInt32(4),
+        IsActive = r.GetBoolean(5)
     };
 
     public override async Task<UuidValue> CreateFeeFormula(FeeFormulaInput request, ServerCallContext context)
@@ -53,11 +52,10 @@ public sealed class FeeServiceImpl : FeeService.FeeServiceBase
         RequireDeveloper();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_create_fee_formula(@name, @pct, @flat, @min, @max)", connection);
+            "SELECT sp_create_fee_formula(@name, @pct, @flat, @max)", connection);
         cmd.Parameters.AddWithValue("name", request.Name);
         cmd.Parameters.AddWithValue("pct", request.PercentBps);
         cmd.Parameters.AddWithValue("flat", request.FlatCents);
-        cmd.Parameters.AddWithValue("min", request.MinFeeCents == 0 ? DBNull.Value : request.MinFeeCents);
         cmd.Parameters.AddWithValue("max", request.MaxFeeCents == 0 ? DBNull.Value : request.MaxFeeCents);
         var id = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
         return new UuidValue { Value = id.ToString() };
@@ -69,12 +67,11 @@ public sealed class FeeServiceImpl : FeeService.FeeServiceBase
         RequireDeveloper();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_update_fee_formula(@id, @name, @pct, @flat, @min, @max, @active)", connection);
+            "SELECT sp_update_fee_formula(@id, @name, @pct, @flat, @max, @active)", connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(request.FeeFormulasId));
         cmd.Parameters.AddWithValue("name", request.Name);
         cmd.Parameters.AddWithValue("pct", request.PercentBps);
         cmd.Parameters.AddWithValue("flat", request.FlatCents);
-        cmd.Parameters.AddWithValue("min", request.MinFeeCents == 0 ? DBNull.Value : request.MinFeeCents);
         cmd.Parameters.AddWithValue("max", request.MaxFeeCents == 0 ? DBNull.Value : request.MaxFeeCents);
         cmd.Parameters.AddWithValue("active", request.IsActive);
         await cmd.ExecuteNonQueryAsync(ct);

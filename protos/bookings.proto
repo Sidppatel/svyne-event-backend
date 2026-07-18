@@ -22,6 +22,9 @@ service BookingService {
   // intent amount server-side. Returns the new total + ACH savings.
   rpc UpdatePaymentIntentForMethod (UpdatePaymentMethodRequest) returns (UpdatePaymentMethodResponse);
   rpc GetPaymentStatus (ticketspan.common.UuidValue) returns (PaymentStatusResponse);
+  // Free events (order total = 0): issue the ticket directly with no Stripe payment.
+  // Server re-checks the booking total is 0 before confirming.
+  rpc ConfirmFreeBooking (ticketspan.common.UuidValue) returns (PaymentStatusResponse);
   rpc ConfirmBooking (ConfirmBookingRequest) returns (ticketspan.common.AckResponse);
   rpc CancelBooking (ticketspan.common.UuidValue) returns (ticketspan.common.AckResponse);
   rpc RefundBooking (ticketspan.common.UuidValue) returns (ticketspan.common.AckResponse);

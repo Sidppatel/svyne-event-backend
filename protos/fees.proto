@@ -20,20 +20,22 @@ service FeeService {
 }
 
 message FeeFormula {
+  reserved 5;
+  reserved "min_fee_cents";
   string fee_formulas_id = 1;
   string name = 2;
   int32 percent_bps = 3;     // 600 = 6.00%
   int32 flat_cents = 4;      // 150 = $1.50
-  int32 min_fee_cents = 5;   // 0 = unset
   int32 max_fee_cents = 6;   // 0 = unset
   bool is_active = 7;
 }
 
 message FeeFormulaInput {
+  reserved 4;
+  reserved "min_fee_cents";
   string name = 1;
   int32 percent_bps = 2;
   int32 flat_cents = 3;
-  int32 min_fee_cents = 4;
   int32 max_fee_cents = 5;
 }
 

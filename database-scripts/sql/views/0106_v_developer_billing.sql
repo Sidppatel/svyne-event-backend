@@ -72,6 +72,7 @@ JOIN tenants t ON t.tenants_id = a.tenants_id;
 
 
 
+DROP VIEW IF EXISTS vw_fee_overrides;
 CREATE OR REPLACE VIEW vw_fee_overrides AS
 SELECT
     'tenant'::text                                  AS scope,
@@ -82,7 +83,6 @@ SELECT
     NULL::text                                      AS event_title,
     ff.percent_bps,
     ff.flat_cents,
-    ff.min_fee_cents,
     ff.max_fee_cents,
     std.percent_bps                                 AS standard_percent_bps,
     std.flat_cents                                  AS standard_flat_cents,
@@ -102,7 +102,6 @@ SELECT
     e.title,
     ff.percent_bps,
     ff.flat_cents,
-    ff.min_fee_cents,
     ff.max_fee_cents,
     std.percent_bps,
     std.flat_cents,
