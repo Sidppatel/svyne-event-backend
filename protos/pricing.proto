@@ -70,7 +70,7 @@ message PriceRule {
   string price_rules_id = 1;
   string prices_id = 2;              // set when scope = Price; empty for event-wide
   string name = 3;
-  string rule_type = 4;              // Presale | LastMinute | TimeWindow | Dynamic
+  string rule_type = 4;              // Presale | LastMinute | TimeWindow | Dynamic | Group
   int32 priority = 5;                // higher wins
   int32 price_cents = 6;
   int64 active_from = 7;             // unix seconds; 0 = unset
@@ -81,6 +81,13 @@ message PriceRule {
   string scope = 12;                 // Price | Event
   string events_id = 13;             // set when scope = Event; empty otherwise
   int32 capacity = 14;               // discount applies only to this many people/seats (0 = no cap)
+  // Group tier fields; only meaningful when rule_type = Group. min_qty is the
+  // cart quantity that triggers the tier, max_qty its upper bound (0 = open).
+  // Among qualifying tiers the highest min_qty wins.
+  int32 min_qty = 15;                // 0 = unset
+  int32 max_qty = 16;                // 0 = unset
+  string discount_kind = 17;         // FixedUnitPrice | PercentOff | AmountOffOrder; empty = unset
+  int32 discount_bps = 18;           // basis points for PercentOff (1500 = 15%)
 }
 
 message CreatePriceRuleRequest {
@@ -97,6 +104,10 @@ message CreatePriceRuleRequest {
   int32 max_remaining = 9;
   string scope = 10;                 // Price | Event; empty = Price
   int32 capacity = 11;               // discount applies only to this many people/seats (0 = no cap)
+  int32 min_qty = 12;                // 0 = unset
+  int32 max_qty = 13;                // 0 = unset
+  string discount_kind = 14;         // FixedUnitPrice | PercentOff | AmountOffOrder
+  int32 discount_bps = 15;           // basis points for PercentOff (1500 = 15%)
 }
 
 message UpdatePriceRuleRequest {
@@ -111,6 +122,10 @@ message UpdatePriceRuleRequest {
   int32 max_remaining = 9;
   bool is_active = 10;
   int32 capacity = 11;               // discount applies only to this many people/seats (0 = no cap)
+  int32 min_qty = 12;                // 0 = unset
+  int32 max_qty = 13;                // 0 = unset
+  string discount_kind = 14;         // FixedUnitPrice | PercentOff | AmountOffOrder
+  int32 discount_bps = 15;           // basis points for PercentOff (1500 = 15%)
 }
 
 message ListPriceRulesResponse {
@@ -122,6 +137,8 @@ message CalculatePriceRequest {
   int32 seats = 2;
   int64 at = 3;                      // unix seconds; 0 = now
   int32 remaining = 4;               // -1 = unknown
+  // Cart quantity used to evaluate Group tiers. 0 = use seats (admin preview).
+  int32 group_qty = 5;
 }
 
 // Full server-authoritative breakdown for one priced line. Every surface (admin
@@ -144,6 +161,12 @@ message PriceBreakdown {
   int32 final_price_cents = 12;      // what the customer pays
   int32 organizer_net_cents = 13;    // what the organizer receives (= selling)
   string currency = 14;
+  // Group tier outcome for this line. When a capacity cap applies, only
+  // group_discounted_seats of the line's seats bill at group_unit_cents and the
+  // remainder bill at standard_unit_cents, so selling is a blended figure.
+  int32 group_discounted_seats = 15;
+  int32 group_unit_cents = 16;
+  int32 standard_unit_cents = 17;
 }
 
 message SetTenantDefaultFeeFormulaRequest {

@@ -146,6 +146,26 @@ message CartQuote {
   bool ach_available = 13;
   int32 ach_total_cents = 14;
   int32 ach_savings_cents = 15;
+  // Everything the group-discount banner renders, computed server-side. Always
+  // present; applied_min_qty = 0 means no tier is active for this cart.
+  GroupDiscountHint group_discount = 16;
+}
+
+// Server-computed group-discount state for a cart. The client renders these
+// values verbatim and never derives savings itself.
+message GroupDiscountHint {
+  string applied_rule_name = 1;      // empty = no tier applied
+  int32 applied_min_qty = 2;         // 0 = no tier applied
+  int32 group_discount_cents = 3;    // what the group tier saved on this cart
+  int32 discounted_seats = 4;        // seats that actually received the tier price
+  bool capped = 5;                   // true = a capacity cap left some seats at full price
+  int32 eligible_qty = 6;            // ticket seats counted toward the threshold
+  // The next tier up, if any. next_tier_min_qty = 0 means there is none.
+  int32 next_tier_min_qty = 7;
+  int32 next_tier_seats_away = 8;
+  string next_tier_kind = 9;         // FixedUnitPrice | PercentOff | AmountOffOrder
+  int32 next_tier_bps = 10;
+  int32 next_tier_price_cents = 11;
 }
 
 message BookingLineInput {

@@ -42,8 +42,20 @@ public class PriceRule : BaseEntity
     
     public int? MaxRemaining { get; set; }
 
-    
+
     public int? Capacity { get; set; }
+
+
+    public int? MinQty { get; set; }
+
+
+    public int? MaxQty { get; set; }
+
+
+    public GroupDiscountKind? DiscountKind { get; set; }
+
+
+    public int? DiscountBps { get; set; }
 
     public bool IsActive { get; set; } = true;
 }

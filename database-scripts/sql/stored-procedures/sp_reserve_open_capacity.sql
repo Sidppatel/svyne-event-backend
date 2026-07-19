@@ -26,6 +26,7 @@ DECLARE
     v_prices_id uuid;
     v_bd record;
     v_seat_idx int;
+    v_seat_price int;
     v_code text;
     v_qr text;
     v_tax_rate numeric; v_tax_total int; v_taxable int;
@@ -107,10 +108,10 @@ BEGIN
         END IF;
     END IF;
 
-    SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), 1,
-                             app.remaining_for_price(v_prices_id));
+    SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), p_seats,
+                             app.remaining_for_price(v_prices_id), p_seats, p_seats);
 
-    v_sub := v_bd.selling_price_cents * p_seats;
+    v_sub := v_bd.selling_price_cents;
     SELECT ofees.platform_fee_cents, ofees.gateway_fee_cents
       INTO v_platform_total, v_gateway_total
       FROM app.order_fees(p_event_id, v_sub, 'card') ofees;
@@ -162,6 +163,8 @@ BEGIN
     FOR v_seat_idx IN 1..p_seats LOOP
         v_code := 'TK-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 8));
         v_qr := encode(gen_random_bytes(32), 'hex');
+        v_seat_price := CASE WHEN v_seat_idx <= COALESCE(v_bd.group_discounted_seats, 0)
+                             THEN v_bd.group_unit_cents ELSE v_bd.standard_unit_cents END;
 
         INSERT INTO booking_lines (tenants_id, bookings_id, events_id, kind, event_ticket_types_id,
             tables_id, prices_id, seats, ticket_code, qr_token, seat_number, status,
@@ -172,12 +175,13 @@ BEGIN
             created_at, updated_at)
         VALUES (v_tenant, v_id, p_event_id, 'Ticket', p_event_ticket_type_id,
             NULL, v_prices_id, 1, v_code, v_qr, v_seat_idx, 'Unassigned',
-            v_bd.base_price_cents, v_bd.selling_price_cents, v_bd.discount_cents,
+            v_bd.base_price_cents / GREATEST(p_seats, 1), v_seat_price,
+            GREATEST(v_bd.base_price_cents / GREATEST(p_seats, 1) - v_seat_price, 0),
             v_bd.applied_price_rules_id, v_bd.applied_rule_name,
             0, 0,
-            v_bd.selling_price_cents,
+            v_seat_price,
             0,
-            v_bd.selling_price_cents, v_bd.selling_price_cents, v_bd.currency,
+            v_seat_price, v_seat_price, v_bd.currency,
             now(), now());
     END LOOP;
 

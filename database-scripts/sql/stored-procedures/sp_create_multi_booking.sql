@@ -23,6 +23,14 @@ DECLARE
     v_global_seat_idx int := 0;
     v_code text;
     v_qr text;
+    v_qty_event int := 0; v_qty_price int;
+    v_qty_by_price jsonb := '{}'::jsonb;
+    v_ticket_subtotal int := 0;
+    v_order record; v_order_amount int := 0; v_allocated int := 0;
+    v_idx int := 0; v_max_idx int := 0; v_max_selling int := -1;
+    v_alloc int; v_line_alloc int; v_seat_alloc int; v_seat_price int;
+    v_grp_seats int; v_grp_unit int; v_std_unit int; v_base_unit int;
+    v_adjusted jsonb := '[]'::jsonb; v_has_unit_group boolean := false;
 BEGIN
     SELECT event_type, tenants_id INTO v_event_type, v_tenant
       FROM events WHERE events_id = p_event_id FOR UPDATE;
@@ -48,6 +56,21 @@ BEGIN
 
     SELECT COALESCE((SELECT value::int FROM app_settings WHERE key = 'booking_hold_seconds'), 600)
       INTO v_hold;
+
+    FOR v_line IN SELECT * FROM jsonb_array_elements(p_lines) LOOP
+        IF v_line->>'kind' <> 'Ticket' THEN
+            CONTINUE;
+        END IF;
+        v_seats := GREATEST(COALESCE((v_line->>'seats')::int, 1), 1);
+        SELECT ett.prices_id INTO v_prices_id
+          FROM event_ticket_types ett WHERE ett.event_ticket_types_id = (v_line->>'ref_id')::uuid;
+        IF v_prices_id IS NULL THEN
+            CONTINUE;
+        END IF;
+        v_qty_event := v_qty_event + v_seats;
+        v_qty_by_price := jsonb_set(v_qty_by_price, ARRAY[v_prices_id::text],
+            to_jsonb(COALESCE((v_qty_by_price->>v_prices_id::text)::int, 0) + v_seats));
+    END LOOP;
 
     FOR v_line IN SELECT * FROM jsonb_array_elements(p_lines) LOOP
         v_kind := v_line->>'kind';
@@ -78,19 +101,29 @@ BEGIN
                 END IF;
             END IF;
 
-            SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), 1,
-                                     app.remaining_for_price(v_prices_id));
+            v_qty_price := COALESCE((v_qty_by_price->>v_prices_id::text)::int, v_seats);
+
+            SELECT * INTO v_bd FROM app.price_breakdown(v_prices_id, now(), v_seats,
+                                     app.remaining_for_price(v_prices_id),
+                                     v_qty_price, v_qty_event);
 
             v_resolved := v_resolved || jsonb_build_object(
                 'kind', 'Ticket', 'ett', v_ref::text, 'tbl', NULL,
                 'prices_id', v_prices_id::text, 'seats', v_seats,
+                'base_unit', v_bd.base_price_cents / v_seats,
                 'base', v_bd.base_price_cents, 'selling', v_bd.selling_price_cents,
                 'discount', v_bd.discount_cents, 'rule_id', v_bd.applied_price_rules_id,
                 'rule_name', v_bd.applied_rule_name, 'platform', 0,
                 'gateway', 0, 'tax', 0,
-                'final', v_bd.selling_price_cents, 'currency', v_bd.currency);
+                'final', v_bd.selling_price_cents, 'currency', v_bd.currency,
+                'grp_seats', v_bd.group_discounted_seats, 'grp_unit', v_bd.group_unit_cents,
+                'std_unit', v_bd.standard_unit_cents);
 
-            v_sub := v_sub + v_bd.selling_price_cents * v_seats;
+            v_sub := v_sub + v_bd.selling_price_cents;
+            v_ticket_subtotal := v_ticket_subtotal + v_bd.selling_price_cents;
+            IF COALESCE(v_bd.group_discounted_seats, 0) > 0 THEN
+                v_has_unit_group := true;
+            END IF;
             v_seats_total := v_seats_total + v_seats;
 
         ELSIF v_kind = 'Table' THEN
@@ -125,11 +158,13 @@ BEGIN
             v_resolved := v_resolved || jsonb_build_object(
                 'kind', 'Table', 'ett', NULL, 'tbl', v_ref::text,
                 'prices_id', v_prices_id::text, 'seats', v_seats,
+                'base_unit', v_bd.base_price_cents,
                 'base', v_bd.base_price_cents, 'selling', v_bd.selling_price_cents,
                 'discount', v_bd.discount_cents, 'rule_id', v_bd.applied_price_rules_id,
                 'rule_name', v_bd.applied_rule_name, 'platform', 0,
                 'gateway', 0, 'tax', 0,
-                'final', v_bd.selling_price_cents, 'currency', v_bd.currency);
+                'final', v_bd.selling_price_cents, 'currency', v_bd.currency,
+                'grp_seats', 0, 'grp_unit', 0, 'std_unit', v_bd.selling_price_cents);
 
             v_sub := v_sub + v_bd.selling_price_cents;
             v_seats_total := v_seats_total + v_seats;
@@ -137,6 +172,49 @@ BEGIN
             RAISE EXCEPTION 'Unknown line kind: %', v_kind USING ERRCODE = '22023';
         END IF;
     END LOOP;
+
+    -- Mirrors sp_quote_cart: order-level group discount, allocated pro-rata across
+    -- ticket lines with the rounding remainder landing on the largest line.
+    IF NOT v_has_unit_group THEN
+        SELECT * INTO v_order FROM app.group_order_discount(p_event_id, v_qty_event, v_ticket_subtotal, now());
+        v_order_amount := COALESCE(v_order.amount_cents, 0);
+    END IF;
+
+    IF v_order_amount > 0 AND v_ticket_subtotal > 0 THEN
+        FOR v_line IN SELECT * FROM jsonb_array_elements(v_resolved) LOOP
+            v_idx := v_idx + 1;
+            IF v_line->>'kind' = 'Ticket' THEN
+                IF (v_line->>'selling')::int > v_max_selling THEN
+                    v_max_selling := (v_line->>'selling')::int;
+                    v_max_idx := v_idx;
+                END IF;
+                v_allocated := v_allocated + (v_order_amount * (v_line->>'selling')::int) / v_ticket_subtotal;
+            END IF;
+        END LOOP;
+
+        v_idx := 0;
+        FOR v_line IN SELECT * FROM jsonb_array_elements(v_resolved) LOOP
+            v_idx := v_idx + 1;
+            v_alloc := 0;
+            IF v_line->>'kind' = 'Ticket' THEN
+                v_alloc := (v_order_amount * (v_line->>'selling')::int) / v_ticket_subtotal;
+                IF v_idx = v_max_idx THEN
+                    v_alloc := v_alloc + (v_order_amount - v_allocated);
+                END IF;
+                v_alloc := LEAST(v_alloc, (v_line->>'selling')::int);
+                v_line := jsonb_set(v_line, '{selling}', to_jsonb((v_line->>'selling')::int - v_alloc));
+                v_line := jsonb_set(v_line, '{discount}', to_jsonb((v_line->>'discount')::int + v_alloc));
+                v_line := jsonb_set(v_line, '{final}', to_jsonb((v_line->>'selling')::int));
+                v_line := jsonb_set(v_line, '{rule_id}', to_jsonb(v_order.price_rules_id::text));
+                v_line := jsonb_set(v_line, '{rule_name}', to_jsonb(v_order.name));
+            END IF;
+            v_line := jsonb_set(v_line, '{alloc}', to_jsonb(v_alloc));
+            v_adjusted := v_adjusted || v_line;
+        END LOOP;
+
+        v_resolved := v_adjusted;
+        v_sub := v_sub - v_order_amount;
+    END IF;
 
     SELECT ofees.platform_fee_cents, ofees.gateway_fee_cents
       INTO v_platform_total, v_gateway_total
@@ -193,10 +271,20 @@ BEGIN
         v_kind := v_line->>'kind';
         IF v_kind = 'Ticket' THEN
             v_seats := (v_line->>'seats')::int;
+            v_grp_seats := COALESCE((v_line->>'grp_seats')::int, 0);
+            v_grp_unit := COALESCE((v_line->>'grp_unit')::int, 0);
+            v_std_unit := COALESCE((v_line->>'std_unit')::int, 0);
+            v_base_unit := COALESCE((v_line->>'base_unit')::int, 0);
+            v_line_alloc := COALESCE((v_line->>'alloc')::int, 0);
             FOR v_seat_idx IN 1..v_seats LOOP
                 v_global_seat_idx := v_global_seat_idx + 1;
                 v_code := 'TK-' || UPPER(SUBSTRING(gen_random_uuid()::text FROM 1 FOR 8));
                 v_qr := encode(gen_random_bytes(32), 'hex');
+
+                v_seat_price := CASE WHEN v_seat_idx <= v_grp_seats THEN v_grp_unit ELSE v_std_unit END;
+                v_seat_alloc := v_line_alloc / v_seats
+                    + CASE WHEN v_seat_idx = 1 THEN v_line_alloc % v_seats ELSE 0 END;
+                v_seat_price := GREATEST(v_seat_price - v_seat_alloc, 0);
 
                 INSERT INTO booking_lines (tenants_id, bookings_id, events_id, kind, event_ticket_types_id,
                     tables_id, prices_id, seats, ticket_code, qr_token, seat_number, status,
@@ -207,12 +295,12 @@ BEGIN
                     created_at, updated_at)
                 VALUES (v_tenant, v_id, p_event_id, 'Ticket', (v_line->>'ett')::uuid,
                     NULL, (v_line->>'prices_id')::uuid, 1, v_code, v_qr, v_global_seat_idx, 'Unassigned',
-                    (v_line->>'base')::int, (v_line->>'selling')::int, (v_line->>'discount')::int,
+                    v_base_unit, v_seat_price, GREATEST(v_base_unit - v_seat_price, 0),
                     NULLIF(v_line->>'rule_id','')::uuid, NULLIF(v_line->>'rule_name',''),
                     (v_line->>'platform')::int, (v_line->>'gateway')::int,
-                    (v_line->>'selling')::int,
+                    v_seat_price,
                     (v_line->>'platform')::int + (v_line->>'gateway')::int + COALESCE((v_line->>'tax')::int, 0),
-                    (v_line->>'final')::int, (v_line->>'final')::int, v_line->>'currency',
+                    v_seat_price, v_seat_price, v_line->>'currency',
                     now(), now());
             END LOOP;
         ELSIF v_kind = 'Table' THEN

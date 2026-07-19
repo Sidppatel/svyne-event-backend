@@ -20,4 +20,4 @@ FROM event_ticket_types tt
 LEFT JOIN vw_event_ticket_types_summary vs ON vs.event_ticket_types_id = tt.event_ticket_types_id
 LEFT JOIN prices p ON p.events_id = tt.events_id AND p.pricing_type = 'TicketTier'
     AND lower(p.name) = lower(tt.label) AND p.is_active
-LEFT JOIN LATERAL sp_calculate_price(p.prices_id, 1, now(), -1) bp ON p.prices_id IS NOT NULL;
+LEFT JOIN LATERAL app.price_breakdown(p.prices_id, now(), 1, -1) bp ON p.prices_id IS NOT NULL;

@@ -549,10 +549,21 @@ public class EventPlatformDbContext(
             entity.ToTable("price_rules", t =>
             {
                 t.HasCheckConstraint("CK_price_rules_RuleType",
-                    "rule_type IN ('Presale','LastMinute','TimeWindow','Dynamic')");
+                    "rule_type IN ('Presale','LastMinute','TimeWindow','Dynamic','Group')");
                 t.HasCheckConstraint("CK_price_rules_PriceCents", "price_cents >= 0");
                 t.HasCheckConstraint("CK_price_rules_Capacity",
                     "capacity IS NULL OR capacity > 0");
+                t.HasCheckConstraint("CK_price_rules_MinQty", "min_qty IS NULL OR min_qty > 0");
+                t.HasCheckConstraint("CK_price_rules_QtyRange",
+                    "min_qty IS NULL OR max_qty IS NULL OR max_qty >= min_qty");
+                t.HasCheckConstraint("CK_price_rules_DiscountKind",
+                    "discount_kind IS NULL OR discount_kind IN ('FixedUnitPrice','PercentOff','AmountOffOrder')");
+                t.HasCheckConstraint("CK_price_rules_DiscountBps",
+                    "discount_bps IS NULL OR (discount_bps > 0 AND discount_bps <= 10000)");
+                t.HasCheckConstraint("CK_price_rules_GroupShape",
+                    "rule_type <> 'Group' OR (min_qty IS NOT NULL AND discount_kind IS NOT NULL "
+                    + "AND (discount_kind <> 'PercentOff' OR discount_bps IS NOT NULL) "
+                    + "AND (discount_kind <> 'AmountOffOrder' OR scope = 'Event'))");
                 t.HasCheckConstraint("CK_price_rules_Window",
                     "active_from IS NULL OR active_until IS NULL OR active_until > active_from");
 
@@ -568,6 +579,7 @@ public class EventPlatformDbContext(
             entity.Property(e => e.Scope).HasConversion<string>().HasMaxLength(20)
                 .HasDefaultValue(Db.Enums.PriceRuleScope.Price);
             entity.Property(e => e.RuleType).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.DiscountKind).HasConversion<string>().HasMaxLength(20);
             entity.Property(e => e.Priority).HasDefaultValue(0);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantsId)

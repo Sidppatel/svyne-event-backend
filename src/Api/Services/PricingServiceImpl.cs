@@ -99,7 +99,7 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         RequireTenant();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_create_price_rule(@owner, @name, @type, @prio, @price, @from, @until, @min, @max, @cap, @scope)", connection);
+            "SELECT sp_create_price_rule(@owner, @name, @type, @prio, @price, @from, @until, @min, @max, @cap, @scope, @minqty, @maxqty, @kind, @bps)", connection);
         cmd.Parameters.AddWithValue("owner", Guid.Parse(request.OwnerId));
         cmd.Parameters.AddWithValue("name", request.Name);
         cmd.Parameters.AddWithValue("type", string.IsNullOrEmpty(request.RuleType) ? "TimeWindow" : request.RuleType);
@@ -111,6 +111,7 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         cmd.Parameters.AddWithValue("max", request.MaxRemaining < 0 ? DBNull.Value : request.MaxRemaining);
         cmd.Parameters.AddWithValue("cap", request.Capacity == 0 ? DBNull.Value : request.Capacity);
         cmd.Parameters.AddWithValue("scope", string.IsNullOrEmpty(request.Scope) ? "Price" : request.Scope);
+        AddGroupTierParams(cmd, request.MinQty, request.MaxQty, request.DiscountKind, request.DiscountBps);
         var id = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
         return new UuidValue { Value = id.ToString() };
     }
@@ -121,7 +122,7 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         RequireTenant();
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
         await using var cmd = new NpgsqlCommand(
-            "SELECT sp_update_price_rule(@id, @name, @type, @prio, @price, @from, @until, @min, @max, @active, @cap)", connection);
+            "SELECT sp_update_price_rule(@id, @name, @type, @prio, @price, @from, @until, @min, @max, @active, @cap, @minqty, @maxqty, @kind, @bps)", connection);
         cmd.Parameters.AddWithValue("id", Guid.Parse(request.PriceRulesId));
         cmd.Parameters.AddWithValue("name", request.Name);
         cmd.Parameters.AddWithValue("type", string.IsNullOrEmpty(request.RuleType) ? "TimeWindow" : request.RuleType);
@@ -133,6 +134,7 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         cmd.Parameters.AddWithValue("max", request.MaxRemaining < 0 ? DBNull.Value : request.MaxRemaining);
         cmd.Parameters.AddWithValue("active", request.IsActive);
         cmd.Parameters.AddWithValue("cap", request.Capacity == 0 ? DBNull.Value : request.Capacity);
+        AddGroupTierParams(cmd, request.MinQty, request.MaxQty, request.DiscountKind, request.DiscountBps);
         await cmd.ExecuteNonQueryAsync(ct);
         return new AckResponse { Success = true, Message = "Price rule updated" };
     }
@@ -141,10 +143,10 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
         => await RunVoid("SELECT sp_delete_price_rule(@id)", "id", Guid.Parse(request.Value), context, "Price rule deleted");
 
     public override Task<ListPriceRulesResponse> ListPriceRules(UuidValue request, ServerCallContext context)
-        => ListRules("SELECT price_rules_id, prices_id, name, rule_type, priority, price_cents, active_from, active_until, min_remaining, max_remaining, is_active, scope, events_id, capacity FROM sp_list_price_rules(@id)", request, context);
+        => ListRules("SELECT price_rules_id, prices_id, name, rule_type, priority, price_cents, active_from, active_until, min_remaining, max_remaining, is_active, scope, events_id, capacity, min_qty, max_qty, discount_kind, discount_bps FROM sp_list_price_rules(@id)", request, context);
 
     public override Task<ListPriceRulesResponse> ListEventPriceRules(UuidValue request, ServerCallContext context)
-        => ListRules("SELECT price_rules_id, prices_id, name, rule_type, priority, price_cents, active_from, active_until, min_remaining, max_remaining, is_active, scope, events_id, capacity FROM sp_list_event_price_rules(@id)", request, context);
+        => ListRules("SELECT price_rules_id, prices_id, name, rule_type, priority, price_cents, active_from, active_until, min_remaining, max_remaining, is_active, scope, events_id, capacity, min_qty, max_qty, discount_kind, discount_bps FROM sp_list_event_price_rules(@id)", request, context);
 
     private async Task<ListPriceRulesResponse> ListRules(string sql, UuidValue request, ServerCallContext context)
     {
@@ -171,7 +173,11 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
                 IsActive = reader.GetBoolean(10),
                 Scope = reader.IsDBNull(11) ? "Price" : reader.GetString(11),
                 EventsId = reader.IsDBNull(12) ? string.Empty : reader.GetGuid(12).ToString(),
-                Capacity = reader.IsDBNull(13) ? 0 : reader.GetInt32(13)
+                Capacity = reader.IsDBNull(13) ? 0 : reader.GetInt32(13),
+                MinQty = reader.IsDBNull(14) ? 0 : reader.GetInt32(14),
+                MaxQty = reader.IsDBNull(15) ? 0 : reader.GetInt32(15),
+                DiscountKind = reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
+                DiscountBps = reader.IsDBNull(17) ? 0 : reader.GetInt32(17)
             });
         }
         return response;
@@ -181,11 +187,12 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
     {
         var ct = context.CancellationToken;
         await using var connection = await db.OpenAsync(tenantContext.UsersId, tenantContext.TenantsId, ct);
-        await using var cmd = new NpgsqlCommand("SELECT base_price_cents, selling_price_cents, discount_cents, applied_price_rules_id, applied_rule_name, platform_fee_cents, gateway_fee_cents, tax_cents, final_price_cents, organizer_net_cents, currency FROM sp_calculate_price(@p, @seats, @at, @rem)", connection);
+        await using var cmd = new NpgsqlCommand("SELECT base_price_cents, selling_price_cents, discount_cents, applied_price_rules_id, applied_rule_name, platform_fee_cents, gateway_fee_cents, tax_cents, final_price_cents, organizer_net_cents, currency, group_discounted_seats, group_unit_cents, standard_unit_cents FROM sp_calculate_price(@p, @seats, @at, @rem, @gqty)", connection);
         cmd.Parameters.AddWithValue("p", Guid.Parse(request.PricesId));
         cmd.Parameters.AddWithValue("seats", request.Seats <= 0 ? 1 : request.Seats);
         cmd.Parameters.AddWithValue("at", ToTimestamp(request.At));
         cmd.Parameters.AddWithValue("rem", request.Remaining < 0 ? DBNull.Value : request.Remaining);
+        cmd.Parameters.AddWithValue("gqty", request.GroupQty < 0 ? 0 : request.GroupQty);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
         {
@@ -208,12 +215,23 @@ public sealed class PricingServiceImpl : PricingService.PricingServiceBase
             TaxCents = r.GetInt32(7),
             FinalPriceCents = r.GetInt32(8),
             OrganizerNetCents = r.GetInt32(9),
-            Currency = r.IsDBNull(10) ? "usd" : r.GetString(10)
+            Currency = r.IsDBNull(10) ? "usd" : r.GetString(10),
+            GroupDiscountedSeats = r.IsDBNull(11) ? 0 : r.GetInt32(11),
+            GroupUnitCents = r.IsDBNull(12) ? 0 : r.GetInt32(12),
+            StandardUnitCents = r.IsDBNull(13) ? 0 : r.GetInt32(13)
         };
         bd.SubtotalCents = bd.SellingPriceCents;
         bd.FeeCents = bd.PlatformFeeCents + bd.GatewayFeeCents + bd.TaxCents;
         bd.TotalCents = bd.FinalPriceCents;
         return bd;
+    }
+
+    private static void AddGroupTierParams(NpgsqlCommand cmd, int minQty, int maxQty, string discountKind, int discountBps)
+    {
+        cmd.Parameters.AddWithValue("minqty", minQty <= 0 ? DBNull.Value : minQty);
+        cmd.Parameters.AddWithValue("maxqty", maxQty <= 0 ? DBNull.Value : maxQty);
+        cmd.Parameters.AddWithValue("kind", string.IsNullOrEmpty(discountKind) ? DBNull.Value : discountKind);
+        cmd.Parameters.AddWithValue("bps", discountBps <= 0 ? DBNull.Value : discountBps);
     }
 
     public override async Task<AckResponse> SetTenantDefaultFeeFormula(SetTenantDefaultFeeFormulaRequest request, ServerCallContext context)

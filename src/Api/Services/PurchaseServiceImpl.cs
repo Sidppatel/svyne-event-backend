@@ -169,7 +169,7 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
             rateCmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
             taxRate = await rateCmd.ExecuteScalarAsync(ct) is decimal r ? r : 0m;
         }
-        await using var cmd = new NpgsqlCommand("SELECT kind, ref_id, label, seats, base_price_cents, selling_price_cents, discount_cents, applied_price_rules_id, applied_rule_name, platform_fee_cents, gateway_fee_cents, tax_cents, final_price_cents, organizer_net_cents, currency, ach_available, ach_final_cents FROM sp_quote_cart(@ev, @lines::jsonb)", connection);
+        await using var cmd = new NpgsqlCommand("SELECT kind, ref_id, label, seats, base_price_cents, selling_price_cents, discount_cents, applied_price_rules_id, applied_rule_name, platform_fee_cents, gateway_fee_cents, tax_cents, final_price_cents, organizer_net_cents, currency, ach_available, ach_final_cents, group_discounted_seats, group_unit_cents, standard_unit_cents FROM sp_quote_cart(@ev, @lines::jsonb)", connection);
         cmd.Parameters.AddWithValue("ev", Guid.Parse(request.EventsId));
         cmd.Parameters.AddWithValue("lines", linesJson);
 
@@ -189,7 +189,10 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
                 TaxCents = reader.GetInt32(11),
                 FinalPriceCents = reader.GetInt32(12),
                 OrganizerNetCents = reader.GetInt32(13),
-                Currency = reader.IsDBNull(14) ? "usd" : reader.GetString(14)
+                Currency = reader.IsDBNull(14) ? "usd" : reader.GetString(14),
+                GroupDiscountedSeats = reader.IsDBNull(17) ? 0 : reader.GetInt32(17),
+                GroupUnitCents = reader.IsDBNull(18) ? 0 : reader.GetInt32(18),
+                StandardUnitCents = reader.IsDBNull(19) ? 0 : reader.GetInt32(19)
             };
             bd.SubtotalCents = bd.SellingPriceCents;
             bd.FeeCents = bd.PlatformFeeCents + bd.GatewayFeeCents + bd.TaxCents;
@@ -251,7 +254,36 @@ public sealed partial class BookingServiceImpl : BookingService.BookingServiceBa
             quote.AchSavingsCents = 0;
         }
         quote.HoldSeconds = await settings.GetIntAsync("booking_hold_seconds", 600, ct);
+        quote.GroupDiscount = await LoadGroupDiscountHintAsync(connection, request.EventsId, linesJson, ct);
         return quote;
+    }
+
+    private static async Task<GroupDiscountHint> LoadGroupDiscountHintAsync(
+        NpgsqlConnection connection, string eventsId, string linesJson, CancellationToken ct)
+    {
+        var hint = new GroupDiscountHint();
+        await using var cmd = new NpgsqlCommand(
+            "SELECT applied_rule_name, applied_min_qty, group_discount_cents, discounted_seats, capped, " +
+            "eligible_qty, next_tier_min_qty, next_tier_seats_away, next_tier_kind, next_tier_bps, " +
+            "next_tier_price_cents FROM sp_group_discount_hint(@ev, @lines::jsonb)", connection);
+        cmd.Parameters.AddWithValue("ev", Guid.Parse(eventsId));
+        cmd.Parameters.AddWithValue("lines", linesJson);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (await reader.ReadAsync(ct))
+        {
+            hint.AppliedRuleName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+            hint.AppliedMinQty = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+            hint.GroupDiscountCents = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
+            hint.DiscountedSeats = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
+            hint.Capped = !reader.IsDBNull(4) && reader.GetBoolean(4);
+            hint.EligibleQty = reader.IsDBNull(5) ? 0 : reader.GetInt32(5);
+            hint.NextTierMinQty = reader.IsDBNull(6) ? 0 : reader.GetInt32(6);
+            hint.NextTierSeatsAway = reader.IsDBNull(7) ? 0 : reader.GetInt32(7);
+            hint.NextTierKind = reader.IsDBNull(8) ? string.Empty : reader.GetString(8);
+            hint.NextTierBps = reader.IsDBNull(9) ? 0 : reader.GetInt32(9);
+            hint.NextTierPriceCents = reader.IsDBNull(10) ? 0 : reader.GetInt32(10);
+        }
+        return hint;
     }
 
     private static RpcException MapPostgres(PostgresException ex) => ex.SqlState switch

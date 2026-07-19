@@ -5,5 +5,6 @@ public enum PriceRuleType
     Presale = 0,
     LastMinute = 1,
     TimeWindow = 2,
-    Dynamic = 3
+    Dynamic = 3,
+    Group = 4
 }

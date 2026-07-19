@@ -3,15 +3,13 @@ DROP FUNCTION IF EXISTS sp_create_price_rule(uuid, text, text, int, int, timesta
 DROP FUNCTION IF EXISTS sp_create_price_rule(uuid, text, text, int, int, timestamptz, timestamptz, int, int, int, text);
 
 
-
-
-
-
 CREATE OR REPLACE FUNCTION sp_create_price_rule(
     p_owner_id uuid, p_name text, p_rule_type text, p_priority int, p_price_cents int,
     p_active_from timestamptz, p_active_until timestamptz,
     p_min_remaining int, p_max_remaining int,
-    p_capacity int DEFAULT NULL, p_scope text DEFAULT 'Price'
+    p_capacity int DEFAULT NULL, p_scope text DEFAULT 'Price',
+    p_min_qty int DEFAULT NULL, p_max_qty int DEFAULT NULL,
+    p_discount_kind text DEFAULT NULL, p_discount_bps int DEFAULT NULL
 ) RETURNS uuid LANGUAGE plpgsql
     SET search_path = public, extensions, pg_catalog
 AS $$
@@ -20,20 +18,22 @@ BEGIN
     IF v_scope = 'Event' THEN
         INSERT INTO price_rules (tenants_id, scope, events_id, prices_id, name, rule_type,
             priority, price_cents, active_from, active_until, min_remaining, max_remaining,
-            capacity, is_active, created_at, updated_at)
+            capacity, min_qty, max_qty, discount_kind, discount_bps, is_active, created_at, updated_at)
         VALUES ((SELECT tenants_id FROM events WHERE events_id = p_owner_id),
             'Event', p_owner_id, NULL, p_name, p_rule_type, COALESCE(p_priority, 0), p_price_cents,
             p_active_from, p_active_until, p_min_remaining, p_max_remaining,
-            p_capacity, true, now(), now())
+            p_capacity, p_min_qty, p_max_qty, NULLIF(p_discount_kind, ''), p_discount_bps,
+            true, now(), now())
         RETURNING price_rules_id INTO v_id;
     ELSE
         INSERT INTO price_rules (tenants_id, scope, events_id, prices_id, name, rule_type,
             priority, price_cents, active_from, active_until, min_remaining, max_remaining,
-            capacity, is_active, created_at, updated_at)
+            capacity, min_qty, max_qty, discount_kind, discount_bps, is_active, created_at, updated_at)
         VALUES ((SELECT tenants_id FROM prices WHERE prices_id = p_owner_id),
             'Price', NULL, p_owner_id, p_name, p_rule_type, COALESCE(p_priority, 0), p_price_cents,
             p_active_from, p_active_until, p_min_remaining, p_max_remaining,
-            p_capacity, true, now(), now())
+            p_capacity, p_min_qty, p_max_qty, NULLIF(p_discount_kind, ''), p_discount_bps,
+            true, now(), now())
         RETURNING price_rules_id INTO v_id;
     END IF;
     RETURN v_id;
