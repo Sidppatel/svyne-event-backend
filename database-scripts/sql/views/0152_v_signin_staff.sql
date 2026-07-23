@@ -1,0 +1,4 @@
+CREATE OR REPLACE VIEW vw_signin_staff WITH (security_invoker = true) AS
+SELECT users_id, tenants_id, password_hash, pepper_version, role, email, first_name, last_name, email_verified, is_active, email_hash
+FROM users
+WHERE role IN (1, 2, 3, 99);

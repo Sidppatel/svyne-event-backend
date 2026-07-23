@@ -5,6 +5,7 @@ using TicketSpan.Api.Data;
 using TicketSpan.Api.Email;
 using TicketSpan.Api.Security;
 using TicketSpan.Protos.Auth;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace TicketSpan.Api.Services;
 
@@ -20,11 +21,13 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
     private readonly ILogger<AuthServiceImpl> logger;
     private readonly TicketSpan.Api.Storage.ObjectStorage storage;
     private readonly IHttpClientFactory httpFactory;
+    private readonly IServiceScopeFactory scopeFactory;
 
     public AuthServiceImpl(Db db, PasswordHasher passwordHasher, JwtTokenService jwt,
         IConfiguration configuration, IEmailService email, EmailTemplateRenderer templates,
         AppSettingsProvider settings, ILogger<AuthServiceImpl> logger,
-        TicketSpan.Api.Storage.ObjectStorage storage, IHttpClientFactory httpFactory)
+        TicketSpan.Api.Storage.ObjectStorage storage, IHttpClientFactory httpFactory,
+        IServiceScopeFactory scopeFactory)
     {
         this.db = db;
         this.passwordHasher = passwordHasher;
@@ -36,6 +39,7 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
         this.logger = logger;
         this.storage = storage;
         this.httpFactory = httpFactory;
+        this.scopeFactory = scopeFactory;
     }
 
     public override async Task<AuthResponse> Login(LoginRequest request, ServerCallContext context)
@@ -44,12 +48,21 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
         var emailHash = EmailHasher.Hash(request.Email);
         var portal = request.Portal ?? string.Empty;
         var slugScoped = portal.Length == 0 || portal == "public";
-        var tenantsId = slugScoped ? await ResolveTenantAsync(request.TenantSlug, ct) : null;
 
         await using var connection = await db.OpenAsync(null, null, ct);
+        var tenantsId = slugScoped ? await ResolveTenantAsync(request.TenantSlug, connection, ct) : null;
+
+        var viewName = portal switch
+        {
+            "admin" => "vw_signin_admin",
+            "staff" => "vw_signin_staff",
+            "developer" => "vw_signin_developer",
+            _ => "vw_signin_public"
+        };
+
         await using var cmd = new NpgsqlCommand(
-            "SELECT users_id, tenants_id, password_hash, pepper_version, role, email, first_name, last_name, email_verified, is_active "
-            + "FROM sp_get_user_by_email_for_signin(@h)", connection);
+            $"SELECT users_id, tenants_id, password_hash, pepper_version, role, email, first_name, last_name, email_verified, is_active "
+            + $"FROM {viewName} WHERE email_hash = @h", connection);
         cmd.Parameters.AddWithValue("h", emailHash);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -57,10 +70,7 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
         {
             var rowTenant = reader.IsDBNull(1) ? (Guid?)null : reader.GetGuid(1);
             var role = reader.GetInt16(4);
-            if (!PortalAllowsRole(portal, role))
-            {
-                continue;
-            }
+            
             if (slugScoped)
             {
                 var matchesTenant = role == Lookups.UserRoles.Developer ? rowTenant is null : rowTenant == tenantsId;
@@ -80,9 +90,9 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
             {
                 throw new RpcException(new Status(StatusCode.PermissionDenied, "Account disabled"));
             }
-            if (!passwordHasher.Verify(request.Password, storedHash, pepperVersion))
+            if (!await passwordHasher.VerifyAsync(request.Password, storedHash, pepperVersion))
             {
-                break;
+                continue;
             }
             var email = reader.GetString(5);
             var firstName = reader.GetString(6);
@@ -90,7 +100,7 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
             var emailVerified = reader.GetBoolean(8);
             await reader.CloseAsync();
             var tenantSlug = rowTenant is { } rt
-                ? await ResolveSlugAsync(rt, ct) ?? request.TenantSlug
+                ? await ResolveSlugAsync(rt, connection, ct) ?? request.TenantSlug
                 : string.Empty;
             var profile = new UserProfile
             {
@@ -103,8 +113,24 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
                 TenantSlug = tenantSlug,
                 EmailVerified = emailVerified
             };
-            await MaybeRehashAsync(usersId, request.Password, pepperVersion, ct);
-            await UpdateLastLoginAsync(usersId, ct);
+
+            var pwd = request.Password;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    var backgroundDb = scope.ServiceProvider.GetRequiredService<Db>();
+                    await using var bgConnection = await backgroundDb.OpenAsync(null, null, CancellationToken.None);
+                    await MaybeRehashAsync(usersId, pwd, pepperVersion, bgConnection, CancellationToken.None);
+                    await UpdateLastLoginAsync(usersId, bgConnection, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to execute post-login background tasks for user {UsersId}", usersId);
+                }
+            });
+
             return BuildAuth(usersId, profile.Email, rowTenant, role, tenantSlug, profile);
         }
         throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid credentials"));
@@ -263,7 +289,20 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
         };
         if (!hasAvatar && !string.IsNullOrWhiteSpace(payload.Picture))
         {
-            await TryStoreGoogleAvatarAsync(usersId, rowTenant, payload.Picture, ct);
+            var pictureUrl = payload.Picture;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    var bgSvc = scope.ServiceProvider.GetRequiredService<AuthServiceImpl>();
+                    await bgSvc.TryStoreGoogleAvatarAsync(usersId, rowTenant, pictureUrl, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed background store of Google avatar for {UsersId}", usersId);
+                }
+            });
         }
         return BuildAuth(usersId, profile.Email, rowTenant, role, tenantSlug, profile);
         }
@@ -605,11 +644,16 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
 
     private async Task<Guid?> ResolveTenantAsync(string slug, CancellationToken ct)
     {
+        await using var connection = await db.OpenAsync(null, null, ct);
+        return await ResolveTenantAsync(slug, connection, ct);
+    }
+
+    private async Task<Guid?> ResolveTenantAsync(string slug, NpgsqlConnection connection, CancellationToken ct)
+    {
         if (string.IsNullOrEmpty(slug))
         {
             return null;
         }
-        await using var connection = await db.OpenAsync(null, null, ct);
         await using var cmd = new NpgsqlCommand("SELECT tenants_id FROM sp_public_tenant_identity() WHERE slug = @s AND archived_at IS NULL", connection);
         cmd.Parameters.AddWithValue("s", slug);
         var result = await cmd.ExecuteScalarAsync(ct);
@@ -619,19 +663,23 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
     private async Task<string?> ResolveSlugAsync(Guid tenantsId, CancellationToken ct)
     {
         await using var connection = await db.OpenAsync(null, null, ct);
+        return await ResolveSlugAsync(tenantsId, connection, ct);
+    }
+
+    private async Task<string?> ResolveSlugAsync(Guid tenantsId, NpgsqlConnection connection, CancellationToken ct)
+    {
         await using var cmd = new NpgsqlCommand("SELECT slug FROM sp_public_tenant_identity() WHERE tenants_id = @id AND archived_at IS NULL", connection);
         cmd.Parameters.AddWithValue("id", tenantsId);
         return await cmd.ExecuteScalarAsync(ct) as string;
     }
 
-    private async Task MaybeRehashAsync(Guid usersId, string password, short pepperVersion, CancellationToken ct)
+    private async Task MaybeRehashAsync(Guid usersId, string password, short pepperVersion, NpgsqlConnection connection, CancellationToken ct)
     {
         if (!passwordHasher.NeedsRehash(pepperVersion))
         {
             return;
         }
-        var newHash = passwordHasher.Hash(password);
-        await using var connection = await db.OpenAsync(null, null, ct);
+        var newHash = await passwordHasher.HashAsync(password);
         await using var cmd = new NpgsqlCommand("SELECT sp_set_user_password(@u, @h, @pv, false, NULL)", connection);
         cmd.Parameters.AddWithValue("u", usersId);
         cmd.Parameters.AddWithValue("h", newHash);
@@ -639,9 +687,8 @@ public sealed partial class AuthServiceImpl : AuthService.AuthServiceBase
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    private async Task UpdateLastLoginAsync(Guid usersId, CancellationToken ct)
+    private async Task UpdateLastLoginAsync(Guid usersId, NpgsqlConnection connection, CancellationToken ct)
     {
-        await using var connection = await db.OpenAsync(null, null, ct);
         await using var cmd = new NpgsqlCommand("SELECT sp_update_user_last_login(@u)", connection);
         cmd.Parameters.AddWithValue("u", usersId);
         await cmd.ExecuteNonQueryAsync(ct);

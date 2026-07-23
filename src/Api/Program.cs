@@ -84,6 +84,7 @@ builder.Services.AddCors(options =>
                 "Retry-After");
     }));
 
+builder.Services.AddTransient<TicketSpan.Api.Services.AuthServiceImpl>();
 builder.Services.AddGrpc(options =>
 {
     options.Interceptors.Add<TicketSpan.Api.ErrorHandling.ErrorLoggingInterceptor>();

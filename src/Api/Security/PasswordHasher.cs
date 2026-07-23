@@ -40,10 +40,20 @@ public sealed class PasswordHasher
         return Hash(password, currentVersion);
     }
 
+    public Task<string> HashAsync(string password)
+    {
+        return Task.Run(() => Hash(password));
+    }
+
     public string Hash(string password, short pepperVersion)
     {
         var peppered = ApplyPepper(password, pepperVersion);
         return BCrypt.Net.BCrypt.EnhancedHashPassword(peppered, 12);
+    }
+
+    public Task<string> HashAsync(string password, short pepperVersion)
+    {
+        return Task.Run(() => Hash(password, pepperVersion));
     }
 
     public bool Verify(string password, string hash, short pepperVersion)
@@ -54,6 +64,11 @@ public sealed class PasswordHasher
         }
         var peppered = ApplyPepper(password, pepperVersion);
         return BCrypt.Net.BCrypt.EnhancedVerify(peppered, hash);
+    }
+
+    public Task<bool> VerifyAsync(string password, string hash, short pepperVersion)
+    {
+        return Task.Run(() => Verify(password, hash, pepperVersion));
     }
 
     public bool NeedsRehash(short pepperVersion) => pepperVersion != currentVersion;
